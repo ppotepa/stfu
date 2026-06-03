@@ -1,13 +1,13 @@
 using STFU.Messaging.Commands;
-using STFU.Projection.Commands;
+using STFU.Camera.Commands;
 
-namespace STFU.Projection.Handlers;
+namespace STFU.Camera.Handlers;
 
 public sealed class SetCameraCommandHandler : ICommandHandler<SetCameraCommand>
 {
-    private readonly ProjectionState _state;
+    private readonly CameraRig _state;
 
-    public SetCameraCommandHandler(ProjectionState state)
+    public SetCameraCommandHandler(CameraRig state)
     {
         _state = state;
     }

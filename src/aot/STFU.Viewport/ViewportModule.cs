@@ -15,6 +15,7 @@ public sealed class ViewportModule : IEngineModule
         context.Services.AddSingleton(state);
         context.Commands
             .Register(new SetViewportSizeCommandHandler(state))
+            .Register(new SetViewportRenderModeCommandHandler(state))
             .Register(new RequestRenderCommandHandler(state, strokes));
     }
 }

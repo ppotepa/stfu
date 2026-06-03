@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\STFU.Assets\STFU.Assets.csproj" />
+    <ProjectReference Include="..\STFU.Camera\STFU.Camera.csproj" />
+    <ProjectReference Include="..\STFU.Common\STFU.Common.csproj" />
+    <ProjectReference Include="..\STFU.Engine\STFU.Engine.csproj" />
+    <ProjectReference Include="..\STFU.Mesh\STFU.Mesh.csproj" />
+    <ProjectReference Include="..\STFU.Strokes\STFU.Strokes.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

@@ -23,6 +23,7 @@ public sealed class RequestRenderCommandHandler : ICommandHandler<RequestRenderC
         _viewport.Publish(new ViewportSnapshot(
             _viewport.Width,
             _viewport.Height,
+            _viewport.RenderMode,
             _strokes.CurrentFrame));
     }
 }

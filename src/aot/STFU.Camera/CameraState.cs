@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace STFU.Projection;
+namespace STFU.Camera;
 
 public readonly record struct CameraState(
     Vector3 Position,
