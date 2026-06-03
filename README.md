@@ -12,6 +12,8 @@ STFU is an experimental .NET 10 mini engine for turning 3D meshes into 2D NPR-st
 - Mesh loading with `assets/suzanne.obj`.
 - NPR pipeline with presets, feature extraction, hatching, stroke styling, and path-based output.
 
+See [NPR Drawing Theory](docs/NPR_DRAWING_THEORY.md) for the drawing concepts this codebase is intended to encode.
+
 ## Controls
 
 - `1` - mesh view.
