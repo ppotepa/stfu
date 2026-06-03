@@ -1,6 +1,5 @@
-# STFU
+# STFU Scene-To-Flat Unrenderer
 
-Scene-To-Flat Unrenderer.
 
 STFU is an experimental .NET 10 mini engine for turning 3D meshes into 2D NPR-style drawings.
 
