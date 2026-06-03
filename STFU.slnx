@@ -2,6 +2,7 @@
   <Folder Name="/src/" />
   <Folder Name="/src/aot/">
     <Project Path="src/aot/STFU.Abstractions/STFU.Abstractions.csproj" />
+    <Project Path="src/aot/STFU.Animation/STFU.Animation.csproj" />
     <Project Path="src/aot/STFU.Assets/STFU.Assets.csproj" />
     <Project Path="src/aot/STFU.Common/STFU.Common.csproj" />
     <Project Path="src/aot/STFU.Engine/STFU.Engine.csproj" />
@@ -15,6 +16,8 @@
   </Folder>
   <Folder Name="/src/runtime/">
     <Project Path="src/runtime/STFU.App/STFU.App.csproj" />
+    <Project Path="src/runtime/STFU.Import.Fbx/STFU.Import.Fbx.csproj" />
+    <Project Path="src/runtime/STFU.Import/STFU.Import.csproj" />
     <Project Path="src/runtime/STFU.UI/STFU.UI.csproj" />
   </Folder>
   <Folder Name="/src/tests/">

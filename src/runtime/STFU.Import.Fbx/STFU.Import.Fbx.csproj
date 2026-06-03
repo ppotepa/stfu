@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\aot\STFU.Animation\STFU.Animation.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Assets\STFU.Assets.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
+    <ProjectReference Include="..\STFU.Import\STFU.Import.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

@@ -1,11 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\STFU.Animation\STFU.Animation.csproj" />
     <ProjectReference Include="..\STFU.Common\STFU.Common.csproj" />
-    <ProjectReference Include="..\STFU.Engine\STFU.Engine.csproj" />
     <ProjectReference Include="..\STFU.Mesh\STFU.Mesh.csproj" />
-    <ProjectReference Include="..\STFU.Messaging\STFU.Messaging.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

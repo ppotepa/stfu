@@ -10,6 +10,8 @@
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Viewport\STFU.Viewport.csproj" />
+    <ProjectReference Include="..\STFU.Import.Fbx\STFU.Import.Fbx.csproj" />
+    <ProjectReference Include="..\STFU.Import\STFU.Import.csproj" />
     <ProjectReference Include="..\STFU.UI\STFU.UI.csproj" />
   </ItemGroup>
 
