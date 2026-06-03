@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\STFU.Abstractions\STFU.Abstractions.csproj" />
+    <ProjectReference Include="..\STFU.Mesh\STFU.Mesh.csproj" />
+    <ProjectReference Include="..\STFU.Engine\STFU.Engine.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/aot/">
+    <Project Path="src/aot/STFU.Abstractions/STFU.Abstractions.csproj" />
+    <Project Path="src/aot/STFU.Assets/STFU.Assets.csproj" />
+    <Project Path="src/aot/STFU.Common/STFU.Common.csproj" />
+    <Project Path="src/aot/STFU.Engine/STFU.Engine.csproj" />
+    <Project Path="src/aot/STFU.Mesh.IO/STFU.Mesh.IO.csproj" />
+    <Project Path="src/aot/STFU.Mesh/STFU.Mesh.csproj" />
+    <Project Path="src/aot/STFU.Messaging/STFU.Messaging.csproj" />
+    <Project Path="src/aot/STFU.Projection/STFU.Projection.csproj" />
+    <Project Path="src/aot/STFU.Strokes/STFU.Strokes.csproj" />
+    <Project Path="src/aot/STFU.Viewport/STFU.Viewport.csproj" />
+  </Folder>
+  <Folder Name="/src/runtime/">
+    <Project Path="src/runtime/STFU.App/STFU.App.csproj" />
+    <Project Path="src/runtime/STFU.UI/STFU.UI.csproj" />
+  </Folder>
+</Solution>
