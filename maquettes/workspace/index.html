@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STFU Workspace Maquette</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <strong>STFU</strong>
+        <span>Scene-To-Flat Unrenderer</span>
+      </div>
+
+      <div class="toolbar" role="toolbar" aria-label="Viewport commands">
+        <button class="tool-button is-active" type="button" data-mode="npr">NPR</button>
+        <button class="tool-button" type="button" data-mode="mesh">Mesh</button>
+        <button class="icon-button" type="button" id="resetCamera" title="Reset camera" aria-label="Reset camera">R</button>
+        <button class="icon-button" type="button" id="exportSvg" title="Export SVG" aria-label="Export SVG">E</button>
+      </div>
+
+      <div class="top-meta">
+        <span id="activePreset">generic-sketch</span>
+        <span class="status-dot"></span>
+        <span>AOT viewport</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="viewport-stage" aria-label="Viewport preview">
+        <canvas id="previewCanvas" width="1100" height="760"></canvas>
+        <div class="viewport-overlay top-left">
+          <span id="modeBadge">NPR</span>
+          <span>1280 x 720</span>
+        </div>
+        <div class="viewport-overlay bottom-left">
+          <span>LMB orbit</span>
+          <span>Ctrl+LMB pan</span>
+          <span>Wheel FOV</span>
+        </div>
+      </section>
+
+      <aside class="inspector" aria-label="NPR inspector">
+        <nav class="tab-rail" aria-label="Inspector tabs">
+          <button class="tab is-active" type="button" data-tab="load">LOAD</button>
+          <button class="tab" type="button" data-tab="general">GENERAL</button>
+          <button class="tab" type="button" data-tab="camera">CAMERA</button>
+          <button class="tab" type="button" data-tab="npr">NPR</button>
+          <button class="tab" type="button" data-tab="strokes">STROKES</button>
+          <button class="tab" type="button" data-tab="debug">DEBUG</button>
+        </nav>
+
+        <div class="inspector-header">
+          <h1 id="panelTitle">Load</h1>
+          <p id="panelSubtitle">Assets and scene input.</p>
+        </div>
+
+        <section class="panel-section is-active" data-panel="load">
+          <label class="field">
+            <span>Model</span>
+            <select id="modelSelect">
+              <option>Suzanne OBJ</option>
+              <option>Prototype Cube</option>
+              <option>Future GLB Import</option>
+            </select>
+          </label>
+          <button class="wide-command" type="button">Load Asset</button>
+          <button class="wide-command secondary" type="button">Reload Current</button>
+          <div class="info-table">
+            <div><span>Vertices</span><strong>511</strong></div>
+            <div><span>Triangles</span><strong>968</strong></div>
+            <div><span>Mesh Handle</span><strong>#1</strong></div>
+          </div>
+        </section>
+
+        <section class="panel-section" data-panel="general">
+          <label class="field">
+            <span>Preset</span>
+            <select id="presetSelect">
+              <option>generic-sketch</option>
+              <option>technical-line</option>
+              <option>manga-ink</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Seed</span>
+            <input id="seedInput" type="number" value="1337">
+          </label>
+          <label class="toggle-line">
+            <input id="stableRandom" type="checkbox" checked>
+            <span>Deterministic strokes</span>
+          </label>
+          <label class="toggle-line">
+            <input id="showGrid" type="checkbox" checked>
+            <span>Viewport grid</span>
+          </label>
+        </section>
+
+        <section class="panel-section" data-panel="camera">
+          <div class="slider-row">
+            <label for="fovSlider">FOV</label>
+            <input id="fovSlider" type="range" min="25" max="100" value="60">
+            <output id="fovValue">60</output>
+          </div>
+          <div class="slider-row">
+            <label for="orbitSlider">Orbit</label>
+            <input id="orbitSlider" type="range" min="-45" max="45" value="0">
+            <output id="orbitValue">0</output>
+          </div>
+          <button class="wide-command" type="button">Frame Selection</button>
+        </section>
+
+        <section class="panel-section" data-panel="npr">
+          <div class="slider-row">
+            <label for="creaseSlider">Crease</label>
+            <input id="creaseSlider" type="range" min="5" max="85" value="34">
+            <output id="creaseValue">34</output>
+          </div>
+          <div class="slider-row">
+            <label for="hiddenSlider">Hidden Bias</label>
+            <input id="hiddenSlider" type="range" min="0" max="100" value="25">
+            <output id="hiddenValue">0.025</output>
+          </div>
+          <div class="slider-row">
+            <label for="featureSlider">Feature Density</label>
+            <input id="featureSlider" type="range" min="0" max="100" value="86">
+            <output id="featureValue">0.86</output>
+          </div>
+          <label class="toggle-line">
+            <input id="occlusionToggle" type="checkbox" checked>
+            <span>Approx hidden-line filtering</span>
+          </label>
+        </section>
+
+        <section class="panel-section" data-panel="strokes">
+          <div class="slider-row">
+            <label for="hatchSlider">Hatch Density</label>
+            <input id="hatchSlider" type="range" min="0" max="100" value="48">
+            <output id="hatchValue">0.48</output>
+          </div>
+          <div class="slider-row">
+            <label for="jitterSlider">Jitter</label>
+            <input id="jitterSlider" type="range" min="0" max="100" value="45">
+            <output id="jitterValue">0.95</output>
+          </div>
+          <div class="slider-row">
+            <label for="thicknessSlider">Thickness</label>
+            <input id="thicknessSlider" type="range" min="50" max="220" value="128">
+            <output id="thicknessValue">1.28</output>
+          </div>
+          <div class="slider-row">
+            <label for="overshootSlider">Overshoot</label>
+            <input id="overshootSlider" type="range" min="0" max="100" value="55">
+            <output id="overshootValue">1.85</output>
+          </div>
+        </section>
+
+        <section class="panel-section" data-panel="debug">
+          <div class="metric-grid">
+            <div><span>Paths</span><strong id="pathsMetric">443</strong></div>
+            <div><span>Features</span><strong id="featuresMetric">447</strong></div>
+            <div><span>Hatch</span><strong id="hatchMetric">43</strong></div>
+            <div><span>Triangles</span><strong>968</strong></div>
+            <div><span>Samples</span><strong id="samplesMetric">311</strong></div>
+            <div><span>Topology</span><strong>1452</strong></div>
+          </div>
+          <button class="wide-command secondary" type="button">Copy Counters</button>
+        </section>
+
+        <footer class="inspector-footer">
+          <button type="button" class="wide-command secondary">Reset Tab</button>
+          <button type="button" class="wide-command">Apply</button>
+        </footer>
+      </aside>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

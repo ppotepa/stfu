@@ -14,6 +14,7 @@ STFU is an experimental .NET 10 mini engine for turning 3D meshes into 2D NPR-st
 
 See [NPR Drawing Theory](docs/NPR_DRAWING_THEORY.md) for the drawing concepts this codebase is intended to encode.
 See [Target UI Screen](docs/UI_TARGET_SCREEN.md) for the planned Avalonia workspace layout.
+Interactive HTML maquettes live in [maquettes](maquettes/).
 
 ## Controls
 
