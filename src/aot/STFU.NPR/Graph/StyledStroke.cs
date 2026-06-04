@@ -1,3 +1,4 @@
+using STFU.Common.Primitives;
 using STFU.Strokes;
 using STFU.NPR.Temporal;
 
@@ -17,7 +18,8 @@ public sealed class StyledStroke
         VisibilityState visibility,
         float tone = 0f,
         float density = 0f,
-        HatchLayerKind? hatchLayerKind = null)
+        HatchLayerKind? hatchLayerKind = null,
+        EntityId entityId = default)
     {
         StableId = stableId;
         FeatureCurveId = featureCurveId;
@@ -31,6 +33,7 @@ public sealed class StyledStroke
         Tone = tone;
         Density = density;
         HatchLayerKind = hatchLayerKind;
+        EntityId = entityId;
         ScreenLength = MeasureLength(Points);
     }
 
@@ -57,6 +60,8 @@ public sealed class StyledStroke
     public float Density { get; }
 
     public HatchLayerKind? HatchLayerKind { get; }
+
+    public EntityId EntityId { get; }
 
     public float ScreenLength { get; }
 

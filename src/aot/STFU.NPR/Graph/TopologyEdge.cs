@@ -1,3 +1,5 @@
+using STFU.Common.Primitives;
+
 namespace STFU.NPR.Graph;
 
 public readonly record struct TopologyEdge(
@@ -7,4 +9,7 @@ public readonly record struct TopologyEdge(
     int FirstTriangleIndex,
     int SecondTriangleIndex,
     float NormalAngleDegrees,
-    bool IsBoundary);
+    bool IsBoundary)
+{
+    public EntityId EntityId { get; init; } = EntityId.None;
+}

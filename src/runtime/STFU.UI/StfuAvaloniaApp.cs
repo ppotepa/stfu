@@ -17,7 +17,7 @@ public sealed class StfuAvaloniaApp : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             StfuUiLog.Write("Creating main window.");
-            desktop.MainWindow = new MainWindow();
+            desktop.MainWindow = new MainWindow(StfuUiHost.StartupOptions);
             desktop.Exit += (_, _) => StfuUiLog.Write("Avalonia desktop lifetime exiting.");
         }
 

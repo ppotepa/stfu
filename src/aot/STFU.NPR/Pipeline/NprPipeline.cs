@@ -9,6 +9,7 @@ internal static class NprPipelineRunner
     {
         context.Graph.Clear();
         context.Frame = StrokeFrame.Empty;
+        context.NprFrame = STFU.NPR.Rendering.NprFrame.Empty;
         context.StepTraces.Clear();
 
         foreach (var step in steps)
@@ -49,6 +50,7 @@ internal static class NprPipelineRunner
             context.Graph.FeatureLines.Count +
             context.Graph.Candidates.Count +
             context.Graph.StyledStrokes.Count +
+            context.Graph.ToneSurfaces.Count +
             context.Frame.Paths.Count;
     }
 

@@ -3,10 +3,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
+using System.Runtime.InteropServices;
 using STFU.Assets;
 using STFU.Camera;
 using STFU.Camera.Commands;
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Engine;
 using STFU.Engine.Commands;
@@ -19,6 +23,7 @@ using STFU.Messaging.Commands;
 using STFU.NPR.Composition;
 using STFU.NPR.Debug;
 using STFU.NPR.Pipeline;
+using STFU.NPR.Rendering;
 using STFU.NPR.Settings;
 using STFU.NPR.Analysis;
 using STFU.NPR.Preset.Blueprint;
@@ -26,8 +31,8 @@ using STFU.NPR.Preset.MangaInk;
 using STFU.NPR.Preset.PencilConstruction;
 using STFU.NPR.Preset.PenInkHatching;
 using STFU.NPR.Preset.TechnicalInk;
+using STFU.NPR.Pipeline.ComicSurface;
 using STFU.NPR.Temporal;
-using STFU.NPR.Visibility;
 using STFU.Strokes;
 using STFU.Viewport;
 using STFU.Viewport.Commands;
@@ -37,6 +42,11 @@ namespace STFU.UI;
 public sealed class MainWindow : Window
 {
     public MainWindow()
+        : this(StfuUiStartupOptions.Default)
+    {
+    }
+
+    internal MainWindow(StfuUiStartupOptions startupOptions)
     {
         Title = "STFU";
         Width = 1280;
@@ -44,7 +54,7 @@ public sealed class MainWindow : Window
         MinWidth = 640;
         MinHeight = 360;
 
-        var viewport = new EngineViewportControl(CreateEngine());
+        var viewport = new EngineViewportControl(CreateEngine(), startupOptions);
         Content = viewport;
         KeyDown += viewport.HandleKeyDown;
         Opened += (_, _) =>
@@ -65,11 +75,17 @@ public sealed class MainWindow : Window
             .AddModule(new CameraModule())
             .AddModule(new StrokesModule())
             .AddModule(new NprModule(
-                new TechnicalInkPreset(),
-                new PencilConstructionPreset(),
-                new PenInkHatchingPreset(),
-                new MangaInkPreset(),
-                new BlueprintPreset()))
+                [
+                    new TechnicalInkPreset(),
+                    new PencilConstructionPreset(),
+                    new PenInkHatchingPreset(),
+                    new MangaInkPreset(),
+                    new BlueprintPreset(),
+                    new ComicSurfacePreset()
+                ],
+                [
+                    new ComicSurfacePipelineProvider()
+                ]))
             .AddModule(new ViewportModule())
             .Build();
 
@@ -92,12 +108,38 @@ public sealed class MainWindow : Window
         var meshFactory = engine.Registry.GetRequired<MeshFactory>();
         var meshLoader = engine.Registry.GetRequired<IMeshLoader<string>>();
         var assets = engine.Registry.GetRequired<AssetRegistry>();
-        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/suzanne.obj"));
+        var path = ResolveAssetPath("suzanne.obj");
         var mesh = meshFactory.Load(path, meshLoader);
         StfuUiLog.Write($"Loaded mesh asset: {path}");
         StfuUiLog.Write($"Mesh vertices: {mesh.Vertices.Count}, triangles: {mesh.Triangles.Count}");
 
         return assets.AddMesh(path, mesh);
+    }
+
+    private static string ResolveAssetPath(string fileName)
+    {
+        foreach (var root in EnumerateAssetRoots())
+        {
+            var path = Path.GetFullPath(Path.Combine(root, "assets", fileName));
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "assets", fileName));
+    }
+
+    private static IEnumerable<string> EnumerateAssetRoots()
+    {
+        yield return Environment.CurrentDirectory;
+
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            yield return directory.FullName;
+            directory = directory.Parent;
+        }
     }
 }
 
@@ -107,9 +149,9 @@ internal sealed class EngineViewportControl : Control
     private readonly AssetRegistry _assets;
     private readonly CameraRig _camera;
     private readonly ActiveNprPresetState _activeNprPreset;
+    private readonly NprEntityStyleRegistry _entityStyles;
+    private readonly NprFrameState _nprFrames;
     private readonly MeshAnalysisCacheStore _analysis;
-    private readonly IVisibilityResolver _visibilityResolver;
-    private readonly IOcclusionQuery _occlusionQuery;
     private readonly FrameHistoryState _frameHistory;
     private readonly NprDebugState _debug;
     private readonly StrokeState _strokes;
@@ -121,21 +163,29 @@ internal sealed class EngineViewportControl : Control
     private bool _loggedOrbitInput;
     private bool _loggedPanInput;
     private bool _loggedFovInput;
+    private bool _logNextNprFrameSummary = true;
     private readonly DispatcherTimer _renderTimer;
 
     public EngineViewportControl(StfuEngine engine)
+        : this(engine, StfuUiStartupOptions.Default)
+    {
+    }
+
+    internal EngineViewportControl(StfuEngine engine, StfuUiStartupOptions startupOptions)
     {
         _engine = engine;
         _assets = engine.Registry.GetRequired<AssetRegistry>();
         _camera = engine.Registry.GetRequired<CameraRig>();
         _activeNprPreset = engine.Registry.GetRequired<ActiveNprPresetState>();
+        _entityStyles = engine.Registry.GetRequired<NprEntityStyleRegistry>();
+        _nprFrames = engine.Registry.GetRequired<NprFrameState>();
         _analysis = engine.Registry.GetRequired<MeshAnalysisCacheStore>();
-        _visibilityResolver = engine.Registry.GetRequired<IVisibilityResolver>();
-        _occlusionQuery = engine.Registry.GetRequired<IOcclusionQuery>();
         _frameHistory = engine.Registry.GetRequired<FrameHistoryState>();
         _debug = engine.Registry.GetRequired<NprDebugState>();
         _strokes = engine.Registry.GetRequired<StrokeState>();
         _viewport = engine.Registry.GetRequired<ViewportState>();
+
+        ApplyStartupOptions(startupOptions);
 
         Focusable = true;
         PointerPressed += OnPointerPressed;
@@ -169,6 +219,26 @@ internal sealed class EngineViewportControl : Control
         };
     }
 
+    private void ApplyStartupOptions(StfuUiStartupOptions startupOptions)
+    {
+        if (!string.IsNullOrWhiteSpace(startupOptions.PresetId))
+        {
+            _activeNprPreset.ApplyPreset(startupOptions.PresetId);
+            _frameHistory.Reset();
+            var preset = _activeNprPreset.ActivePreset.Metadata;
+            StfuUiLog.Write($"Startup NPR preset: {preset.Id} ({preset.Name})");
+            _logNextNprFrameSummary = true;
+        }
+
+        if (startupOptions.RenderMode is { } renderMode)
+        {
+            _commands.Enqueue(new SetViewportRenderModeCommand(renderMode));
+            _engine.Tick(_commands);
+            StfuUiLog.Write($"Startup viewport render mode: {renderMode}");
+            _logNextNprFrameSummary = renderMode != ViewportRenderMode.Mesh;
+        }
+    }
+
     public override void Render(DrawingContext context)
     {
         base.Render(context);
@@ -184,14 +254,95 @@ internal sealed class EngineViewportControl : Control
 
         if (!_loggedFirstFrame)
         {
-            StfuUiLog.Write($"Viewport first frame: {width}x{height}, strokes: {_viewport.Snapshot.Frame.Paths.Count}");
+            StfuUiLog.Write($"Viewport first frame: {width}x{height}, strokes: {_viewport.Snapshot.Frame.Paths.Count}, layers: {_viewport.Snapshot.NprFrame?.Layers.Count ?? 0}");
             _loggedFirstFrame = true;
         }
 
-        context.FillRectangle(new SolidColorBrush(Color.FromRgb(245, 245, 242)), bounds);
-        DrawGrid(context, bounds);
-        DrawFrame(context, _viewport.Snapshot.Frame);
+        if (_viewport.Snapshot.NprFrame is { Layers.Count: > 0 } nprFrame && _viewport.RenderMode != ViewportRenderMode.Mesh)
+        {
+            DrawNprFrame(context, nprFrame, bounds);
+        }
+        else
+        {
+            context.FillRectangle(new SolidColorBrush(Color.FromRgb(245, 245, 242)), bounds);
+            DrawGrid(context, bounds);
+            DrawFrame(context, _viewport.Snapshot.Frame);
+        }
+
         DrawDebugOverlay(context, _viewport.Snapshot.DebugFrame, _viewport.DebugOverlay);
+    }
+
+    private static void DrawNprFrame(DrawingContext context, NprFrame frame, Rect bounds)
+    {
+        var paper = frame.Paper.Color;
+        var paperAlpha = (byte)(Math.Clamp(frame.Paper.Opacity, 0f, 1f) * 255f);
+        context.FillRectangle(new SolidColorBrush(Color.FromArgb(paperAlpha, paper.R, paper.G, paper.B)), bounds);
+
+        foreach (var layer in frame.Layers.Where(layer => layer.Visible).OrderBy(layer => layer.Order))
+        {
+            var layerOpacity = Math.Clamp(layer.Opacity, 0f, 1f);
+            foreach (var tone in layer.Tones)
+            {
+                DrawToneSurface(context, tone, bounds, layerOpacity);
+            }
+
+            DrawPaths(context, layer.Shading, layerOpacity);
+            DrawPaths(context, layer.Strokes, layerOpacity);
+        }
+    }
+
+    private static void DrawToneSurface(DrawingContext context, NprToneSurface2D surface, Rect bounds, float layerOpacity)
+    {
+        if (surface.Width <= 0 || surface.Height <= 0 || surface.Rgba.Length < surface.Width * surface.Height * 4)
+        {
+            return;
+        }
+
+        var bitmap = new WriteableBitmap(
+            new PixelSize(surface.Width, surface.Height),
+            new Avalonia.Vector(96, 96),
+            PixelFormat.Bgra8888,
+            AlphaFormat.Premul);
+        using (var framebuffer = bitmap.Lock())
+        {
+            var pixels = new byte[framebuffer.RowBytes * surface.Height];
+            var opacity = Math.Clamp(surface.Opacity * layerOpacity, 0f, 1f);
+            for (var y = 0; y < surface.Height; y++)
+            {
+                var sourceRow = y * surface.Width * 4;
+                var targetRow = y * framebuffer.RowBytes;
+                for (var x = 0; x < surface.Width; x++)
+                {
+                    var source = sourceRow + x * 4;
+                    var target = targetRow + x * 4;
+                    var alpha = (byte)Math.Clamp(MathF.Round(surface.Rgba[source + 3] * opacity), 0f, 255f);
+                    pixels[target] = Premultiply(surface.Rgba[source + 2], alpha);
+                    pixels[target + 1] = Premultiply(surface.Rgba[source + 1], alpha);
+                    pixels[target + 2] = Premultiply(surface.Rgba[source], alpha);
+                    pixels[target + 3] = alpha;
+                }
+            }
+
+            Marshal.Copy(pixels, 0, framebuffer.Address, pixels.Length);
+        }
+
+        context.DrawImage(
+            bitmap,
+            new Rect(0, 0, surface.Width, surface.Height),
+            bounds);
+    }
+
+    private static byte Premultiply(byte color, byte alpha)
+    {
+        return (byte)(color * alpha / 255);
+    }
+
+    private static void DrawPaths(DrawingContext context, IReadOnlyList<StrokePath2D> paths, float layerOpacity)
+    {
+        foreach (var path in paths.OrderByDescending(path => path.Metadata?.LayerOrder ?? 100))
+        {
+            DrawPath(context, path, layerOpacity);
+        }
     }
 
     private static void DrawGrid(DrawingContext context, Rect bounds)
@@ -216,54 +367,59 @@ internal sealed class EngineViewportControl : Control
     {
         foreach (var path in frame.Paths.OrderByDescending(path => path.Metadata?.LayerOrder ?? 100))
         {
-            if (path.Points.Count < 2)
-            {
-                continue;
-            }
-
-            var dashStyle = path.Metadata?.SourceKind == "DashedHiddenStroke"
-                ? new DashStyle([6.0, 4.0], 0)
-                : null;
-
-            if (path.RichPoints is { Count: > 1 } richPoints && richPoints.Count == path.Points.Count)
-            {
-                for (var index = 1; index < richPoints.Count; index++)
-                {
-                    var start = richPoints[index - 1];
-                    var end = richPoints[index];
-                    var style = new StrokeStyle2D(
-                        MathF.Max(0.35f, (start.Thickness + end.Thickness) * 0.5f),
-                        Math.Clamp((start.Opacity + end.Opacity) * 0.5f, 0f, 1f),
-                        path.Style.Color);
-                    context.DrawLine(
-                        CreatePen(style, dashStyle),
-                        new Point(start.Position.X, start.Position.Y),
-                        new Point(end.Position.X, end.Position.Y));
-                }
-
-                continue;
-            }
-
-            var pen = CreatePen(path.Style, dashStyle);
-
-            for (var index = 1; index < path.Points.Count; index++)
-            {
-                var start = path.Points[index - 1];
-                var end = path.Points[index];
-                context.DrawLine(
-                    pen,
-                    new Point(start.X, start.Y),
-                    new Point(end.X, end.Y));
-            }
+            DrawPath(context, path, 1f);
         }
+    }
 
-        static Pen CreatePen(StrokeStyle2D style, DashStyle? dashStyle)
+    private static void DrawPath(DrawingContext context, StrokePath2D path, float opacityScale)
+    {
+        if (path.Points.Count < 2)
         {
-            var color = style.Color;
-            var alpha = (byte)(Math.Clamp(style.Opacity, 0f, 1f) * 255f);
-            var brush = new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B));
-            return new Pen(brush, Math.Max(0.35, style.Thickness), dashStyle);
+            return;
         }
+
+        var dashStyle = path.Metadata?.SourceKind == "DashedHiddenStroke"
+            ? new DashStyle([6.0, 4.0], 0)
+            : null;
+
+        if (path.RichPoints is { Count: > 1 } richPoints && richPoints.Count == path.Points.Count)
+        {
+            for (var index = 1; index < richPoints.Count; index++)
+            {
+                var start = richPoints[index - 1];
+                var end = richPoints[index];
+                var style = new StrokeStyle2D(
+                    MathF.Max(0.35f, (start.Thickness + end.Thickness) * 0.5f),
+                    Math.Clamp((start.Opacity + end.Opacity) * 0.5f * opacityScale, 0f, 1f),
+                    path.Style.Color);
+                context.DrawLine(
+                    CreatePen(style, dashStyle),
+                    new Point(start.Position.X, start.Position.Y),
+                    new Point(end.Position.X, end.Position.Y));
+            }
+
+            return;
+        }
+
+        var pen = CreatePen(path.Style with { Opacity = Math.Clamp(path.Style.Opacity * opacityScale, 0f, 1f) }, dashStyle);
+
+        for (var index = 1; index < path.Points.Count; index++)
+        {
+            var start = path.Points[index - 1];
+            var end = path.Points[index];
+            context.DrawLine(
+                pen,
+                new Point(start.X, start.Y),
+                new Point(end.X, end.Y));
+        }
+    }
+
+    private static Pen CreatePen(StrokeStyle2D style, DashStyle? dashStyle)
+    {
+        var color = style.Color;
+        var alpha = (byte)(Math.Clamp(style.Opacity, 0f, 1f) * 255f);
+        var brush = new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B));
+        return new Pen(brush, Math.Max(0.35, style.Thickness), dashStyle);
     }
 
     private static void DrawDebugOverlay(DrawingContext context, NprDebugFrame debugFrame, DebugOverlayKind overlay)
@@ -362,6 +518,7 @@ internal sealed class EngineViewportControl : Control
         return renderMode switch
         {
             ViewportRenderMode.Npr => CreateNprFrame(width, height),
+            ViewportRenderMode.ComicSurface => CreateNprFrame(width, height),
             _ => CreateMeshFrame(width, height)
         };
     }
@@ -369,6 +526,7 @@ internal sealed class EngineViewportControl : Control
     private StrokeFrame CreateMeshFrame(int width, int height)
     {
         _debug.Publish(NprDebugFrame.Empty);
+        _nprFrames.Publish(NprFrame.Empty);
         return CreateSuzanneFrame(width, height);
     }
 
@@ -387,15 +545,51 @@ internal sealed class EngineViewportControl : Control
             Height = height,
             Settings = presetState.ActiveSettings,
             Style = presetState.ActiveGrammar,
+            StyleSet = presetState.ActiveStyleSet,
+            EntityStyles = _entityStyles,
             Analysis = _analysis,
-            VisibilityResolver = _visibilityResolver,
-            OcclusionQuery = _occlusionQuery,
             FrameHistoryState = _frameHistory
         };
 
         var frame = presetState.ActivePipeline.Execute(nprContext);
+        _nprFrames.Publish(nprContext.NprFrame);
         _debug.Publish(nprContext.DebugFrame);
+        LogNprFrameSummaryIfNeeded(presetState, nprContext, frame);
         return frame;
+    }
+
+    private void LogNprFrameSummaryIfNeeded(ActiveNprPresetState presetState, NprContext context, StrokeFrame frame)
+    {
+        if (!_logNextNprFrameSummary)
+        {
+            return;
+        }
+
+        var preset = presetState.ActivePreset.Metadata;
+        var counters = context.DebugFrame.Counters;
+        StfuUiLog.Write(
+            $"NPR frame {context.FrameId}: preset={preset.Id}, pipeline={presetState.ActivePreset.PipelineId}, " +
+            $"meshes={context.Graph.Meshes.Count}, vertices={context.Graph.Vertices.Count}, triangles={context.Graph.Triangles.Count}, " +
+            $"curves={counters.FeatureCurveCount}, visible={counters.VisibleSegmentCount}, hidden={counters.HiddenSegmentCount}, " +
+            $"candidates={counters.StrokeCandidateCount}, strokes={counters.StrokeCount}, paths={frame.Paths.Count}, " +
+            $"layers={context.NprFrame.Layers.Count}, tones={context.Graph.ToneSurfaces.Count}");
+        if (context.NprFrame.Layers.Count > 0)
+        {
+            StfuUiLog.Write("NPR layers: " + string.Join(", ", context.NprFrame.Layers.Select(layer =>
+                $"{layer.Id}[tone={layer.Tones.Count}, shading={layer.Shading.Count}, strokes={layer.Strokes.Count}]")));
+            StfuUiLog.Write("NPR path layers: " + string.Join(", ", context.Frame.Paths
+                .GroupBy(path => string.IsNullOrWhiteSpace(path.Metadata?.Layer) ? "unlayered" : path.Metadata!.Layer!)
+                .OrderBy(group => group.Key)
+                .Select(group => $"{group.Key}={group.Count()}")));
+        }
+
+        foreach (var trace in context.DebugFrame.StepTraces.OrderByDescending(trace => trace.Milliseconds).Take(3))
+        {
+            StfuUiLog.Write(
+                $"NPR step: {trace.StepName} {trace.Milliseconds:0.00}ms, input={trace.InputCount}, output={trace.OutputCount}, notes={trace.Notes}");
+        }
+
+        _logNextNprFrameSummary = false;
     }
 
     private StrokeFrame CreateSuzanneFrame(int width, int height)
@@ -411,7 +605,7 @@ internal sealed class EngineViewportControl : Control
             return StrokeFrame.Empty;
         }
 
-        return MeshToStrokeFrame(mesh, width, height, _camera.Camera);
+        return MeshToStrokeFrame(mesh, width, height, _camera.Camera, entity.Transform);
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -507,19 +701,22 @@ internal sealed class EngineViewportControl : Control
         switch (e.Key)
         {
             case Key.F1:
-                SetPreset("technical-ink");
+                SetNprPreset("technical-ink", ViewportRenderMode.Npr);
                 return;
             case Key.F2:
-                SetPreset("pencil-construction");
+                SetNprPreset("pencil-construction", ViewportRenderMode.Npr);
                 return;
             case Key.F3:
-                SetPreset("pen-ink-hatching");
+                SetNprPreset("pen-ink-hatching", ViewportRenderMode.Npr);
                 return;
             case Key.F4:
-                SetPreset("manga-ink");
+                SetNprPreset("manga-ink", ViewportRenderMode.Npr);
                 return;
             case Key.F5:
-                SetPreset("blueprint");
+                SetNprPreset("blueprint", ViewportRenderMode.Npr);
+                return;
+            case Key.F6:
+                SetNprPreset("comic-surface", ViewportRenderMode.ComicSurface);
                 return;
             case Key.D0:
             case Key.NumPad0:
@@ -527,8 +724,12 @@ internal sealed class EngineViewportControl : Control
                 return;
             case Key.D3:
             case Key.NumPad3:
-                SetOverlay(DebugOverlayKind.FeatureCurves, "feature-curves");
-                return;
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                {
+                    SetOverlay(DebugOverlayKind.FeatureCurves, "feature-curves");
+                    return;
+                }
+                break;
             case Key.D4:
             case Key.NumPad4:
                 SetOverlay(DebugOverlayKind.VisibilitySegments, "visibility-segments");
@@ -577,6 +778,7 @@ internal sealed class EngineViewportControl : Control
         {
             Key.D1 or Key.NumPad1 => ViewportRenderMode.Mesh,
             Key.D2 or Key.NumPad2 => ViewportRenderMode.Npr,
+            Key.D3 or Key.NumPad3 => ViewportRenderMode.ComicSurface,
             _ => (ViewportRenderMode?)null
         };
 
@@ -585,10 +787,20 @@ internal sealed class EngineViewportControl : Control
             return;
         }
 
+        if (renderMode.Value == ViewportRenderMode.ComicSurface)
+        {
+            ApplyPreset("comic-surface");
+        }
+        else if (renderMode.Value == ViewportRenderMode.Npr &&
+            _activeNprPreset.ActivePreset.PipelineId == NprPipelineIds.ComicSurface)
+        {
+            ApplyPreset("technical-ink");
+        }
+
         _commands.Enqueue(new SetViewportRenderModeCommand(renderMode.Value));
         _engine.Tick(_commands);
         StfuUiLog.Write($"Viewport render mode: {renderMode.Value}");
-        if (renderMode.Value == ViewportRenderMode.Npr)
+        if (renderMode.Value != ViewportRenderMode.Mesh)
         {
             var preset = _activeNprPreset.ActivePreset.Metadata;
             StfuUiLog.Write($"NPR preset: {preset.Id} ({preset.Name})");
@@ -606,14 +818,24 @@ internal sealed class EngineViewportControl : Control
             e.Handled = true;
         }
 
-        void SetPreset(string presetId)
+        void SetNprPreset(string presetId, ViewportRenderMode renderMode)
+        {
+            ApplyPreset(presetId);
+            _commands.Enqueue(new SetViewportRenderModeCommand(renderMode));
+            _engine.Tick(_commands);
+            StfuUiLog.Write($"Viewport render mode: {renderMode}");
+            _logNextNprFrameSummary = true;
+            InvalidateVisual();
+            e.Handled = true;
+        }
+
+        void ApplyPreset(string presetId)
         {
             _activeNprPreset.ApplyPreset(presetId);
             _frameHistory.Reset();
+            _logNextNprFrameSummary = true;
             var preset = _activeNprPreset.ActivePreset.Metadata;
             StfuUiLog.Write($"NPR preset: {preset.Id} ({preset.Name})");
-            InvalidateVisual();
-            e.Handled = true;
         }
     }
 
@@ -634,7 +856,7 @@ internal sealed class EngineViewportControl : Control
             point.Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed;
     }
 
-    private static StrokeFrame MeshToStrokeFrame(MeshData mesh, int width, int height, CameraState camera)
+    private static StrokeFrame MeshToStrokeFrame(MeshData mesh, int width, int height, CameraState camera, Transform3D transform)
     {
         if (mesh.Vertices.Count == 0)
         {
@@ -645,9 +867,27 @@ internal sealed class EngineViewportControl : Control
         var emittedEdges = new HashSet<long>();
         var projection = CameraProjection.Create(camera, width, height);
         var style = new StrokeStyle2D(0.55f, 1.0f, StrokeColor.Black);
+        var worldPositions = mesh.Vertices
+            .Select(vertex => TransformVertex(vertex.Position, transform))
+            .ToArray();
 
         foreach (var triangle in mesh.Triangles)
         {
+            if ((uint)triangle.A >= (uint)worldPositions.Length ||
+                (uint)triangle.B >= (uint)worldPositions.Length ||
+                (uint)triangle.C >= (uint)worldPositions.Length)
+            {
+                continue;
+            }
+
+            var aWorld = worldPositions[triangle.A];
+            var bWorld = worldPositions[triangle.B];
+            var cWorld = worldPositions[triangle.C];
+            if (!IsFrontFacing(aWorld, bWorld, cWorld, camera.Position))
+            {
+                continue;
+            }
+
             AddEdge(triangle.A, triangle.B);
             AddEdge(triangle.B, triangle.C);
             AddEdge(triangle.C, triangle.A);
@@ -667,8 +907,8 @@ internal sealed class EngineViewportControl : Control
                 return;
             }
 
-            if (projection.TryProject(mesh.Vertices[a].Position, out var start) &&
-                projection.TryProject(mesh.Vertices[b].Position, out var end))
+            if (projection.TryProject(worldPositions[a], out var start) &&
+                projection.TryProject(worldPositions[b], out var end))
             {
                 paths.Add(StrokePath2D.Line(start, end, style));
             }
@@ -679,6 +919,30 @@ internal sealed class EngineViewportControl : Control
             var min = Math.Min(a, b);
             var max = Math.Max(a, b);
             return ((long)min << 32) | (uint)max;
+        }
+
+        static Vector3 TransformVertex(Vector3 position, Transform3D transform)
+        {
+            return Vector3.Transform(position * transform.Scale, CreateRotation(transform.Rotation)) + transform.Position;
+        }
+
+        static bool IsFrontFacing(Vector3 a, Vector3 b, Vector3 c, Vector3 cameraPosition)
+        {
+            var normal = Vector3.Cross(b - a, c - a);
+            if (normal.LengthSquared() <= 0.0001f)
+            {
+                return false;
+            }
+
+            normal = Vector3.Normalize(normal);
+            var center = (a + b + c) / 3f;
+            var viewDirection = Vector3.Normalize(cameraPosition - center);
+            return Vector3.Dot(normal, viewDirection) > 0f;
+        }
+
+        static Quaternion CreateRotation(Vector3 rotation)
+        {
+            return Quaternion.CreateFromYawPitchRoll(rotation.Y, rotation.X, rotation.Z);
         }
     }
 

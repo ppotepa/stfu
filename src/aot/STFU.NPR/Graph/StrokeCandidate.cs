@@ -1,4 +1,5 @@
 using System.Numerics;
+using STFU.Common.Primitives;
 using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
@@ -18,7 +19,8 @@ public sealed record StrokeCandidate(
     float Tone,
     Vector2 Direction,
     float Density,
-    HatchLayerKind? HatchLayerKind = null)
+    HatchLayerKind? HatchLayerKind = null,
+    EntityId EntityId = default)
 {
     public float ScreenLength => MeasureLength(Points);
 

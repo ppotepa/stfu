@@ -1,5 +1,6 @@
 using STFU.NPR.Fields;
 using STFU.NPR.Temporal;
+using STFU.NPR.Rendering;
 
 namespace STFU.NPR.Graph;
 
@@ -31,6 +32,8 @@ public sealed class NprGraph
 
     public List<StyledStroke> StyledStrokes { get; } = [];
 
+    public List<NprToneSurface2D> ToneSurfaces { get; } = [];
+
     public List<StyledStroke> Strokes => StyledStrokes;
 
     public List<HatchingPlan> HatchingPlans { get; } = [];
@@ -53,6 +56,8 @@ public sealed class NprGraph
 
     public TextureField? TextureField { get; set; }
 
+    public SurfaceVisibilityBuffer? SurfaceVisibility { get; set; }
+
     public void Clear()
     {
         Meshes.Clear();
@@ -68,6 +73,7 @@ public sealed class NprGraph
         FeatureLines.Clear();
         Candidates.Clear();
         StyledStrokes.Clear();
+        ToneSurfaces.Clear();
         HatchingPlans.Clear();
         SalienceByStableId.Clear();
         CurveMatchesByStableId.Clear();
@@ -78,6 +84,7 @@ public sealed class NprGraph
         DirectionField = null;
         DensityField = null;
         TextureField = null;
+        SurfaceVisibility = null;
     }
 
     public void AddCurve(FeatureCurve curve)

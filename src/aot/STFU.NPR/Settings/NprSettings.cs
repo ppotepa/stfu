@@ -36,5 +36,9 @@ public sealed class NprSettings
 
     public float MinimumSalience { get; set; } = 0.28f;
 
+    public float SurfaceBufferScale { get; set; } = 0.5f;
+
+    public bool MainFillEnabled { get; set; } = true;
+
     public NprStrokeStyle StrokeStyle { get; } = new();
 }

@@ -1,3 +1,4 @@
+using STFU.Common.Primitives;
 using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
@@ -16,10 +17,14 @@ public readonly record struct VisibilitySegment(
     float Shade,
     float Importance,
     float Confidence,
-    HatchLayerKind? HatchLayerKind = null)
+    HatchLayerKind? HatchLayerKind = null,
+    EntityId EntityId = default)
 {
     public FeatureLine ToFeatureLine()
     {
-        return new FeatureLine(StableId, Intent, Start, End, Depth, Shade, Importance);
+        return new FeatureLine(StableId, Intent, Start, End, Depth, Shade, Importance)
+        {
+            EntityId = EntityId
+        };
     }
 }

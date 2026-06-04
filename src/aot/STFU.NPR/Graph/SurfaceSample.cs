@@ -1,4 +1,5 @@
 using System.Numerics;
+using STFU.Common.Primitives;
 using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
@@ -12,4 +13,7 @@ public readonly record struct SurfaceSample(
     float Depth,
     float Shade,
     float Curvature,
-    float SmoothedCurvature);
+    float SmoothedCurvature)
+{
+    public EntityId EntityId { get; init; } = EntityId.None;
+}

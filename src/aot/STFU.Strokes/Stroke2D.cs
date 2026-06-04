@@ -42,7 +42,8 @@ public sealed record StrokeMetadata(
     string? Visibility = null,
     string? StyleId = null,
     string? Variant = null,
-    int LayerOrder = 0);
+    int LayerOrder = 0,
+    int? EntityId = null);
 
 public sealed record StrokePath2D(
     IReadOnlyList<Point2D> Points,

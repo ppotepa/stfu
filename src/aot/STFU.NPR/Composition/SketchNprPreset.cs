@@ -2,10 +2,6 @@ using STFU.NPR.Pipeline;
 using STFU.NPR.Settings;
 using STFU.NPR.Debug;
 using STFU.NPR.Graph;
-using STFU.NPR.Steps.Analysis;
-using STFU.NPR.Steps.Debug;
-using STFU.NPR.Steps.Mesh;
-using STFU.NPR.Steps.Strokes;
 using STFU.Strokes;
 using STFU.Strokes.Export;
 
@@ -126,32 +122,52 @@ public static class SketchNprPreset
                 DebugOverlayKind.MaterialRegion]));
     }
 
+    public static NprStyleSet CreateStyleSet(string id = "generic-sketch", string name = "Generic Sketch")
+    {
+        return new NprStyleSet(
+            id,
+            name,
+            NprPaper.Default,
+            CreateRoleStyle(NprSceneRole.Foreground, 30, 1f, 1.2f, 1f, 1f, 1f, 0.22f),
+            CreateRoleStyle(NprSceneRole.Midground, 20, 0.72f, 0.82f, 0.6f, 0.65f, 0.5f, 0.14f),
+            CreateRoleStyle(NprSceneRole.Background, 10, 0.46f, 0.55f, 0.25f, 0.35f, 0.15f, 0.08f));
+    }
+
+    private static NprRoleStyle CreateRoleStyle(
+        NprSceneRole role,
+        int order,
+        float opacityScale,
+        float strokeScale,
+        float detailScale,
+        float toneScale,
+        float hatchScale,
+        float fillOpacity)
+    {
+        var layer = new NprLayerStyle(
+            $"{role.ToString().ToLowerInvariant()}:model",
+            $"{role} Model",
+            order,
+            true,
+            opacityScale,
+            NprLayerBlendMode.Normal,
+            new NprToneStyle(true, new StrokeColor(166, 173, 162), fillOpacity, 0.42f),
+            new NprShadingStyle(true, 0.45f, hatchScale),
+            new NprStrokeChannelStyle(true, 1f, 1f),
+            new NprStrokeChannelStyle(true, 0.78f, 0.82f),
+            new NprStrokeChannelStyle(true, 0.68f, 0.72f));
+
+        return new NprRoleStyle(
+            role,
+            opacityScale,
+            strokeScale,
+            detailScale,
+            toneScale,
+            hatchScale,
+            [layer]);
+    }
+
     public static INprPipeline CreatePipeline()
     {
-        return new NprPipeline(
-        [
-            new ProjectMeshStep(),
-            new BuildProjectedTrianglesStep(),
-            new BuildMeshTopologyStep(),
-            new BuildMaterialRegionsStep(),
-            new ExtractFeatureCurvesStep(),
-            new RefineFeatureConfidenceStep(),
-            new BuildSurfaceSamplesStep(),
-            new BuildScreenSpaceFieldsStep(),
-            new BuildContactAccentsStep(),
-            new BuildStyleMasksStep(),
-            new BuildSurfaceFlowLinesStep(),
-            new BuildHatchingStep(),
-            new ApplyApproximateOcclusionStep(),
-            new ScoreFeatureSalienceStep(),
-            new PruneFeatureLinesStep(),
-            new BuildStrokeCandidatesStep(),
-            new BuildTemporalMatchesStep(),
-            new StyleStrokesStep(),
-            new HumanizeStrokesStep(),
-            new BuildStrokeFrameStep(),
-            new CaptureFrameHistoryStep(),
-            new BuildDebugFrameStep()
-        ]);
+        return new NprPipeline([]);
     }
 }

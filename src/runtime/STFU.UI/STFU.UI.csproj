@@ -8,6 +8,7 @@
     <ProjectReference Include="..\..\aot\STFU.Messaging\STFU.Messaging.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Camera\STFU.Camera.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\..\aot\pipelines\STFU.NPR.Pipeline.ComicSurface\STFU.NPR.Pipeline.ComicSurface.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR.Preset.Blueprint\STFU.NPR.Preset.Blueprint.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR.Preset.MangaInk\STFU.NPR.Preset.MangaInk.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR.Preset.PencilConstruction\STFU.NPR.Preset.PencilConstruction.csproj" />

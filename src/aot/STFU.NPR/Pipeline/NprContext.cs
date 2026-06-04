@@ -7,7 +7,7 @@ using STFU.NPR.Graph;
 using STFU.NPR.Composition;
 using STFU.NPR.Settings;
 using STFU.NPR.Temporal;
-using STFU.NPR.Visibility;
+using STFU.NPR.Rendering;
 using STFU.Strokes;
 
 namespace STFU.NPR.Pipeline;
@@ -28,11 +28,11 @@ public sealed class NprContext
 
     public required StyleGrammar Style { get; init; }
 
+    public required NprStyleSet StyleSet { get; init; }
+
+    public required NprEntityStyleRegistry EntityStyles { get; init; }
+
     public required MeshAnalysisCacheStore Analysis { get; init; }
-
-    public required IVisibilityResolver VisibilityResolver { get; init; }
-
-    public required IOcclusionQuery OcclusionQuery { get; init; }
 
     public required FrameHistoryState FrameHistoryState { get; init; }
 
@@ -45,6 +45,8 @@ public sealed class NprContext
     public NprGraph Graph { get; } = new();
 
     public StrokeFrame Frame { get; set; } = StrokeFrame.Empty;
+
+    public NprFrame NprFrame { get; set; } = NprFrame.Empty;
 
     public NprDebugFrame DebugFrame { get; set; } = NprDebugFrame.Empty;
 

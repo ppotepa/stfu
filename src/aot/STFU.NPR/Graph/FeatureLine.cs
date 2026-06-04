@@ -1,3 +1,4 @@
+using STFU.Common.Primitives;
 using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
@@ -9,4 +10,7 @@ public readonly record struct FeatureLine(
     Point2D End,
     float Depth,
     float Shade,
-    float Importance);
+    float Importance)
+{
+    public EntityId EntityId { get; init; } = EntityId.None;
+}

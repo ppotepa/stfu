@@ -1,3 +1,4 @@
+using STFU.Common.Primitives;
 using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
@@ -17,6 +18,8 @@ public sealed record FeatureCurve(
 
     public HatchLayerKind? HatchLayerKind { get; init; }
 
+    public EntityId EntityId { get; init; } = EntityId.None;
+
     public float AverageDepth => Points.Count == 0 ? 0f : Points.Average(point => point.Depth);
 
     public FeatureLine ToFeatureLine()
@@ -33,7 +36,10 @@ public sealed record FeatureCurve(
             Points[^1].ScreenPosition,
             AverageDepth,
             Shade,
-            Importance);
+            Importance)
+        {
+            EntityId = EntityId
+        };
     }
 
     public static FeatureCurve FromLine(
@@ -47,7 +53,8 @@ public sealed record FeatureCurve(
         float importance,
         float confidence = 1f,
         FeatureCurveFlags flags = FeatureCurveFlags.None,
-        HatchLayerKind? hatchLayerKind = null)
+        HatchLayerKind? hatchLayerKind = null,
+        EntityId entityId = default)
     {
         return new FeatureCurve(
             stableId,
@@ -60,7 +67,8 @@ public sealed record FeatureCurve(
             Math.Clamp(confidence, 0f, 1f),
             flags)
         {
-            HatchLayerKind = hatchLayerKind
+            HatchLayerKind = hatchLayerKind,
+            EntityId = entityId
         };
     }
 }

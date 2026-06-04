@@ -1,4 +1,5 @@
 using System.Numerics;
+using STFU.Common.Primitives;
 using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
@@ -17,4 +18,7 @@ public readonly record struct ProjectedTriangle(
     float ScreenArea,
     float Shade,
     bool IsFrontFacing,
-    bool IsVisible);
+    bool IsVisible)
+{
+    public EntityId EntityId { get; init; } = EntityId.None;
+}

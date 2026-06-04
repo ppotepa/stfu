@@ -1,5 +1,6 @@
 using STFU.Messaging.Commands;
 using STFU.NPR.Debug;
+using STFU.NPR.Rendering;
 using STFU.Strokes;
 using STFU.Viewport.Commands;
 using STFU.Viewport.Snapshots;
@@ -11,15 +12,18 @@ public sealed class RequestRenderCommandHandler : ICommandHandler<RequestRenderC
     private readonly ViewportState _viewport;
     private readonly NprDebugState _debug;
     private readonly StrokeState _strokes;
+    private readonly NprFrameState _nprFrames;
 
     public RequestRenderCommandHandler(
         ViewportState viewport,
         NprDebugState debug,
-        StrokeState strokes)
+        StrokeState strokes,
+        NprFrameState nprFrames)
     {
         _viewport = viewport;
         _debug = debug;
         _strokes = strokes;
+        _nprFrames = nprFrames;
     }
 
     public void Handle(RequestRenderCommand command)
@@ -29,6 +33,7 @@ public sealed class RequestRenderCommandHandler : ICommandHandler<RequestRenderC
             _viewport.Height,
             _viewport.RenderMode,
             _strokes.CurrentFrame,
+            _nprFrames.CurrentFrame,
             _debug.CurrentFrame));
     }
 }

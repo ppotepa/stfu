@@ -1,5 +1,4 @@
 using STFU.NPR.Pipeline;
-using STFU.NPR.Visibility;
 
 namespace STFU.NPR.Export;
 
@@ -18,16 +17,10 @@ public sealed class NprExportRenderer
             Width = sourceContext.Width,
             Height = sourceContext.Height,
             Settings = sourceContext.Settings,
-            Style = sourceContext.Style with
-            {
-                Visibility = sourceContext.Style.Visibility with
-                {
-                    Strictness = Composition.VisibilityStrictness.OfflineExact
-                }
-            },
+            Style = sourceContext.Style,
+            StyleSet = sourceContext.StyleSet,
+            EntityStyles = sourceContext.EntityStyles,
             Analysis = sourceContext.Analysis,
-            VisibilityResolver = new OfflineExactVisibilityResolver(),
-            OcclusionQuery = CloneOcclusionQuery(sourceContext.OcclusionQuery),
             FrameHistoryState = new Temporal.FrameHistoryState(),
             FrameId = sourceContext.FrameId,
             TimeSeconds = sourceContext.TimeSeconds,
@@ -36,15 +29,5 @@ public sealed class NprExportRenderer
 
         pipeline.Execute(exportContext);
         return exportContext;
-    }
-
-    private static IOcclusionQuery CloneOcclusionQuery(IOcclusionQuery query)
-    {
-        return query switch
-        {
-            BvhOcclusionQuery => new BvhOcclusionQuery(),
-            SampleOcclusionQuery => new SampleOcclusionQuery(),
-            _ => new BvhOcclusionQuery()
-        };
     }
 }

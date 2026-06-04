@@ -1,5 +1,6 @@
 using STFU.Viewport.Snapshots;
 using STFU.NPR.Debug;
+using STFU.NPR.Rendering;
 
 namespace STFU.Viewport;
 
@@ -18,6 +19,7 @@ public sealed class ViewportState
         720,
         ViewportRenderMode.Mesh,
         Strokes.StrokeFrame.Empty,
+        NprFrame.Empty,
         NprDebugFrame.Empty);
 
     public void Resize(int width, int height)
