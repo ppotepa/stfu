@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.CameraPanel">
+  <StackPanel Spacing="12">
+    <TextBlock Text="CameraState" FontWeight="Bold" />
+
+    <TextBlock Text="Position" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+      <NumericUpDown Grid.Column="0" Value="{Binding Camera.PositionX, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+      <NumericUpDown Grid.Column="1" Value="{Binding Camera.PositionY, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+      <NumericUpDown Grid.Column="2" Value="{Binding Camera.PositionZ, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+    </Grid>
+
+    <TextBlock Text="Target" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+      <NumericUpDown Grid.Column="0" Value="{Binding Camera.TargetX, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+      <NumericUpDown Grid.Column="1" Value="{Binding Camera.TargetY, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+      <NumericUpDown Grid.Column="2" Value="{Binding Camera.TargetZ, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+    </Grid>
+
+    <Grid ColumnDefinitions="150,*,52" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="9">
+      <TextBlock Text="FOV" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Column="1" Minimum="20" Maximum="100" Value="{Binding Camera.FieldOfViewDegrees, Mode=TwoWay}" />
+      <TextBlock Grid.Column="2" Text="{Binding Camera.FieldOfViewDegrees, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="1" Text="Orbit Yaw" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="1" Grid.Column="1" Minimum="-75" Maximum="75" Value="{Binding Camera.OrbitYawDegrees, Mode=TwoWay}" />
+      <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Camera.OrbitYawDegrees, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="2" Text="Orbit Pitch" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="2" Grid.Column="1" Minimum="-45" Maximum="45" Value="{Binding Camera.OrbitPitchDegrees, Mode=TwoWay}" />
+      <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding Camera.OrbitPitchDegrees, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+    </Grid>
+
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+      <Button Grid.Column="0" Content="Frame Model" Classes="primary" Command="{Binding Camera.FrameModelCommand}" />
+      <Button Grid.Column="1" Content="Reset Camera" Command="{Binding Camera.ResetCommand}" />
+    </Grid>
+
+    <StackPanel Spacing="8">
+      <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="9">
+        <TextBlock Text="OrbitCameraCommand(deltaYaw, deltaPitch)" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+      </Border>
+      <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="9">
+        <TextBlock Text="PanCameraCommand(deltaRight, deltaUp)" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+      </Border>
+      <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="9">
+        <TextBlock Text="AdjustCameraFovCommand(deltaDegrees)" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+      </Border>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

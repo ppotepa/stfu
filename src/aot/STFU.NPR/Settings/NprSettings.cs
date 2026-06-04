@@ -41,4 +41,6 @@ public sealed class NprSettings
     public bool MainFillEnabled { get; set; } = true;
 
     public NprStrokeStyle StrokeStyle { get; } = new();
+
+    public DefaultDrawingSettings DefaultDrawing { get; } = new();
 }

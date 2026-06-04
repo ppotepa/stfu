@@ -1,16 +1,19 @@
+using STFU.Abstractions.Modules;
 using STFU.Engine.Commands;
-using STFU.Engine.Composition;
 using STFU.Engine.Handlers;
+using STFU.Engine.Scenes;
 
 namespace STFU.Engine;
 
 public sealed class EngineCoreModule : IEngineModule
 {
-    public void Register(EngineModuleContext context)
+    public void Register(IModuleContext context)
     {
+        var scene = context.Services.GetRequired<Scene>();
+
         context.Commands
-            .Register(new CreateEntityCommandHandler(context.Scene))
-            .Register(new DeleteEntityCommandHandler(context.Scene))
-            .Register(new SetEntityPositionCommandHandler(context.Scene));
+            .Register(new CreateEntityCommandHandler(scene))
+            .Register(new DeleteEntityCommandHandler(scene))
+            .Register(new SetEntityPositionCommandHandler(scene));
     }
 }

@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.LoadPanel">
+  <StackPanel Spacing="12">
+    <TextBlock Text="Asset Registry" FontWeight="Bold" />
+    <TextBlock Text="{Binding Assets.LoaderStatus}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    <ListBox ItemsSource="{Binding Assets.Assets}" SelectedItem="{Binding Assets.SelectedAsset, Mode=TwoWay}" MinHeight="80">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <StackPanel Spacing="3">
+            <TextBlock Text="{Binding Id}" FontWeight="Bold" />
+            <TextBlock Text="{Binding Path}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="11" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding Handle, StringFormat='{}MeshHandle({0})'}" Foreground="{DynamicResource StfuBlueBrush}" FontSize="11" FontWeight="Bold" />
+              <TextBlock Text="{Binding VertexCount, StringFormat='{}{0} vertices'}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="11" />
+              <TextBlock Text="{Binding TriangleCount, StringFormat='{}{0} triangles'}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="11" />
+              <TextBlock Text="{Binding Status}" Foreground="{DynamicResource StfuGreenBrush}" FontSize="11" FontWeight="Bold" />
+            </StackPanel>
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="8" RowDefinitions="Auto,Auto" RowSpacing="8">
+      <Button Grid.ColumnSpan="2" Content="Load Asset" Classes="primary" Command="{Binding Assets.LoadAssetCommand}" />
+      <Button Grid.Row="1" Content="Reload Current" Command="{Binding Assets.ReloadAssetCommand}" />
+      <Button Grid.Row="1" Grid.Column="1" Content="Assign Mesh" Command="{Binding Assets.AssignMeshCommand}" />
+    </Grid>
+
+    <TextBlock Text="Scene Entities" FontWeight="Bold" />
+    <TextBlock Text="{Binding Scene.SceneSummary}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    <ListBox ItemsSource="{Binding Scene.Entities}" SelectedItem="{Binding Scene.SelectedEntity, Mode=TwoWay}" MinHeight="100">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <StackPanel Spacing="3">
+            <TextBlock Text="{Binding Name}" FontWeight="Bold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding IdLabel}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="11" />
+              <TextBlock Text="{Binding MeshLabel}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="11" />
+              <TextBlock Text="{Binding Role}" Foreground="{DynamicResource StfuGreenBrush}" FontWeight="Bold" FontSize="11" />
+            </StackPanel>
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+      <Button Grid.Column="0" Content="Create Entity" Classes="primary" Command="{Binding Scene.CreateEntityCommand}" />
+      <Button Grid.Column="1" Content="Delete Selected" Command="{Binding Scene.DeleteEntityCommand}" />
+    </Grid>
+
+    <TextBlock Text="{Binding Scene.SelectedEntityLabel, StringFormat='{}Entity.Position - {0}'}" FontWeight="Bold" />
+    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+      <NumericUpDown Grid.Column="0" Value="{Binding Scene.SelectedEntity.PositionX, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+      <NumericUpDown Grid.Column="1" Value="{Binding Scene.SelectedEntity.PositionY, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+      <NumericUpDown Grid.Column="2" Value="{Binding Scene.SelectedEntity.PositionZ, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+    </Grid>
+    <StackPanel Spacing="6">
+      <TextBlock Text="Scene Role" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+      <ComboBox ItemsSource="{Binding Scene.RoleOptions}" SelectedItem="{Binding Scene.SelectedEntity.Role, Mode=TwoWay}" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

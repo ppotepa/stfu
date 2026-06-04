@@ -1,4 +1,3 @@
-using STFU.NPR.Pipeline;
 using STFU.NPR.Settings;
 
 namespace STFU.NPR.Composition;
@@ -7,9 +6,7 @@ public interface INprPreset
 {
     NprPresetMetadata Metadata { get; }
 
-    string PipelineId => NprPipelineIds.Sketch;
-
-    INprPipeline CreatePipeline();
+    string PipelineId => NprPipelineIds.Default;
 
     NprSettings CreateSettings();
 

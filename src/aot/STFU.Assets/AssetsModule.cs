@@ -1,10 +1,10 @@
-using STFU.Engine.Composition;
+using STFU.Abstractions.Modules;
 
 namespace STFU.Assets;
 
 public sealed class AssetsModule : IEngineModule
 {
-    public void Register(EngineModuleContext context)
+    public void Register(IModuleContext context)
     {
         context.Services.AddSingleton(new AssetRegistry());
     }

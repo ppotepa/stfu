@@ -1,10 +1,10 @@
-using STFU.Engine.Composition;
+using STFU.Abstractions.Modules;
 
 namespace STFU.Strokes;
 
 public sealed class StrokesModule : IEngineModule
 {
-    public void Register(EngineModuleContext context)
+    public void Register(IModuleContext context)
     {
         context.Services.AddSingleton(new StrokeState());
     }

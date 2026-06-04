@@ -20,6 +20,9 @@ public sealed class AssetRegistry
 
     public int MeshCount => _meshes.Count;
 
+    public IEnumerable<AssetMeshEntry> MeshEntries => _meshesByPath
+        .Select(entry => new AssetMeshEntry(entry.Key, entry.Value, _meshes[entry.Value]));
+
     public int SkinnedMeshCount => _skinnedMeshes.Count;
 
     public int SkeletonCount => _skeletons.Count;
@@ -80,3 +83,8 @@ public sealed class AssetRegistry
         return _meshesByPath.TryGetValue(path, out handle);
     }
 }
+
+public sealed record AssetMeshEntry(
+    string Path,
+    MeshHandle Handle,
+    MeshData Mesh);

@@ -1,29 +1,36 @@
 <Solution>
   <Folder Name="/src/" />
-  <Folder Name="/src/aot/">
+  <Folder Name="/src/aot/" />
+  <Folder Name="/src/aot/foundation/">
     <Project Path="src/aot/STFU.Abstractions/STFU.Abstractions.csproj" />
-    <Project Path="src/aot/STFU.Animation/STFU.Animation.csproj" />
-    <Project Path="src/aot/STFU.Assets/STFU.Assets.csproj" />
     <Project Path="src/aot/STFU.Common/STFU.Common.csproj" />
     <Project Path="src/aot/STFU.Engine/STFU.Engine.csproj" />
+    <Project Path="src/aot/STFU.Messaging/STFU.Messaging.csproj" />
+  </Folder>
+  <Folder Name="/src/aot/domains/">
+    <Project Path="src/aot/STFU.Animation/STFU.Animation.csproj" />
+    <Project Path="src/aot/STFU.Assets/STFU.Assets.csproj" />
+    <Project Path="src/aot/STFU.Camera/STFU.Camera.csproj" />
     <Project Path="src/aot/STFU.Mesh.IO/STFU.Mesh.IO.csproj" />
     <Project Path="src/aot/STFU.Mesh/STFU.Mesh.csproj" />
-    <Project Path="src/aot/STFU.Messaging/STFU.Messaging.csproj" />
-    <Project Path="src/aot/STFU.Camera/STFU.Camera.csproj" />
-    <Project Path="src/aot/STFU.NPR/STFU.NPR.csproj" />
-    <Project Path="src/aot/pipelines/STFU.NPR.Pipeline.ComicSurface/STFU.NPR.Pipeline.ComicSurface.csproj" />
-    <Project Path="src/aot/STFU.NPR.Preset.Blueprint/STFU.NPR.Preset.Blueprint.csproj" />
-    <Project Path="src/aot/STFU.NPR.Preset.MangaInk/STFU.NPR.Preset.MangaInk.csproj" />
-    <Project Path="src/aot/STFU.NPR.Preset.PencilConstruction/STFU.NPR.Preset.PencilConstruction.csproj" />
-    <Project Path="src/aot/STFU.NPR.Preset.PenInkHatching/STFU.NPR.Preset.PenInkHatching.csproj" />
-    <Project Path="src/aot/STFU.NPR.Preset.TechnicalInk/STFU.NPR.Preset.TechnicalInk.csproj" />
     <Project Path="src/aot/STFU.Strokes/STFU.Strokes.csproj" />
     <Project Path="src/aot/STFU.Viewport/STFU.Viewport.csproj" />
   </Folder>
-  <Folder Name="/src/runtime/">
+  <Folder Name="/src/aot/npr/">
+    <Project Path="src/aot/STFU.NPR/STFU.NPR.csproj" />
+    <Project Path="src/aot/npr/pipelines/STFU.NPR.Pipelines/STFU.NPR.Pipelines.csproj" />
+    <Project Path="src/aot/npr/presets/STFU.NPR.Presets/STFU.NPR.Presets.csproj" />
+  </Folder>
+  <Folder Name="/src/runtime/" />
+  <Folder Name="/src/runtime/apps/">
     <Project Path="src/runtime/STFU.App/STFU.App.csproj" />
-    <Project Path="src/runtime/STFU.Import.Fbx/STFU.Import.Fbx.csproj" />
+  </Folder>
+  <Folder Name="/src/runtime/import/">
     <Project Path="src/runtime/STFU.Import/STFU.Import.csproj" />
+    <Project Path="src/runtime/STFU.Import.Fbx/STFU.Import.Fbx.csproj" />
+  </Folder>
+  <Folder Name="/src/runtime/ui/">
+    <Project Path="src/runtime/STFU.UI.Bridge/STFU.UI.Bridge.csproj" />
     <Project Path="src/runtime/STFU.UI/STFU.UI.csproj" />
   </Folder>
 </Solution>

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\STFU.Abstractions\STFU.Abstractions.csproj" />
     <ProjectReference Include="..\STFU.Assets\STFU.Assets.csproj" />
     <ProjectReference Include="..\STFU.Camera\STFU.Camera.csproj" />
     <ProjectReference Include="..\STFU.Common\STFU.Common.csproj" />

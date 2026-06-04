@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.GeneralPanel">
+  <StackPanel Spacing="12">
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+      <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Id" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Presets.ActivePresetId}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Column="1" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Name" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Presets.ActivePresetName}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Row="1" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="IsEditable" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Presets.ActivePresetIsEditable}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Pipeline" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Presets.ActivePipelineId}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Row="2" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Provider" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Presets.ActivePresetProvider}" FontWeight="Bold" TextWrapping="Wrap" /></StackPanel>
+      </Border>
+      <Border Grid.Row="2" Grid.Column="1" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Packaging" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="BuiltInAot" FontWeight="Bold" /></StackPanel>
+      </Border>
+    </Grid>
+
+    <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuGreenBrush}" BorderThickness="3,0,0,0" Padding="10">
+      <TextBlock Text="{Binding Presets.ActivePresetDescription}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource StfuTextBrush}" />
+    </Border>
+
+    <StackPanel Spacing="6">
+      <TextBlock Text="Preset Registry" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+      <ComboBox ItemsSource="{Binding Presets.Presets}"
+                SelectedItem="{Binding Presets.ActivePresetItem, Mode=TwoWay}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding DisplayName}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </StackPanel>
+
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+      <Button Grid.Column="0" Content="ViewportRenderMode.Npr" Classes="primary" Command="{Binding SetNprModeCommand}" />
+      <Button Grid.Column="1" Content="ViewportRenderMode.Mesh" Command="{Binding SetMeshModeCommand}" />
+    </Grid>
+
+    <StackPanel Spacing="6">
+      <TextBlock Text="Seed" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+      <NumericUpDown Value="{Binding DefaultDrawing.Seed, Mode=TwoWay}" Minimum="0" Maximum="999999" />
+    </StackPanel>
+
+    <CheckBox Content="Deterministic strokes" IsChecked="{Binding StableRandom, Mode=TwoWay}" />
+    <CheckBox Content="Viewport grid" IsChecked="{Binding Viewport.ShowGrid, Mode=TwoWay}" />
+
+    <TextBlock Text="Command Log" FontWeight="Bold" />
+    <ItemsControl ItemsSource="{Binding CommandLog}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Background="{DynamicResource StfuInputBrush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,6">
+            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource StfuMutedBrush}" TextWrapping="Wrap" />
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

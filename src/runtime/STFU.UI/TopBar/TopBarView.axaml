@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.TopBarView">
+  <Grid ColumnDefinitions="*,Auto,*"
+        ColumnSpacing="16"
+        Height="48"
+        Background="{DynamicResource StfuSurfaceBrush}">
+    <Border Grid.ColumnSpan="3"
+            BorderBrush="{DynamicResource StfuLineBrush}"
+            BorderThickness="0,0,0,1" />
+
+    <StackPanel Grid.Column="0"
+                Orientation="Horizontal"
+                Spacing="12"
+                VerticalAlignment="Center"
+                Margin="16,0,0,0">
+      <TextBlock Text="STFU" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+      <TextBlock Text="Scene-To-Flat Unrenderer"
+                 Foreground="{DynamicResource StfuMutedBrush}"
+                 FontSize="12"
+                 VerticalAlignment="Center" />
+    </StackPanel>
+
+    <StackPanel Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="10"
+                VerticalAlignment="Center">
+      <TextBlock Text="MODE"
+                 FontSize="11"
+                 FontWeight="Bold"
+                 Foreground="{DynamicResource StfuMutedBrush}"
+                 VerticalAlignment="Center" />
+      <ToggleSwitch Classes="topbar-toggle"
+                    OffContent="MESH"
+                    OnContent="NPR"
+                    IsChecked="{Binding Viewport.IsNprModeSelected, Mode=TwoWay}" />
+    </StackPanel>
+
+    <StackPanel Grid.Column="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Spacing="9"
+                Margin="0,0,16,0">
+      <ToggleSwitch Classes="topbar-toggle"
+                    OffContent="LIGHT"
+                    OnContent="DARK"
+                    IsChecked="{Binding IsDarkTheme, Mode=TwoWay}"
+                    ToolTip.Tip="Switch light/dark theme" />
+    </StackPanel>
+  </Grid>
+</UserControl>

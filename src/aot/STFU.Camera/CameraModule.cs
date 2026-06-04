@@ -1,4 +1,4 @@
-using STFU.Engine.Composition;
+using STFU.Abstractions.Modules;
 using STFU.Camera.Commands;
 using STFU.Camera.Handlers;
 
@@ -6,7 +6,7 @@ namespace STFU.Camera;
 
 public sealed class CameraModule : IEngineModule
 {
-    public void Register(EngineModuleContext context)
+    public void Register(IModuleContext context)
     {
         var state = new CameraRig();
 

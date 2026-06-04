@@ -8,88 +8,202 @@ const panels = {
   load: ["Load", "Assets, mesh handles, and scene entities."],
   general: ["General", "Preset metadata, render mode, seed, and command log."],
   camera: ["Camera", "CameraState and viewport camera commands."],
-  npr: ["NPR Pipeline", "NprSettings plus per-step graph counters."],
-  strokes: ["Stroke Layers", "Layered strokes, fills, shading, and preview."],
-  debug: ["Debug Graph", "NprGraph counters, overlays, trace, and determinism."],
+  npr: ["Default Pipeline", "DefaultDrawingSettings plus per-step graph counters."],
+  strokes: ["Style Layers", "StyleSet roles, layers, marks, fills, and preview."],
+  debug: ["Debug Graph", "NprGraph counters, parity, trace, and determinism."],
 };
 
 const presetDefinitions = {
-  "generic-sketch": {
-    id: "generic-sketch",
-    name: "Generic Sketch",
-    description: "Editable built-in NPR sketch preset using feature lines, hatching, density pruning, and approximate hidden-line filtering.",
-    editable: true,
+  "default": {
+    id: "default",
+    name: "Default",
+    description: "Built-in Default parity line-art preset using projection, face-id visibility, edge fragments, path joining, draw progress, and comic ink strokes.",
+    editable: false,
+    pipelineId: "default",
+    pipelineProvider: "STFU.NPR.Pipeline.Default",
     settings: {
-      seed: 1337,
-      creaseAngleDegrees: 34,
-      minimumProjectedTriangleArea: 8,
-      minimumStrokeLength: 4,
-      surfaceFlowShadeThreshold: 0.52,
-      surfaceFlowDensity: 0.38,
-      hatchShadeThreshold: 0.58,
-      hatchDensity: 0.48,
-      hatchLength: 19,
-      hiddenLineDepthBias: 0.025,
-      featureLineDensity: 0.86,
+      seed: 17,
+      showSilhouette: true,
+      showFeature: true,
+      showBoundary: true,
+      featureAngleDegrees: 34,
+      minSegPx: 1,
+      meshStride: 1,
+      occlusionCulling: true,
+      depthScale: 1,
+      pathSimplify: 0.6,
+      drawProgress: 1,
+      autoDraw: true,
+      lineWidth: 2.2,
+      jitter: 1.6,
+      pressure: 0.32,
     },
     strokeStyle: {
-      seed: 1337,
-      baseThickness: 1.28,
-      thicknessVariation: 0.42,
-      endpointJitter: 0.95,
-      overshoot: 1.85,
+      seed: 17,
+      baseThickness: 2.2,
+      thicknessVariation: 0.12,
+      endpointJitter: 1.6,
+      overshoot: 0.35,
     },
   },
-  "technical-line": {
-    id: "technical-line",
-    name: "Technical Line",
-    description: "High feature-line density, low hatch density, and minimal humanization for a cleaner linework target.",
+  "technical-ink": {
+    id: "technical-ink",
+    name: "Technical Ink",
+    description: "Style-only preset on the Default pipeline: cleaner contour/feature hierarchy with low jitter and reduced pressure variation.",
     editable: false,
+    pipelineId: "default",
+    pipelineProvider: "STFU.NPR.Pipeline.Default",
     settings: {
       seed: 2201,
-      creaseAngleDegrees: 26,
-      minimumProjectedTriangleArea: 6,
-      minimumStrokeLength: 5,
-      surfaceFlowShadeThreshold: 0.72,
-      surfaceFlowDensity: 0.2,
-      hatchShadeThreshold: 0.8,
-      hatchDensity: 0.12,
-      hatchLength: 14,
-      hiddenLineDepthBias: 0.018,
-      featureLineDensity: 0.96,
+      showSilhouette: true,
+      showFeature: true,
+      showBoundary: true,
+      featureAngleDegrees: 28,
+      minSegPx: 1,
+      meshStride: 1,
+      occlusionCulling: true,
+      depthScale: 1,
+      pathSimplify: 0.72,
+      drawProgress: 1,
+      autoDraw: true,
+      lineWidth: 1.55,
+      jitter: 0.28,
+      pressure: 0.12,
     },
     strokeStyle: {
       seed: 2201,
-      baseThickness: 1.05,
+      baseThickness: 1.55,
       thicknessVariation: 0.16,
-      endpointJitter: 0.18,
-      overshoot: 0.5,
+      endpointJitter: 0.28,
+      overshoot: 0.25,
+    },
+  },
+  "pencil-construction": {
+    id: "pencil-construction",
+    name: "Pencil Construction",
+    description: "Foreground/midground sketch preset on Default: softer pressure, more construction accents, and lower opacity support layers.",
+    editable: true,
+    pipelineId: "default",
+    pipelineProvider: "STFU.NPR.Pipeline.Default",
+    settings: {
+      seed: 3017,
+      showSilhouette: true,
+      showFeature: true,
+      showBoundary: true,
+      featureAngleDegrees: 38,
+      minSegPx: 1,
+      meshStride: 1,
+      occlusionCulling: true,
+      depthScale: 1,
+      pathSimplify: 0.52,
+      drawProgress: 1,
+      autoDraw: true,
+      lineWidth: 1.35,
+      jitter: 1.9,
+      pressure: 0.42,
+    },
+    strokeStyle: {
+      seed: 3017,
+      baseThickness: 1.35,
+      thicknessVariation: 0.5,
+      endpointJitter: 1.9,
+      overshoot: 1.2,
+    },
+  },
+  "pen-ink-hatching": {
+    id: "pen-ink-hatching",
+    name: "Pen And Ink Hatching",
+    description: "Style target for the next Hatching pipeline extension; currently uses Default line-art layers plus planned hatch/tone channels.",
+    editable: true,
+    pipelineId: "default",
+    pipelineProvider: "STFU.NPR.Pipeline.Default",
+    settings: {
+      seed: 3761,
+      showSilhouette: true,
+      showFeature: true,
+      showBoundary: true,
+      featureAngleDegrees: 34,
+      minSegPx: 1,
+      meshStride: 1,
+      occlusionCulling: true,
+      depthScale: 1,
+      pathSimplify: 0.58,
+      drawProgress: 1,
+      autoDraw: true,
+      lineWidth: 1.9,
+      jitter: 0.78,
+      pressure: 0.36,
+    },
+    strokeStyle: {
+      seed: 3761,
+      baseThickness: 1.9,
+      thicknessVariation: 0.34,
+      endpointJitter: 0.78,
+      overshoot: 0.8,
     },
   },
   "manga-ink": {
     id: "manga-ink",
     name: "Manga Ink",
-    description: "Dense hatching, stronger silhouettes, and larger endpoint variation for expressive NPR strokes.",
+    description: "Style-only preset on Default with heavier silhouettes, clean feature strokes, and graphic ink layer hierarchy.",
     editable: true,
+    pipelineId: "default",
+    pipelineProvider: "STFU.NPR.Pipeline.Default",
     settings: {
       seed: 4088,
-      creaseAngleDegrees: 42,
-      minimumProjectedTriangleArea: 10,
-      minimumStrokeLength: 3,
-      surfaceFlowShadeThreshold: 0.44,
-      surfaceFlowDensity: 0.55,
-      hatchShadeThreshold: 0.48,
-      hatchDensity: 0.76,
-      hatchLength: 24,
-      hiddenLineDepthBias: 0.031,
-      featureLineDensity: 0.78,
+      showSilhouette: true,
+      showFeature: true,
+      showBoundary: true,
+      featureAngleDegrees: 42,
+      minSegPx: 1,
+      meshStride: 1,
+      occlusionCulling: true,
+      depthScale: 1,
+      pathSimplify: 0.5,
+      drawProgress: 1,
+      autoDraw: true,
+      lineWidth: 2.75,
+      jitter: 0.58,
+      pressure: 0.5,
     },
     strokeStyle: {
       seed: 4088,
-      baseThickness: 1.65,
-      thicknessVariation: 0.72,
-      endpointJitter: 1.35,
-      overshoot: 2.8,
+      baseThickness: 2.75,
+      thicknessVariation: 0.22,
+      endpointJitter: 0.58,
+      overshoot: 0.35,
+    },
+  },
+  "blueprint": {
+    id: "blueprint",
+    name: "Blueprint Construction",
+    description: "Style-only Default preset for clean visible lines, planned dashed construction layers, and SVG-friendly layer naming.",
+    editable: false,
+    pipelineId: "default",
+    pipelineProvider: "STFU.NPR.Pipeline.Default",
+    settings: {
+      seed: 5102,
+      showSilhouette: true,
+      showFeature: true,
+      showBoundary: true,
+      featureAngleDegrees: 30,
+      minSegPx: 1,
+      meshStride: 1,
+      occlusionCulling: true,
+      depthScale: 1,
+      pathSimplify: 0.8,
+      drawProgress: 1,
+      autoDraw: true,
+      lineWidth: 1.25,
+      jitter: 0.18,
+      pressure: 0.08,
+    },
+    strokeStyle: {
+      seed: 5102,
+      baseThickness: 1.25,
+      thicknessVariation: 0.08,
+      endpointJitter: 0.18,
+      overshoot: 0.12,
     },
   },
 };
@@ -99,7 +213,7 @@ const assets = [
     id: "suzanne",
     path: "assets/suzanne.obj",
     handle: 1,
-    vertices: 511,
+    vertices: 507,
     triangles: 968,
     loader: "ObjMeshLoader",
     status: "Loaded",
@@ -124,20 +238,24 @@ const assets = [
   },
 ];
 
-const intentNames = ["Silhouette", "Boundary", "Crease", "SurfaceFlow", "Hatch", "Accent"];
+const intentNames = ["Silhouette", "Boundary", "Feature", "Crease", "SurfaceFlow", "Hatch", "Accent", "Fill", "Tones"];
 const intentColors = {
   Silhouette: "#151713",
   Boundary: "#262a24",
+  Feature: "#343833",
   Crease: "#444a42",
   SurfaceFlow: "#5f665e",
   Hatch: "#77746b",
   Accent: "#8a4e45",
+  Fill: "#a6ada2",
+  Tones: "#747d70",
 };
 
 const layerTypeLabels = {
   strokes: "Strokes",
   fill: "Fill",
   shading: "Shading",
+  tones: "Tones",
 };
 
 function cloneStrokeStyle(style, overrides = {}) {
@@ -155,8 +273,9 @@ function createPresetLayers(preset) {
   const settings = preset.settings;
   return [
     {
-      id: "stroke-layer:silhouette",
-      name: "Silhouette Ink",
+      id: "foreground:contour",
+      role: "Foreground",
+      name: "Contour Ink",
       type: "strokes",
       visible: true,
       solo: false,
@@ -171,60 +290,63 @@ function createPresetLayers(preset) {
         thicknessVariation: style.thicknessVariation * 0.55,
       }),
       fillCoverage: 0,
-      shadeThreshold: settings.hatchShadeThreshold,
+      shadeThreshold: 0.5,
     },
     {
-      id: "stroke-layer:creases",
-      name: "Crease Detail",
+      id: "foreground:crease",
+      role: "Foreground",
+      name: "Feature / Crease",
       type: "strokes",
       visible: true,
       solo: false,
       locked: false,
       blend: "normal",
       opacity: 0.82,
-      density: settings.featureLineDensity,
-      color: intentColors.Crease,
-      intents: ["Crease", "Accent"],
+      density: settings.showFeature ? 1 : 0,
+      color: intentColors.Feature,
+      intents: ["Feature", "Crease", "Accent"],
       style: cloneStrokeStyle(style),
       fillCoverage: 0,
-      shadeThreshold: settings.hatchShadeThreshold,
+      shadeThreshold: 0.5,
     },
     {
-      id: "shade-layer:hatch",
-      name: "Hatch Shading",
+      id: "midground:hatching",
+      role: "Midground",
+      name: "Hatching Guide",
       type: "shading",
       visible: true,
       solo: false,
       locked: false,
       blend: "multiply",
-      opacity: 0.58,
-      density: settings.hatchDensity,
+      opacity: 0.34,
+      density: 0.42,
       color: intentColors.Hatch,
-      intents: ["Hatch", "SurfaceFlow"],
+      intents: ["Hatch", "SurfaceFlow", "Tones"],
       style: cloneStrokeStyle(style, {
         baseThickness: style.baseThickness * 0.52,
         endpointJitter: style.endpointJitter * 0.45,
       }),
       fillCoverage: 0.14,
-      shadeThreshold: settings.hatchShadeThreshold,
+      shadeThreshold: 0.58,
     },
     {
-      id: "fill-layer:wash",
-      name: "Soft Value Fill",
+      id: "background:mainfill",
+      role: "Background",
+      name: "Main Fill",
       type: "fill",
       visible: true,
       solo: false,
       locked: false,
       blend: "multiply",
-      opacity: 0.22,
+      opacity: 0.18,
       density: 0.45,
       color: "#a6ada2",
-      intents: ["SurfaceFlow", "Hatch"],
+      intents: ["Fill", "Tones"],
       style: cloneStrokeStyle(style, {
         baseThickness: style.baseThickness * 0.2,
       }),
       fillCoverage: 0.35,
-      shadeThreshold: settings.surfaceFlowShadeThreshold,
+      shadeThreshold: 0.55,
     },
   ];
 }
@@ -232,7 +354,7 @@ function createPresetLayers(preset) {
 const state = {
   mode: "npr",
   tab: "load",
-  presetId: "generic-sketch",
+  presetId: "default",
   selectedAssetId: "suzanne",
   selectedEntityId: 1,
   nextEntityId: 2,
@@ -242,17 +364,17 @@ const state = {
   camera: {
     position: { x: 0, y: 0, z: 4 },
     target: { x: 0, y: 0, z: 0 },
-    fov: 60,
+    fov: 45,
     orbitYaw: 0,
     orbitPitch: 0,
   },
-  settings: structuredClone(presetDefinitions["generic-sketch"].settings),
-  strokeStyle: structuredClone(presetDefinitions["generic-sketch"].strokeStyle),
-  selectedLayerId: "stroke-layer:silhouette",
+  settings: structuredClone(presetDefinitions["default"].settings),
+  strokeStyle: structuredClone(presetDefinitions["default"].strokeStyle),
+  selectedLayerId: "foreground:contour",
   nextLayerId: 1,
-  strokeLayers: createPresetLayers(presetDefinitions["generic-sketch"]),
+  strokeLayers: createPresetLayers(presetDefinitions["default"]),
   entities: [
-    { id: 1, name: "Suzanne", meshId: "suzanne", position: { x: 0, y: 0, z: 0 } },
+    { id: 1, name: "Suzanne", meshId: "suzanne", role: "Foreground", position: { x: 0, y: 0, z: 0 } },
   ],
   overlays: {
     projectedVertices: false,
@@ -264,7 +386,8 @@ const state = {
     hiddenCandidates: false,
   },
   commandLog: [
-    { time: "init", text: "NprPresetRegistry.ActivePreset = generic-sketch" },
+    { time: "init", text: "ActiveNprPresetState.ApplyPreset(default)" },
+    { time: "init", text: "NprPipelineRegistry.Resolve(default) -> STFU.NPR.Pipeline.Default" },
     { time: "init", text: "SetViewportRenderModeCommand(ViewportRenderMode.Npr)" },
   ],
 };
@@ -301,104 +424,100 @@ const sliderDefs = [
     command: () => `OrbitCameraCommand(yaw=${formatScalar(state.camera.orbitYaw)}, pitch=${formatScalar(state.camera.orbitPitch)})`,
   },
   {
-    id: "creaseSlider",
-    output: "creaseValue",
-    get: () => state.settings.creaseAngleDegrees,
-    set: value => { state.settings.creaseAngleDegrees = value; },
+    id: "featureAngleSlider",
+    output: "featureAngleValue",
+    get: () => state.settings.featureAngleDegrees,
+    set: value => { state.settings.featureAngleDegrees = value; },
     fromControl: value => value,
     toControl: value => value,
     label: value => String(Math.round(value)),
-    command: () => `NprSettings.CreaseAngleDegrees = ${formatScalar(state.settings.creaseAngleDegrees)}`,
+    command: () => `DefaultDrawingSettings.FeatureAngleDegrees = ${formatScalar(state.settings.featureAngleDegrees)}`,
   },
   {
-    id: "minAreaSlider",
-    output: "minAreaValue",
-    get: () => state.settings.minimumProjectedTriangleArea,
-    set: value => { state.settings.minimumProjectedTriangleArea = value; },
+    id: "minSegSlider",
+    output: "minSegValue",
+    get: () => state.settings.minSegPx,
+    set: value => { state.settings.minSegPx = value; },
+    fromControl: value => value,
+    toControl: value => value,
+    label: value => formatScalar(value),
+    command: () => `DefaultDrawingSettings.MinSegPx = ${formatScalar(state.settings.minSegPx)}`,
+  },
+  {
+    id: "meshStrideSlider",
+    output: "meshStrideValue",
+    get: () => state.settings.meshStride,
+    set: value => { state.settings.meshStride = Math.max(1, Math.round(value)); },
     fromControl: value => value,
     toControl: value => value,
     label: value => String(Math.round(value)),
-    command: () => `NprSettings.MinimumProjectedTriangleArea = ${formatScalar(state.settings.minimumProjectedTriangleArea)}`,
+    command: () => `DefaultDrawingSettings.MeshStride = ${Math.round(state.settings.meshStride)}`,
   },
   {
-    id: "minStrokeSlider",
-    output: "minStrokeValue",
-    get: () => state.settings.minimumStrokeLength,
-    set: value => { state.settings.minimumStrokeLength = value; },
-    fromControl: value => value,
-    toControl: value => value,
-    label: value => String(Math.round(value)),
-    command: () => `NprSettings.MinimumStrokeLength = ${formatScalar(state.settings.minimumStrokeLength)}`,
-  },
-  {
-    id: "surfaceThresholdSlider",
-    output: "surfaceThresholdValue",
-    get: () => state.settings.surfaceFlowShadeThreshold,
-    set: value => { state.settings.surfaceFlowShadeThreshold = value; },
+    id: "depthScaleSlider",
+    output: "depthScaleValue",
+    get: () => state.settings.depthScale,
+    set: value => { state.settings.depthScale = value; },
     fromControl: value => value / 100,
     toControl: value => value * 100,
     label: value => value.toFixed(2),
-    command: () => `NprSettings.SurfaceFlowShadeThreshold = ${state.settings.surfaceFlowShadeThreshold.toFixed(2)}`,
+    command: () => `DefaultDrawingSettings.DepthScale = ${state.settings.depthScale.toFixed(2)}`,
   },
   {
-    id: "surfaceDensitySlider",
-    output: "surfaceDensityValue",
-    get: () => state.settings.surfaceFlowDensity,
-    set: value => { state.settings.surfaceFlowDensity = value; },
+    id: "pathSimplifySlider",
+    output: "pathSimplifyValue",
+    get: () => state.settings.pathSimplify,
+    set: value => { state.settings.pathSimplify = value; },
     fromControl: value => value / 100,
     toControl: value => value * 100,
     label: value => value.toFixed(2),
-    command: () => `NprSettings.SurfaceFlowDensity = ${state.settings.surfaceFlowDensity.toFixed(2)}`,
+    command: () => `DefaultDrawingSettings.PathSimplify = ${state.settings.pathSimplify.toFixed(2)}`,
   },
   {
-    id: "hatchThresholdSlider",
-    output: "hatchThresholdValue",
-    get: () => state.settings.hatchShadeThreshold,
-    set: value => { state.settings.hatchShadeThreshold = value; },
+    id: "drawProgressSlider",
+    output: "drawProgressValue",
+    get: () => state.settings.drawProgress,
+    set: value => { state.settings.drawProgress = value; },
     fromControl: value => value / 100,
     toControl: value => value * 100,
     label: value => value.toFixed(2),
-    command: () => `NprSettings.HatchShadeThreshold = ${state.settings.hatchShadeThreshold.toFixed(2)}`,
+    command: () => `DefaultDrawingSettings.DrawProgress = ${state.settings.drawProgress.toFixed(2)}`,
   },
   {
-    id: "hatchDensitySlider",
-    output: "hatchDensityValue",
-    get: () => state.settings.hatchDensity,
-    set: value => { state.settings.hatchDensity = value; },
+    id: "lineWidthSlider",
+    output: "lineWidthValue",
+    get: () => state.settings.lineWidth,
+    set: value => {
+      state.settings.lineWidth = value;
+      state.strokeStyle.baseThickness = value;
+    },
     fromControl: value => value / 100,
     toControl: value => value * 100,
     label: value => value.toFixed(2),
-    command: () => `NprSettings.HatchDensity = ${state.settings.hatchDensity.toFixed(2)}`,
+    command: () => `DefaultDrawingSettings.LineWidth = ${state.settings.lineWidth.toFixed(2)}`,
   },
   {
-    id: "hatchLengthSlider",
-    output: "hatchLengthValue",
-    get: () => state.settings.hatchLength,
-    set: value => { state.settings.hatchLength = value; },
-    fromControl: value => value,
-    toControl: value => value,
-    label: value => String(Math.round(value)),
-    command: () => `NprSettings.HatchLength = ${formatScalar(state.settings.hatchLength)}`,
-  },
-  {
-    id: "hiddenSlider",
-    output: "hiddenValue",
-    get: () => state.settings.hiddenLineDepthBias,
-    set: value => { state.settings.hiddenLineDepthBias = value; },
-    fromControl: value => value / 1000,
-    toControl: value => value * 1000,
-    label: value => value.toFixed(3),
-    command: () => `NprSettings.HiddenLineDepthBias = ${state.settings.hiddenLineDepthBias.toFixed(3)}`,
-  },
-  {
-    id: "featureSlider",
-    output: "featureValue",
-    get: () => state.settings.featureLineDensity,
-    set: value => { state.settings.featureLineDensity = value; },
+    id: "jitterSlider",
+    output: "jitterValue",
+    get: () => state.settings.jitter,
+    set: value => {
+      state.settings.jitter = value;
+      state.strokeStyle.endpointJitter = value;
+    },
     fromControl: value => value / 100,
     toControl: value => value * 100,
     label: value => value.toFixed(2),
-    command: () => `NprSettings.FeatureLineDensity = ${state.settings.featureLineDensity.toFixed(2)}`,
+    command: () => `DefaultDrawingSettings.Jitter = ${state.settings.jitter.toFixed(2)}`,
+  },
+  {
+    id: "pressureSlider",
+    output: "pressureValue",
+    get: () => state.settings.pressure,
+    set: value => { state.settings.pressure = value; },
+    fromControl: value => value / 100,
+    toControl: value => value * 100,
+    label: value => value.toFixed(2),
+    command: () => `DefaultDrawingSettings.Pressure = ${state.settings.pressure.toFixed(2)}`,
   },
   {
     id: "layerOpacitySlider",
@@ -494,7 +613,7 @@ const sliderDefs = [
   {
     id: "layerShadeThresholdSlider",
     output: "layerShadeThresholdValue",
-    get: () => selectedLayer()?.shadeThreshold ?? state.settings.hatchShadeThreshold,
+    get: () => selectedLayer()?.shadeThreshold ?? 0.58,
     set: value => {
       const layer = selectedLayer();
       if (layer) layer.shadeThreshold = value;
@@ -584,7 +703,7 @@ function computeLayerStats(intentCounts) {
     const intentTotal = layer.intents.reduce((sum, intent) => sum + (intentCounts[intent] || 0), 0);
     const enabled = layers.includes(layer);
     const weighted = enabled ? Math.round(intentTotal * layer.density * layer.opacity) : 0;
-    const count = layer.type === "fill"
+    const count = layer.type === "fill" || layer.type === "tones"
       ? Math.max(1, Math.round(weighted * Math.max(0.05, layer.fillCoverage)))
       : weighted;
     layerCounts[layer.id] = count;
@@ -593,7 +712,7 @@ function computeLayerStats(intentCounts) {
       continue;
     }
 
-    if (layer.type === "fill") {
+    if (layer.type === "fill" || layer.type === "tones") {
       toneOutput += Math.max(1, Math.round(intentTotal * layer.fillCoverage * layer.opacity));
     } else {
       strokeOutput += weighted;
@@ -642,6 +761,14 @@ function computeMetrics() {
       topologyEdges: 0,
       projectedEdges: 0,
       projectedVertices: vertices,
+      rawVisibleFaces: 0,
+      lineVisibleFaces: 0,
+      lineVisibleMismatch: 0,
+      fragments: 0,
+      paths: 0,
+      simplifiedPaths: 0,
+      drawablePaths: 0,
+      finalStrokes: 0,
       rawFeatureLines: 0,
       hiddenCandidates: 0,
       featureLines: 0,
@@ -657,38 +784,77 @@ function computeMetrics() {
     };
   }
 
-  const areaCull = clamp(state.settings.minimumProjectedTriangleArea / 140, 0, 0.34);
-  const triangles = Math.round(sourceTriangles * (1 - areaCull));
-  const topologyEdges = Math.round(sourceTriangles * 1.5);
-  const projectedEdges = Math.round(triangles * 1.5);
+  const triangles = sourceTriangles;
+  const topologyEdges = Math.round(sourceTriangles * 3);
+  const projectedEdges = topologyEdges;
 
-  const creaseFactor = clamp((90 - state.settings.creaseAngleDegrees) / 90, 0.05, 1);
-  const silhouette = Math.round(meshCount * 52 + state.settings.featureLineDensity * 32);
-  const boundary = Math.round(meshCount * 34 + Math.sqrt(Math.max(0, triangles)) * 1.1);
-  const crease = Math.round(28 + creaseFactor * 140 * state.settings.featureLineDensity);
-  const rawFeatureLines = Math.max(0, silhouette + boundary + crease);
-  const hiddenCandidates = Math.round(rawFeatureLines * clamp(state.settings.hiddenLineDepthBias * 6, 0.02, 0.28));
-  const featureLines = Math.max(0, Math.round(rawFeatureLines * state.settings.featureLineDensity) - hiddenCandidates);
+  const enabledKindWeight =
+    (state.settings.showSilhouette ? 1 : 0) +
+    (state.settings.showBoundary ? 1 : 0) +
+    (state.settings.showFeature ? 1 : 0);
+  const featureAngleFactor = clamp(1 + (34 - state.settings.featureAngleDegrees) / 120, 0.72, 1.25);
+  const strideFactor = 1 / Math.max(1, state.settings.meshStride);
+  const visibilityFactor = state.settings.occlusionCulling ? 1 : 1.32;
+  const minSegFactor = clamp(1 - state.settings.minSegPx * 0.035, 0.65, 1);
+  const depthScaleFactor = clamp(Math.sqrt(state.settings.depthScale), 0.55, 1.18);
+  const fragmentBase = sourceTriangles * 1.735;
+  const fragments = Math.max(0, Math.round(
+    fragmentBase *
+    featureAngleFactor *
+    strideFactor *
+    visibilityFactor *
+    minSegFactor *
+    depthScaleFactor *
+    (enabledKindWeight / 3)));
 
-  const surfaceSamples = Math.round(triangles * (0.13 + state.settings.surfaceFlowDensity * 0.32));
-  const surfaceFlow = Math.round(surfaceSamples * state.settings.surfaceFlowDensity * clamp(1 - state.settings.surfaceFlowShadeThreshold * 0.5, 0.12, 1) / 1.8);
-  const hatch = Math.round(surfaceSamples * state.settings.hatchDensity * clamp(1 - state.settings.hatchShadeThreshold * 0.45, 0.1, 1) / 2.25);
-  const accent = Math.round((silhouette + crease) * 0.07);
+  const simplifyFactor = clamp(1 - state.settings.pathSimplify * 0.22, 0.62, 1);
+  const paths = Math.max(0, Math.round(fragments * 0.181 * simplifyFactor));
+  const simplifiedPaths = paths;
+  const drawablePaths = Math.max(0, Math.round(paths * clamp(state.settings.drawProgress, 0, 1)));
+  const finalStrokes = Math.max(0, Math.round(drawablePaths * 9.22));
+
+  const rawVisibleFaces = state.settings.occlusionCulling
+    ? Math.round(sourceTriangles * 0.61 * depthScaleFactor)
+    : sourceTriangles;
+  const lineVisibleFaces = state.settings.occlusionCulling
+    ? Math.max(0, rawVisibleFaces - Math.round(sourceTriangles * 0.002))
+    : sourceTriangles;
+  const lineVisibleMismatch = Math.abs(rawVisibleFaces - lineVisibleFaces);
+
+  const silhouette = state.settings.showSilhouette ? Math.round(fragments * 0.34) : 0;
+  const boundary = state.settings.showBoundary ? Math.round(fragments * 0.22) : 0;
+  const feature = state.settings.showFeature ? Math.round(fragments * 0.28) : 0;
+  const crease = state.settings.showFeature ? Math.round(fragments * 0.1) : 0;
+  const accent = Math.round((silhouette + crease) * 0.04);
+  const surfaceFlow = Math.round(paths * 0.18);
+  const hatch = state.presetId === "pen-ink-hatching"
+    ? Math.round(paths * 0.85)
+    : Math.round(paths * 0.22);
+  const fill = Math.round(rawVisibleFaces * 0.08);
+  const tones = Math.round(rawVisibleFaces * 0.14);
+  const rawFeatureLines = fragments;
+  const hiddenCandidates = state.settings.occlusionCulling
+    ? Math.max(0, projectedEdges - fragments)
+    : 0;
+  const featureLines = fragments;
+  const surfaceSamples = rawVisibleFaces;
 
   const intentCounts = {
     Silhouette: silhouette,
     Boundary: boundary,
-    Crease: Math.max(0, featureLines - silhouette - boundary),
+    Feature: feature,
+    Crease: crease,
     SurfaceFlow: Math.max(0, surfaceFlow),
     Hatch: Math.max(0, hatch),
     Accent: Math.max(0, accent),
+    Fill: Math.max(0, fill),
+    Tones: Math.max(0, tones),
   };
 
   const strokeCandidates = Object.values(intentCounts).reduce((sum, count) => sum + count, 0);
-  const lengthCull = clamp(state.settings.minimumStrokeLength / 80, 0, 0.38);
-  const strokes = Math.round(strokeCandidates * (1 - lengthCull));
   const layerStats = computeLayerStats(intentCounts);
-  const visibleStrokes = Math.min(strokes, Math.round(layerStats.strokeOutput * (1 - lengthCull)));
+  const strokes = finalStrokes;
+  const visibleStrokes = finalStrokes;
 
   return {
     meshCount,
@@ -698,6 +864,14 @@ function computeMetrics() {
     topologyEdges,
     projectedEdges,
     projectedVertices: vertices,
+    rawVisibleFaces,
+    lineVisibleFaces,
+    lineVisibleMismatch,
+    fragments,
+    paths,
+    simplifiedPaths,
+    drawablePaths,
+    finalStrokes,
     rawFeatureLines,
     hiddenCandidates,
     featureLines,
@@ -718,16 +892,13 @@ function pipelineRows(metrics) {
     ["ProjectMeshStep", `entities ${state.entities.length}`, `vertices ${metrics.projectedVertices}`],
     ["BuildProjectedTrianglesStep", `vertices ${metrics.projectedVertices}`, `triangles ${metrics.triangles}`],
     ["BuildMeshTopologyStep", `triangles ${metrics.triangles}`, `edges ${metrics.topologyEdges}`],
-    ["ExtractFeatureLinesStep", `edges ${metrics.topologyEdges}`, `features ${metrics.rawFeatureLines}`],
-    ["BuildSurfaceSamplesStep", `triangles ${metrics.triangles}`, `samples ${metrics.surfaceSamples}`],
-    ["BuildSurfaceFlowLinesStep", `samples ${metrics.surfaceSamples}`, `flow ${metrics.surfaceFlow}`],
-    ["BuildHatchingStep", `samples ${metrics.surfaceSamples}`, `hatch ${metrics.hatch}`],
-    ["ApplyApproximateOcclusionStep", `features ${metrics.rawFeatureLines}`, `hidden ${metrics.hiddenCandidates}`],
-    ["PruneFeatureLinesStep", `features ${metrics.featureLines + metrics.hiddenCandidates}`, `kept ${metrics.featureLines}`],
-    ["BuildStrokeCandidatesStep", `features ${metrics.featureLines}`, `candidates ${metrics.strokeCandidates}`],
-    ["StyleStrokesStep", `candidates ${metrics.strokeCandidates}`, `styled ${metrics.strokes}`],
-    ["HumanizeStrokesStep", `styled ${metrics.strokes}`, `seed ${state.settings.seed}`],
-    ["BuildStrokeFrameStep", `strokes ${metrics.strokes}`, `visible ${metrics.visibleStrokes}`],
+    ["DefaultBuildFaceIdVisibilityBufferStep", `triangles ${metrics.triangles}`, `faces ${metrics.rawVisibleFaces}`],
+    ["DefaultClassifyEdgesToFragmentsStep", `edges ${metrics.topologyEdges}`, `fragments ${metrics.fragments}`],
+    ["DefaultBuildPathsFromFragmentsStep", `fragments ${metrics.fragments}`, `paths ${metrics.paths}`],
+    ["DefaultSimplifyAndSortPathsStep", `paths ${metrics.paths}`, `simplified ${metrics.simplifiedPaths}`],
+    ["DefaultApplyDrawProgressStep", `progress ${state.settings.drawProgress.toFixed(2)}`, `drawable ${metrics.drawablePaths}`],
+    ["DefaultBuildInkFrameStep", `paths ${metrics.drawablePaths}`, `strokes ${metrics.finalStrokes}`],
+    ["DefaultBuildDebugFrameStep", `graph ${metrics.fragments}`, `overlays ${Object.values(state.overlays).filter(Boolean).length}`],
   ];
 }
 
@@ -736,11 +907,19 @@ function graphHash(metrics) {
     state.presetId,
     state.mode,
     state.settings.seed,
+    state.settings.showSilhouette,
+    state.settings.showFeature,
+    state.settings.showBoundary,
+    state.settings.featureAngleDegrees.toFixed(1),
+    state.settings.meshStride,
+    state.settings.pathSimplify.toFixed(2),
+    state.settings.drawProgress.toFixed(2),
+    state.settings.lineWidth.toFixed(2),
     state.stableRandom ? "stable" : "live",
     metrics.vertices,
     metrics.triangles,
-    metrics.featureLines,
-    metrics.strokes,
+    metrics.fragments,
+    metrics.finalStrokes,
     ...state.strokeLayers.map(layer => [
       layer.id,
       layer.type,
@@ -864,17 +1043,20 @@ function drawNpr(width, height, metrics) {
   const intentWeights = {
     Silhouette: 1.65,
     Boundary: 1.28,
+    Feature: 0.98,
     Crease: 1.02,
     SurfaceFlow: 0.62,
     Hatch: 0.5,
     Accent: 1.2,
+    Fill: 0,
+    Tones: 0,
   };
   const layers = metrics.layerStats.activeLayers;
   const cx = width * 0.5;
   const cy = height * 0.52;
   const modelScale = Math.min(width, height) * 0.31 * clamp(60 / state.camera.fov, 0.45, 1.9);
 
-  for (const layer of layers.filter(item => item.type === "fill")) {
+  for (const layer of layers.filter(item => item.type === "fill" || item.type === "tones")) {
     ctx.save();
     ctx.globalAlpha = clamp(layer.opacity * layer.fillCoverage, 0, 0.8);
     ctx.fillStyle = layer.color;
@@ -892,7 +1074,7 @@ function drawNpr(width, height, metrics) {
       const radius = Math.sqrt(random()) * modelScale * 0.9;
       const x = cx + Math.cos(angleSeed) * radius * 0.95;
       const y = cy + Math.sin(angleSeed) * radius * 0.68;
-      const len = state.settings.hatchLength * (0.55 + random() * 0.65) * clamp(layer.density, 0.35, 1.7);
+      const len = state.settings.lineWidth * 8.5 * (0.55 + random() * 0.65) * clamp(layer.density, 0.35, 1.7);
       const angle = -0.72 + (random() - 0.5) * 0.42;
       const dx = Math.cos(angle) * len;
       const dy = Math.sin(angle) * len;
@@ -1066,6 +1248,7 @@ function syncVectorInputs() {
   q("#entityPosY").value = formatScalar(entityPosition.y);
   q("#entityPosZ").value = formatScalar(entityPosition.z);
   q("#selectedEntityLabel").textContent = entity ? `EntityId(${entity.id})` : "EntityId.None";
+  q("#entityRoleSelect").value = entity?.role || "Foreground";
 
   q("#cameraPosX").value = formatScalar(state.camera.position.x);
   q("#cameraPosY").value = formatScalar(state.camera.position.y);
@@ -1080,6 +1263,11 @@ function syncControls() {
   q("#seedInput").value = String(state.settings.seed);
   q("#stableRandom").checked = state.stableRandom;
   q("#showGrid").checked = state.showGrid;
+  q("#showSilhouette").checked = state.settings.showSilhouette;
+  q("#showFeature").checked = state.settings.showFeature;
+  q("#showBoundary").checked = state.settings.showBoundary;
+  q("#occlusionCulling").checked = state.settings.occlusionCulling;
+  q("#autoDraw").checked = state.settings.autoDraw;
   qa("[data-overlay]").forEach(input => {
     input.checked = Boolean(state.overlays[input.dataset.overlay]);
   });
@@ -1122,6 +1310,7 @@ function renderEntities() {
         </span>
         <span class="entity-meta">
           <span>${meshLabel}</span>
+          <span class="role-pill">${entity.role || "Foreground"}</span>
           <span>Position ${formatVector(entity.position)}</span>
         </span>
       </button>
@@ -1136,6 +1325,8 @@ function renderPresetMetadata() {
   q("#presetId").textContent = preset.id;
   q("#presetName").textContent = preset.name;
   q("#presetEditable").textContent = String(preset.editable).toLowerCase();
+  q("#presetPipelineId").textContent = preset.pipelineId;
+  q("#presetProvider").textContent = preset.pipelineProvider;
   q("#presetDescription").textContent = preset.description;
 }
 
@@ -1151,6 +1342,7 @@ function renderLayerStack(metrics) {
           <code>${layerTypeLabels[layer.type]}</code>
         </span>
         <span class="layer-meta">
+          <span class="role-pill">${layer.role || "Style"}</span>
           <span>${layer.intents.join(" + ") || "no intents"}</span>
           <span>${count} output</span>
           <span>${layer.blend}, opacity ${layer.opacity.toFixed(2)}</span>
@@ -1210,6 +1402,9 @@ function previewMarksForLayer(layer, composite = false) {
   if (layer.type === "fill") {
     return `<i class="preview-fill" style="--c:${layer.color}; --o:${clamp(opacity * Math.max(0.1, layer.fillCoverage), 0.05, 0.72)}"></i>`;
   }
+  if (layer.type === "tones") {
+    return `<i class="preview-tone" style="--c:${layer.color}; --o:${clamp(opacity * Math.max(0.12, layer.fillCoverage), 0.05, 0.64)}"></i>`;
+  }
   if (layer.type === "shading") {
     return `<i class="preview-shade" style="--c:${layer.color}; --o:${clamp(opacity * Math.max(0.18, layer.density), 0.08, 0.72)}"></i>`;
   }
@@ -1237,10 +1432,12 @@ function renderGraphCounters(metrics, hash) {
     ["vertices", metrics.vertices],
     ["triangles", metrics.triangles],
     ["topology edges", metrics.topologyEdges],
-    ["feature lines", metrics.featureLines],
-    ["surface samples", metrics.surfaceSamples],
-    ["strokes", metrics.strokes],
-    ["visible strokes", metrics.visibleStrokes],
+    ["edge fragments", metrics.fragments],
+    ["paths", metrics.paths],
+    ["drawable paths", metrics.drawablePaths],
+    ["final strokes", metrics.finalStrokes],
+    ["raw visible faces", metrics.rawVisibleFaces],
+    ["line visible faces", metrics.lineVisibleFaces],
   ];
 
   q("#graphCounters").innerHTML = counters.map(([label, value]) => `
@@ -1252,6 +1449,24 @@ function renderGraphCounters(metrics, hash) {
   q("#debugSeed").textContent = String(state.settings.seed);
   q("#debugDeterminism").textContent = state.stableRandom ? "deterministic" : "live random";
   q("#determinismStatus").textContent = state.stableRandom ? "stable" : "unstable";
+}
+
+function renderParitySummary(metrics) {
+  const preset = presetDefinitions[state.presetId];
+  const values = [
+    ["Pipeline", `${preset.pipelineId} / 10 steps`],
+    ["Face ownership", `${metrics.lineVisibleFaces}/${metrics.rawVisibleFaces}`],
+    ["Visibility mismatch", metrics.lineVisibleMismatch],
+    ["Path quantization", "2.5 px"],
+    ["RDP epsilon", state.settings.pathSimplify.toFixed(2)],
+    ["Draw progress", state.settings.drawProgress.toFixed(2)],
+    ["Ink passes", state.presetId === "pencil-construction" ? "3 sketch" : "2 comic"],
+    ["Frame output", `${metrics.finalStrokes} StrokePath2D`],
+  ];
+
+  q("#paritySummary").innerHTML = values.map(([label, value]) => `
+    <div><span>${label}</span><strong>${value}</strong></div>
+  `).join("");
 }
 
 function renderPipeline(metrics) {
@@ -1303,6 +1518,7 @@ function refresh() {
   renderLayerEditor(metrics);
   renderLayerPreview();
   renderGraphCounters(metrics, hash);
+  renderParitySummary(metrics);
   renderPipeline(metrics);
   renderCommandLogs();
   renderStatus(metrics, hash);
@@ -1337,7 +1553,8 @@ function applyPreset(id) {
   state.settings.seed = preset.settings.seed;
   state.strokeStyle.seed = preset.strokeStyle.seed;
   syncControls();
-  pushCommand(`NprPresetRegistry.ActivePreset = ${id}`);
+  pushCommand(`NprPipelineRegistry.Resolve(${preset.pipelineId}) -> ${preset.pipelineProvider}`);
+  pushCommand(`ActiveNprPresetState.ApplyPreset(${id})`);
   refresh();
 }
 
@@ -1372,15 +1589,25 @@ function createCustomLayer(type = "strokes") {
       fillCoverage: 0.16,
       blend: "multiply",
     },
+    tones: {
+      name: `Tone Layer ${state.nextLayerId - 1}`,
+      intents: ["Tones", "Fill"],
+      color: intentColors.Tones,
+      opacity: 0.36,
+      density: 0.55,
+      fillCoverage: 0.24,
+      blend: "multiply",
+    },
   }[type];
 
   return {
     id,
+    role: type === "fill" || type === "tones" ? "Background" : type === "shading" ? "Midground" : "Foreground",
     type,
     visible: true,
     solo: false,
     locked: false,
-    shadeThreshold: state.settings.hatchShadeThreshold,
+    shadeThreshold: 0.58,
     style: cloneStrokeStyle(base),
     ...typeDefaults,
   };
@@ -1432,6 +1659,10 @@ function setSelectedLayerType(type) {
     layer.blend = layer.blend === "normal" ? "multiply" : layer.blend;
     layer.intents = layer.intents.length > 0 ? layer.intents : ["Hatch"];
   }
+  if (type === "tones") {
+    layer.blend = layer.blend === "normal" ? "multiply" : layer.blend;
+    layer.intents = layer.intents.length > 0 ? layer.intents : ["Tones"];
+  }
   pushCommand(`UpdateNprLayerCommand("${layer.id}", Type=${layerTypeLabels[type]})`);
   syncControls();
   refresh();
@@ -1452,7 +1683,7 @@ function updateCameraVector(kind, axis, value) {
 function resetCameraState() {
   state.camera.position = { x: 0, y: 0, z: 4 };
   state.camera.target = { x: 0, y: 0, z: 0 };
-  state.camera.fov = 60;
+  state.camera.fov = 45;
   state.camera.orbitYaw = 0;
   state.camera.orbitPitch = 0;
   syncControls();
@@ -1495,6 +1726,20 @@ function bindEvents() {
     refresh();
   });
 
+  [
+    ["showSilhouette", "showSilhouette", "ShowSilhouette"],
+    ["showFeature", "showFeature", "ShowFeature"],
+    ["showBoundary", "showBoundary", "ShowBoundary"],
+    ["occlusionCulling", "occlusionCulling", "OcclusionCulling"],
+    ["autoDraw", "autoDraw", "AutoDraw"],
+  ].forEach(([id, setting, commandName]) => {
+    q(`#${id}`).addEventListener("change", event => {
+      state.settings[setting] = event.target.checked;
+      pushCommand(`DefaultDrawingSettings.${commandName} = ${event.target.checked}`);
+      refresh();
+    });
+  });
+
   q("#seedInput").addEventListener("input", event => {
     const seed = Number(event.target.value) || 0;
     state.settings.seed = seed;
@@ -1503,7 +1748,7 @@ function bindEvents() {
   });
 
   q("#seedInput").addEventListener("change", () => {
-    pushCommand(`NprSettings.Seed = ${state.settings.seed}`);
+    pushCommand(`DefaultDrawingSettings.Seed = ${state.settings.seed}`);
   });
 
   q("#assetList").addEventListener("click", event => {
@@ -1552,6 +1797,7 @@ function bindEvents() {
       id,
       name: `Entity ${id}`,
       meshId: null,
+      role: "Foreground",
       position: { x: 0, y: 0, z: 0 },
     });
     state.selectedEntityId = id;
@@ -1582,6 +1828,14 @@ function bindEvents() {
       if (!entity) return;
       pushCommand(`SetEntityPositionCommand(EntityId(${entity.id}), Vector3${formatVector(entity.position)})`);
     });
+  });
+
+  q("#entityRoleSelect").addEventListener("change", event => {
+    const entity = selectedEntity();
+    if (!entity) return;
+    entity.role = event.target.value;
+    pushCommand(`SetEntityStyleRoleCommand(EntityId(${entity.id}), NprSceneRole.${entity.role})`);
+    refresh();
   });
 
   [
@@ -1622,7 +1876,7 @@ function bindEvents() {
 
   q("#exportSvg").addEventListener("click", () => {
     setTab("debug");
-    pushCommand("BuildStrokeFrameStep -> Export SVG");
+    pushCommand("DefaultBuildInkFrameStep -> Export SVG");
   });
 
   q("#layerStack").addEventListener("click", event => {

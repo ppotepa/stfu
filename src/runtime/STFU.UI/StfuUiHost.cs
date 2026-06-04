@@ -43,6 +43,14 @@ internal sealed record StfuUiStartupOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var arg = args[index];
+            if (string.Equals(arg, "--default", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--line-art", StringComparison.OrdinalIgnoreCase))
+            {
+                renderMode = ViewportRenderMode.Npr;
+                presetId = "default";
+                continue;
+            }
+
             if (string.Equals(arg, "--mesh", StringComparison.OrdinalIgnoreCase))
             {
                 renderMode = ViewportRenderMode.Mesh;
@@ -63,6 +71,10 @@ internal sealed record StfuUiStartupOptions(
                 if (index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal))
                 {
                     presetId = args[++index];
+                }
+                else
+                {
+                    presetId ??= "default";
                 }
                 continue;
             }
@@ -99,7 +111,7 @@ internal sealed record StfuUiStartupOptions(
         return value.ToLowerInvariant() switch
         {
             "mesh" => ViewportRenderMode.Mesh,
-            "npr" or "sketch" => ViewportRenderMode.Npr,
+            "npr" or "sketch" or "default" or "line-art" => ViewportRenderMode.Npr,
             "comic" or "comic-surface" => ViewportRenderMode.ComicSurface,
             _ => fallback
         };

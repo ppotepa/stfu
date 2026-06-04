@@ -1,5 +1,4 @@
 using System.Text.Json;
-using STFU.NPR.Pipeline;
 using STFU.NPR.Settings;
 using STFU.Strokes;
 
@@ -31,11 +30,6 @@ public sealed class JsonEditableNprPreset : INprPreset
         {
             PresetVersion = document.Metadata.PresetVersion
         };
-    }
-
-    public INprPipeline CreatePipeline()
-    {
-        return SketchNprPreset.CreatePipeline();
     }
 
     public NprSettings CreateSettings()

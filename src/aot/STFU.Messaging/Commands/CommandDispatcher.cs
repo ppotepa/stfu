@@ -1,12 +1,12 @@
 namespace STFU.Messaging.Commands;
 
-public sealed class CommandDispatcher
+public sealed class CommandDispatcher : ICommandRegistry
 {
     private readonly Dictionary<Type, ICommandHandlerAdapter> _handlers = new();
 
     public int HandlerCount => _handlers.Count;
 
-    public CommandDispatcher Register<TCommand>(ICommandHandler<TCommand> handler)
+    public ICommandRegistry Register<TCommand>(ICommandHandler<TCommand> handler)
         where TCommand : ICommand
     {
         _handlers[typeof(TCommand)] = new CommandHandlerAdapter<TCommand>(handler);

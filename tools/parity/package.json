@@ -1,0 +1,7 @@
+{
+  "name": "stfu-parity-tools",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}

@@ -1,4 +1,3 @@
-using STFU.NPR.Pipeline;
 using STFU.NPR.Settings;
 
 namespace STFU.NPR.Composition;
@@ -15,11 +14,6 @@ public sealed class GenericSketchNprPreset : INprPreset
         "STFU",
         ["sketch", "npr", "built-in"],
         PresetPackaging.BuiltInAot);
-
-    public INprPipeline CreatePipeline()
-    {
-        return SketchNprPreset.CreatePipeline();
-    }
 
     public NprSettings CreateSettings()
     {

@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.Inspector.Load.Widgets.LoadActionWidget">
+  <Button Content="LOAD"
+          Classes="primary"
+          MinHeight="36"
+          Command="{Binding Assets.LoadAssetCommand}" />
+</UserControl>

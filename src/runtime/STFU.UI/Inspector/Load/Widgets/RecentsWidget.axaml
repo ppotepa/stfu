@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.Inspector.Load.Widgets.RecentsWidget">
+  <Border Classes="load-card">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="RECENTS" Classes="load-section-title" />
+        <TextBlock Grid.Column="1"
+                   Text="double click to load"
+                   Foreground="{DynamicResource StfuMutedBrush}"
+                   FontSize="10" />
+      </Grid>
+      <ListBox ItemsSource="{Binding Assets.Recents}"
+               SelectedItem="{Binding Assets.SelectedRecent, Mode=TwoWay}"
+               Classes="recents-list"
+               DoubleTapped="OnRecentDoubleTapped"
+               MinHeight="88">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding FolderDisplay}"
+                           Foreground="{DynamicResource StfuMutedBrush}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding FileName}"
+                           FontWeight="Bold"
+                           FontSize="12"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <Border Grid.Column="1"
+                      VerticalAlignment="Center"
+                      BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                      BorderThickness="1"
+                      Padding="6,2"
+                      CornerRadius="3">
+                <TextBlock Text="{Binding DriveLabel}"
+                           Foreground="{DynamicResource StfuBlueBrush}"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Right" />
+              </Border>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </StackPanel>
+  </Border>
+</UserControl>

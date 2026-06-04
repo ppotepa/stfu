@@ -58,6 +58,14 @@ public sealed class NprGraph
 
     public SurfaceVisibilityBuffer? SurfaceVisibility { get; set; }
 
+    public DefaultFaceIdVisibilityBuffer? DefaultFaceIdVisibility { get; set; }
+
+    public List<DefaultLineFragment> DefaultFragments { get; } = [];
+
+    public List<DefaultProjectedPath> DefaultPaths { get; } = [];
+
+    public List<DefaultProjectedPath> DefaultDrawablePaths { get; } = [];
+
     public void Clear()
     {
         Meshes.Clear();
@@ -85,6 +93,10 @@ public sealed class NprGraph
         DensityField = null;
         TextureField = null;
         SurfaceVisibility = null;
+        DefaultFaceIdVisibility = null;
+        DefaultFragments.Clear();
+        DefaultPaths.Clear();
+        DefaultDrawablePaths.Clear();
     }
 
     public void AddCurve(FeatureCurve curve)

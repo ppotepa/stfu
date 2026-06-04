@@ -1,7 +1,75 @@
-bin/
-obj/
+# STFU local and generated files
+
+# OS / filesystem noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
 .vs/
 .idea/
-artifacts/
-*.user
+.vscode/
 *.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.slnLaunch.user
+
+# .NET build output
+bin/
+obj/
+**/bin/
+**/obj/
+artifacts/
+artifacts-*.log
+TestResults/
+test-results/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+coverage.*
+BenchmarkDotNet.Artifacts/
+
+# NuGet / packaging output
+packages/
+*.nupkg
+*.snupkg
+*.symbols.nupkg
+
+# Native / CMake output
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.o
+*.lib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# Node / Playwright tooling
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+playwright-report/
+blob-report/
+.playwright/
+
+# Generated local bundles / concatenations
+concat.txt
+concat.zip
+*.tmp
+*.temp
+*.bak
+
+# Codex / agent local state
+.codex/
+.agents/
+.tmp-*/

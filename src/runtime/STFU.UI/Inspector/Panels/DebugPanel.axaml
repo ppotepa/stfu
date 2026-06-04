@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.DebugPanel">
+  <StackPanel Spacing="12">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Text="NprGraph Counters" FontWeight="Bold" />
+      <TextBlock Grid.Column="1" Text="{Binding Debug.DeterminismLabel}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    </Grid>
+    <ItemsControl ItemsSource="{Binding Debug.Counters}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10" Margin="0,0,0,6">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding Label}" Foreground="{DynamicResource StfuMutedBrush}" />
+              <TextBlock Grid.Column="1" Text="{Binding Value}" FontWeight="Bold" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Text="Default Parity Snapshot" FontWeight="Bold" />
+      <TextBlock Grid.Column="1" Text="face-id buffer / paths / ink frame" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    </Grid>
+    <ItemsControl ItemsSource="{Binding Debug.Parity}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,5">
+            <TextBlock Text="{Binding Label}" Foreground="{DynamicResource StfuMutedBrush}" />
+            <TextBlock Grid.Column="1" Text="{Binding Value}" FontWeight="Bold" />
+          </Grid>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <TextBlock Text="Overlay" FontWeight="Bold" />
+    <ComboBox ItemsSource="{Binding Debug.OverlayOptions}" SelectedItem="{Binding Debug.SelectedOverlay, Mode=TwoWay}" />
+
+    <TextBlock Text="Pipeline Trace" FontWeight="Bold" />
+    <ItemsControl ItemsSource="{Binding Debug.Trace}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,6">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+              <TextBlock Text="{Binding StepName}" FontFamily="Consolas" FontSize="11" />
+              <TextBlock Grid.Column="1" Text="{Binding Counts}" Foreground="{DynamicResource StfuMutedBrush}" FontFamily="Consolas" FontSize="11" />
+              <TextBlock Grid.Column="2" Text="{Binding Timing}" Foreground="{DynamicResource StfuAmberBrush}" FontFamily="Consolas" FontSize="11" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+      <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Graph hash" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Debug.GraphHash}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Column="1" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Seed" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding DefaultDrawing.Seed}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Column="2" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Status" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Debug.DeterminismStatus}" FontWeight="Bold" /></StackPanel>
+      </Border>
+    </Grid>
+
+    <TextBlock Text="Command Log" FontWeight="Bold" />
+    <ItemsControl ItemsSource="{Binding CommandLog}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Border Background="{DynamicResource StfuInputBrush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,6">
+            <TextBlock Text="{Binding Text}" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource StfuMutedBrush}" TextWrapping="Wrap" />
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

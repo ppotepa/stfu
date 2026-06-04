@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.ExportPanel">
+  <StackPanel Spacing="12">
+    <TextBlock Text="Export" FontWeight="Bold" />
+    <TextBlock Text="Output path" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    <TextBox Text="{Binding Export.OutputPath, Mode=TwoWay}" />
+    <Button Content="Export SVG" Classes="primary" Command="{Binding Export.ExportSvgCommand}" />
+    <Button Content="Export Raw Paths" Command="{Binding Export.ExportRawPathsCommand}" />
+    <Button Content="Export Debug Snapshot" Command="{Binding Export.ExportDebugSnapshotCommand}" />
+  </StackPanel>
+</UserControl>

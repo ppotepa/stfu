@@ -1,0 +1,142 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:load="clr-namespace:STFU.UI.Inspector.Load"
+             x:Class="STFU.UI.InspectorView">
+  <UserControl.Styles>
+    <Style Selector="Button.inspector-tab">
+      <Setter Property="MinWidth" Value="72" />
+      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="CornerRadius" Value="6,0,0,6" />
+      <Setter Property="Background" Value="{DynamicResource StfuSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StfuLineBrush}" />
+      <Setter Property="BorderThickness" Value="1,0,0,1" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.inspector-tab:pointerover">
+      <Setter Property="Background" Value="{DynamicResource StfuGoldSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StfuGoldBorderBrush}" />
+    </Style>
+    <Style Selector="Button.inspector-tab.active">
+      <Setter Property="MinWidth" Value="82" />
+      <Setter Property="Background" Value="{DynamicResource StfuGoldBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StfuGoldBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource StfuGoldTextBrush}" />
+    </Style>
+    <Style Selector="Button.inspector-tab.active TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource StfuGoldTextBrush}" />
+    </Style>
+    <Style Selector="Button.option-pill">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="{DynamicResource StfuInputBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StfuLineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.option-pill.active">
+      <Setter Property="Background" Value="{DynamicResource StfuGoldBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StfuGoldBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource StfuGoldTextBrush}" />
+    </Style>
+    <Style Selector="Button.option-pill.active TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource StfuGoldTextBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="{DynamicResource StfuPanelBrush}"
+          BorderBrush="{DynamicResource StfuLineBrush}"
+          BorderThickness="1">
+    <Grid ColumnDefinitions="72,*">
+      <Border Grid.Column="0"
+              Background="{DynamicResource StfuSurfaceBrush}"
+              BorderBrush="{DynamicResource StfuLineBrush}"
+              BorderThickness="0,0,1,0">
+        <ItemsControl ItemsSource="{Binding Inspector.Tabs}"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Top"
+                      Margin="0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Vertical" Spacing="0" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Classes="inspector-tab"
+                      Classes.active="{Binding IsActive}"
+                      Command="{Binding DataContext.Inspector.SetTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                      CommandParameter="{Binding Id}">
+                <StackPanel Spacing="0"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Icon}"
+                             FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                             FontSize="13"
+                             HorizontalAlignment="Center">
+                    <TextBlock.RenderTransform>
+                      <ScaleTransform ScaleX="0.86" ScaleY="1" />
+                    </TextBlock.RenderTransform>
+                  </TextBlock>
+                  <TextBlock Text="{Binding Label}"
+                             FontSize="9"
+                             FontWeight="Bold"
+                             HorizontalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Border>
+
+      <Grid Grid.Column="1" RowDefinitions="Auto,*">
+        <StackPanel Grid.Row="0" Spacing="6" Margin="16,14,16,14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="{Binding Inspector.Icon}"
+                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                       FontSize="20"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Inspector.Title}"
+                       FontSize="18"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock Text="{Binding Inspector.Subtitle}"
+                     Foreground="{DynamicResource StfuMutedBrush}"
+                     FontSize="12"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="16,0,16,16">
+          <load:LoadTabView IsVisible="{Binding Inspector.IsLoadActive}" />
+
+          <ScrollViewer VerticalScrollBarVisibility="Auto"
+                        IsVisible="{Binding Inspector.IsBoilerplateActive}">
+            <ItemsControl ItemsSource="{Binding Inspector.Sections}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Background="{DynamicResource StfuPanel2Brush}"
+                          BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                          BorderThickness="1"
+                          Padding="12"
+                          Margin="0,0,0,10">
+                    <StackPanel Spacing="5">
+                      <TextBlock Text="{Binding Title}" FontWeight="Bold" />
+                      <TextBlock Text="{Binding Description}"
+                                 Foreground="{DynamicResource StfuMutedBrush}"
+                                 FontSize="12"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
+      </Grid>
+    </Grid>
+  </Border>
+</UserControl>

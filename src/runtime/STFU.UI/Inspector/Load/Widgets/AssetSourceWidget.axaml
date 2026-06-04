@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.Inspector.Load.Widgets.AssetSourceWidget">
+  <Border Classes="load-card">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="ASSET SOURCE" Classes="load-section-title" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding Assets.SourceStatus}"
+                   Foreground="{DynamicResource StfuMutedBrush}"
+                   FontSize="11" />
+      </Grid>
+      <ItemsControl ItemsSource="{Binding Assets.SourceOptions}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="0" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Classes="option-pill"
+                    Classes.active="{Binding IsSelected}"
+                    Click="OnSourceClicked"
+                    Tag="{Binding}"
+                    MinWidth="112">
+              <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="11" />
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </Border>
+</UserControl>

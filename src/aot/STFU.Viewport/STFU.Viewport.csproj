@@ -1,6 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\STFU.Abstractions\STFU.Abstractions.csproj" />
     <ProjectReference Include="..\STFU.Engine\STFU.Engine.csproj" />
     <ProjectReference Include="..\STFU.Messaging\STFU.Messaging.csproj" />
     <ProjectReference Include="..\STFU.NPR\STFU.NPR.csproj" />

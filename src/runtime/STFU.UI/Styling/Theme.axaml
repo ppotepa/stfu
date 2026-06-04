@@ -1,0 +1,101 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <SolidColorBrush x:Key="StfuBgBrush" Color="#EEF0EC" />
+    <SolidColorBrush x:Key="StfuSurfaceBrush" Color="#FAFBF8" />
+    <SolidColorBrush x:Key="StfuPanelBrush" Color="#FCFCFA" />
+    <SolidColorBrush x:Key="StfuPanel2Brush" Color="#F2F4F0" />
+    <SolidColorBrush x:Key="StfuInputBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="StfuOverlayBrush" Color="#E6FAFBF8" />
+    <SolidColorBrush x:Key="StfuLineBrush" Color="#C6CBC3" />
+    <SolidColorBrush x:Key="StfuLineSoftBrush" Color="#DDE1D9" />
+    <SolidColorBrush x:Key="StfuTextBrush" Color="#20231F" />
+    <SolidColorBrush x:Key="StfuMutedBrush" Color="#697067" />
+    <SolidColorBrush x:Key="StfuActiveBrush" Color="#20231F" />
+    <SolidColorBrush x:Key="StfuActiveTextBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="StfuGoldBrush" Color="#E7B52B" />
+    <SolidColorBrush x:Key="StfuGoldSoftBrush" Color="#FFF8E1" />
+    <SolidColorBrush x:Key="StfuGoldBorderBrush" Color="#B58412" />
+    <SolidColorBrush x:Key="StfuGoldTextBrush" Color="#221905" />
+    <SolidColorBrush x:Key="StfuGreenBrush" Color="#347257" />
+    <SolidColorBrush x:Key="StfuBlueBrush" Color="#2E657D" />
+    <SolidColorBrush x:Key="StfuAmberBrush" Color="#8A6822" />
+    <SolidColorBrush x:Key="StfuRustBrush" Color="#8A4E45" />
+  </Styles.Resources>
+
+  <Style Selector="TextBlock">
+    <Setter Property="FontFamily" Value="Segoe UI" />
+    <Setter Property="Foreground" Value="{DynamicResource StfuTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource StfuActiveBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StfuActiveBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource StfuActiveTextBrush}" />
+  </Style>
+
+  <Style Selector="ToggleSwitch.topbar-toggle">
+    <Setter Property="MinWidth" Value="116" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <Style Selector="Border.load-card">
+    <Setter Property="Background" Value="{DynamicResource StfuPanel2Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StfuLineSoftBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="CornerRadius" Value="3" />
+  </Style>
+
+  <Style Selector="TextBlock.load-section-title">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <Style Selector="Button.option-pill">
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Background" Value="{DynamicResource StfuInputBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StfuLineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Button.option-pill.active">
+    <Setter Property="Background" Value="{DynamicResource StfuGoldBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StfuGoldBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource StfuGoldTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.option-pill.active TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource StfuGoldTextBrush}" />
+  </Style>
+
+  <Style Selector="ListBox.recents-list">
+    <Setter Property="Background" Value="{DynamicResource StfuInputBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StfuLineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.recents-list ListBoxItem">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="MinHeight" Value="44" />
+  </Style>
+
+  <Style Selector="ListBox.recents-list ListBoxItem:pointerover">
+    <Setter Property="Background" Value="{DynamicResource StfuPanel2Brush}" />
+  </Style>
+
+  <Style Selector="ListBox.recents-list ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource StfuGoldSoftBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource StfuTextBrush}" />
+  </Style>
+</Styles>

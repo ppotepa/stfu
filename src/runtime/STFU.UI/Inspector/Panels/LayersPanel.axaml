@@ -1,0 +1,182 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.LayersPanel">
+  <StackPanel Spacing="12">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Text="NPR Layer Stack" FontWeight="Bold" />
+      <TextBlock Grid.Column="1" Text="{Binding Layers.LayerStackSummary}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    </Grid>
+
+    <ListBox ItemsSource="{Binding Layers.Layers}" SelectedItem="{Binding Layers.SelectedLayer, Mode=TwoWay}" MinHeight="160">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,2">
+            <CheckBox Grid.Column="0" IsChecked="{Binding Visible, Mode=TwoWay}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Spacing="4">
+              <TextBlock Text="{Binding Name}" FontWeight="Bold" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Role}" Foreground="{DynamicResource StfuGreenBrush}" FontSize="11" FontWeight="Bold" />
+                <TextBlock Text="{Binding Type}" Foreground="{DynamicResource StfuBlueBrush}" FontSize="11" FontWeight="Bold" />
+                <TextBlock Text="{Binding Blend}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="11" />
+                <TextBlock Text="{Binding Opacity, StringFormat='{}opacity {0:0.00}'}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="11" />
+              </StackPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+              <CheckBox Content="S" IsChecked="{Binding Solo, Mode=TwoWay}" ToolTip.Tip="Solo layer" />
+              <CheckBox Content="L" IsChecked="{Binding Locked, Mode=TwoWay}" ToolTip.Tip="Lock layer" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <StackPanel Spacing="6">
+      <TextBlock Text="New Layer Type" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+      <ComboBox ItemsSource="{Binding Layers.LayerTypes}" SelectedItem="{Binding Layers.NewLayerType, Mode=TwoWay}" />
+    </StackPanel>
+
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+      <Button Grid.ColumnSpan="2" Content="Add Layer" Classes="primary" Command="{Binding Layers.AddLayerCommand}" />
+      <Button Grid.Row="1" Content="Duplicate" Command="{Binding Layers.DuplicateLayerCommand}" />
+      <Button Grid.Row="1" Grid.Column="1" Content="Delete Layer" Command="{Binding Layers.DeleteLayerCommand}" />
+    </Grid>
+
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Text="{Binding Layers.ActiveLayerId, StringFormat='{}Active Layer - {0}'}" FontWeight="Bold" />
+      <TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayerSummary}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    </Grid>
+
+    <StackPanel Spacing="6">
+      <TextBlock Text="Name" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+      <TextBox Text="{Binding Layers.SelectedLayer.Name, Mode=TwoWay}" />
+    </StackPanel>
+
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+      <StackPanel Grid.Column="0" Spacing="6">
+        <TextBlock Text="Layer Type" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+        <ComboBox ItemsSource="{Binding Layers.LayerTypes}" SelectedItem="{Binding Layers.SelectedLayer.Type, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Spacing="6">
+        <TextBlock Text="Blend" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+        <ComboBox ItemsSource="{Binding Layers.BlendModes}" SelectedItem="{Binding Layers.SelectedLayer.Blend, Mode=TwoWay}" />
+      </StackPanel>
+    </Grid>
+
+    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+      <CheckBox Grid.Column="0" Content="Visible" IsChecked="{Binding Layers.SelectedLayer.Visible, Mode=TwoWay}" />
+      <CheckBox Grid.Column="1" Content="Solo" IsChecked="{Binding Layers.SelectedLayer.Solo, Mode=TwoWay}" />
+      <CheckBox Grid.Column="2" Content="Locked" IsChecked="{Binding Layers.SelectedLayer.Locked, Mode=TwoWay}" />
+    </Grid>
+
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+      <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Opacity" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.Opacity, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Layers.SelectedLayer.Opacity, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Density" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.Density, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0" Maximum="1.6" Value="{Binding Layers.SelectedLayer.Density, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="BaseThickness" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.BaseThickness, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0.4" Maximum="3.5" Value="{Binding Layers.SelectedLayer.BaseThickness, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="ThicknessVariation" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.ThicknessVariation, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Layers.SelectedLayer.ThicknessVariation, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="EndpointJitter" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.EndpointJitter, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0" Maximum="2.2" Value="{Binding Layers.SelectedLayer.EndpointJitter, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Overshoot" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.Overshoot, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0" Maximum="4.2" Value="{Binding Layers.SelectedLayer.Overshoot, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Row="3" Grid.Column="0" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="FillCoverage" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.FillCoverage, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Layers.SelectedLayer.FillCoverage, Mode=TwoWay}" />
+      </StackPanel>
+      <StackPanel Grid.Row="3" Grid.Column="1" Spacing="4">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="ShadeThreshold" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Grid.Column="1" Text="{Binding Layers.SelectedLayer.ShadeThreshold, StringFormat='{}{0:0.00}'}" /></Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Layers.SelectedLayer.ShadeThreshold, Mode=TwoWay}" />
+      </StackPanel>
+    </Grid>
+
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Text="Intent Inputs" FontWeight="Bold" />
+      <TextBlock Grid.Column="1" Text="NprStrokeIntent routing" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    </Grid>
+    <ItemsControl ItemsSource="{Binding Layers.Intents}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+            <CheckBox Content="{Binding Name}" IsChecked="{Binding Enabled, Mode=TwoWay}" />
+            <TextBlock Grid.Column="1" Text="{Binding Count}" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+          </Grid>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Text="Preview" FontWeight="Bold" />
+      <TextBlock Grid.Column="1" Text="active + composite" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+    </Grid>
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+      <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Active Layer" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+          <ItemsControl ItemsSource="{Binding Layers.ActiveLayerPreview}" MinHeight="76">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Width="{Binding Width}" Height="{Binding Height}" Opacity="{Binding Opacity}" Background="{Binding Color}" CornerRadius="3" Margin="2">
+                  <Border.RenderTransform>
+                    <RotateTransform Angle="{Binding Rotation}" />
+                  </Border.RenderTransform>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="1" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Composite" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" />
+          <ItemsControl ItemsSource="{Binding Layers.CompositeLayerPreview}" MinHeight="76">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Width="{Binding Width}" Height="{Binding Height}" Opacity="{Binding Opacity}" Background="{Binding Color}" CornerRadius="3" Margin="2">
+                  <Border.RenderTransform>
+                    <RotateTransform Angle="{Binding Rotation}" />
+                  </Border.RenderTransform>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+      <Border Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Visible layers" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Layers.VisibleLayerCount}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Column="1" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Stroke output" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Layers.StrokeOutputCount}" FontWeight="Bold" /></StackPanel>
+      </Border>
+      <Border Grid.Column="2" Background="{DynamicResource StfuPanel2Brush}" BorderBrush="{DynamicResource StfuLineSoftBrush}" BorderThickness="1" Padding="10">
+        <StackPanel><TextBlock Text="Fill / shading" Foreground="{DynamicResource StfuMutedBrush}" FontSize="12" /><TextBlock Text="{Binding Layers.ToneOutputCount}" FontWeight="Bold" /></StackPanel>
+      </Border>
+    </Grid>
+  </StackPanel>
+</UserControl>

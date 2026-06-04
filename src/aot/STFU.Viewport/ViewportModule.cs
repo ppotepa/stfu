@@ -1,4 +1,4 @@
-using STFU.Engine.Composition;
+using STFU.Abstractions.Modules;
 using STFU.NPR.Debug;
 using STFU.NPR.Rendering;
 using STFU.Strokes;
@@ -9,7 +9,7 @@ namespace STFU.Viewport;
 
 public sealed class ViewportModule : IEngineModule
 {
-    public void Register(EngineModuleContext context)
+    public void Register(IModuleContext context)
     {
         var state = new ViewportState();
         var debug = context.Services.GetRequired<NprDebugState>();

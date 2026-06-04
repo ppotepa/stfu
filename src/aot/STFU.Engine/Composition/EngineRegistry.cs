@@ -1,12 +1,14 @@
+using STFU.Abstractions.Modules;
+
 namespace STFU.Engine.Composition;
 
-public sealed class EngineRegistry
+public sealed class EngineRegistry : IModuleServiceRegistry
 {
     private readonly Dictionary<Type, object> _services = new();
 
     public int Count => _services.Count;
 
-    public EngineRegistry AddSingleton<TService>(TService service)
+    public IModuleServiceRegistry AddSingleton<TService>(TService service)
         where TService : notnull
     {
         _services[typeof(TService)] = service;

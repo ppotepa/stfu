@@ -1,3 +1,5 @@
+using STFU.Abstractions.Modules;
+
 namespace STFU.Engine.Composition;
 
 public sealed class StfuEngineBuilder
@@ -8,6 +10,7 @@ public sealed class StfuEngineBuilder
 
     private StfuEngineBuilder()
     {
+        _registry.AddSingleton(_scene);
     }
 
     public static StfuEngineBuilder Create()
@@ -18,7 +21,7 @@ public sealed class StfuEngineBuilder
 
     public StfuEngineBuilder AddModule(IEngineModule module)
     {
-        module.Register(new EngineModuleContext(_registry, _commands, _scene));
+        module.Register(new EngineModuleContext(_registry, _commands));
         return this;
     }
 

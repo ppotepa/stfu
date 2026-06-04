@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="STFU.UI.NprPanel">
+  <StackPanel Spacing="12">
+    <TextBlock Text="DefaultDrawingSettings" FontWeight="Bold" />
+
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10">
+      <CheckBox Content="ShowSilhouette" IsChecked="{Binding DefaultDrawing.ShowSilhouette, Mode=TwoWay}" />
+      <CheckBox Grid.Column="1" Content="ShowFeature" IsChecked="{Binding DefaultDrawing.ShowFeature, Mode=TwoWay}" />
+      <CheckBox Grid.Row="1" Content="ShowBoundary" IsChecked="{Binding DefaultDrawing.ShowBoundary, Mode=TwoWay}" />
+      <CheckBox Grid.Row="1" Grid.Column="1" Content="OcclusionCulling" IsChecked="{Binding DefaultDrawing.OcclusionCulling, Mode=TwoWay}" />
+      <CheckBox Grid.Row="2" Content="AutoDraw" IsChecked="{Binding DefaultDrawing.AutoDraw, Mode=TwoWay}" />
+    </Grid>
+
+    <Grid ColumnDefinitions="168,*,52" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="9">
+      <TextBlock Text="FeatureAngleDegrees" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Column="1" Minimum="5" Maximum="85" Value="{Binding DefaultDrawing.FeatureAngleDegrees, Mode=TwoWay}" />
+      <TextBlock Grid.Column="2" Text="{Binding DefaultDrawing.FeatureAngleDegrees, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="1" Text="MinSegPx" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="8" Value="{Binding DefaultDrawing.MinSegPx, Mode=TwoWay}" />
+      <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding DefaultDrawing.MinSegPx, StringFormat='{}{0:0.##}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="2" Text="MeshStride" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="8" Value="{Binding DefaultDrawing.MeshStride, Mode=TwoWay}" />
+      <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding DefaultDrawing.MeshStride}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="3" Text="DepthScale" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="3" Grid.Column="1" Minimum="0.25" Maximum="1.5" Value="{Binding DefaultDrawing.DepthScale, Mode=TwoWay}" />
+      <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding DefaultDrawing.DepthScale, StringFormat='{}{0:0.00}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="4" Text="PathSimplify" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="1.6" Value="{Binding DefaultDrawing.PathSimplify, Mode=TwoWay}" />
+      <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding DefaultDrawing.PathSimplify, StringFormat='{}{0:0.00}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="5" Text="DrawProgress" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="5" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding DefaultDrawing.DrawProgress, Mode=TwoWay}" />
+      <TextBlock Grid.Row="5" Grid.Column="2" Text="{Binding DefaultDrawing.DrawProgress, StringFormat='{}{0:0.00}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="6" Text="LineWidth" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="6" Grid.Column="1" Minimum="0.35" Maximum="5" Value="{Binding DefaultDrawing.LineWidth, Mode=TwoWay}" />
+      <TextBlock Grid.Row="6" Grid.Column="2" Text="{Binding DefaultDrawing.LineWidth, StringFormat='{}{0:0.00}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="7" Text="Jitter" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="7" Grid.Column="1" Minimum="0" Maximum="3" Value="{Binding DefaultDrawing.Jitter, Mode=TwoWay}" />
+      <TextBlock Grid.Row="7" Grid.Column="2" Text="{Binding DefaultDrawing.Jitter, StringFormat='{}{0:0.00}'}" TextAlignment="Right" />
+
+      <TextBlock Grid.Row="8" Text="Pressure" Foreground="{DynamicResource StfuMutedBrush}" VerticalAlignment="Center" />
+      <Slider Grid.Row="8" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding DefaultDrawing.Pressure, Mode=TwoWay}" />
+      <TextBlock Grid.Row="8" Grid.Column="2" Text="{Binding DefaultDrawing.Pressure, StringFormat='{}{0:0.00}'}" TextAlignment="Right" />
+    </Grid>
+
+    <TextBlock Text="NPR Pipeline" FontWeight="Bold" />
+    <ItemsControl>
+      <ItemsControl.Items>
+        <TextBlock Text="1. ProjectMeshStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="2. BuildProjectedTrianglesStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="3. BuildMeshTopologyStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="4. DefaultBuildFaceIdVisibilityBufferStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="5. DefaultClassifyEdgesToFragmentsStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="6. DefaultBuildPathsFromFragmentsStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="7. DefaultSimplifyAndSortPathsStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="8. DefaultApplyDrawProgressStep" FontFamily="Consolas" FontSize="11" />
+        <TextBlock Text="9. DefaultBuildInkFrameStep" FontFamily="Consolas" FontSize="11" />
+      </ItemsControl.Items>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

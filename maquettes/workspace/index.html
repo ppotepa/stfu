@@ -24,8 +24,8 @@
       </div>
 
       <div class="top-meta">
-        <span id="activePreset">generic-sketch</span>
-        <span id="presetEditBadge" class="soft-pill">editable</span>
+        <span id="activePreset">default</span>
+        <span id="presetEditBadge" class="soft-pill">locked</span>
         <span class="status-dot"></span>
         <span id="renderModeLabel">ViewportRenderMode.Npr</span>
       </div>
@@ -40,7 +40,7 @@
           <span id="graphHash">graph 8fd9a1</span>
         </div>
         <div class="viewport-overlay bottom-left">
-          <span id="cameraCompact">Camera (0, 0, 4) -> (0, 0, 0), 60 deg</span>
+          <span id="cameraCompact">Camera (0, 0, 4) -> (0, 0, 0), 45 deg</span>
         </div>
         <div class="viewport-overlay bottom-right">
           <span id="lastCommand">CommandBuffer idle</span>
@@ -95,27 +95,40 @@
               <label><span>Y</span><input id="entityPosY" type="number" step="0.1" value="0"></label>
               <label><span>Z</span><input id="entityPosZ" type="number" step="0.1" value="0"></label>
             </div>
+            <label class="field">
+              <span>Scene Role</span>
+              <select id="entityRoleSelect">
+                <option value="Foreground">Foreground</option>
+                <option value="Midground">Midground</option>
+                <option value="Background">Background</option>
+              </select>
+            </label>
           </section>
 
           <section class="panel-section" data-panel="general">
             <div class="section-heading">
               <h2>NprPresetMetadata</h2>
-              <span>NprPresetRegistry.ActivePreset</span>
+              <span>ActiveNprPresetState.ActivePreset</span>
             </div>
             <div class="info-table four">
-              <div><span>Id</span><strong id="presetId">generic-sketch</strong></div>
-              <div><span>Name</span><strong id="presetName">Generic Sketch</strong></div>
-              <div><span>IsEditable</span><strong id="presetEditable">true</strong></div>
-              <div><span>Pipeline</span><strong>13 steps</strong></div>
+              <div><span>Id</span><strong id="presetId">default</strong></div>
+              <div><span>Name</span><strong id="presetName">Default</strong></div>
+              <div><span>IsEditable</span><strong id="presetEditable">false</strong></div>
+              <div><span>Pipeline</span><strong id="presetPipelineId">default</strong></div>
+              <div><span>Provider</span><strong id="presetProvider">STFU.NPR.Pipeline.Default</strong></div>
+              <div><span>Packaging</span><strong>BuiltInAot</strong></div>
             </div>
-            <p class="description-box" id="presetDescription">Editable built-in NPR sketch preset using feature lines, hatching, density pruning, and approximate hidden-line filtering.</p>
+            <p class="description-box" id="presetDescription">Built-in Default parity line-art preset using projection, face-id visibility, edge fragments, path joining, draw progress, and comic ink strokes.</p>
 
             <label class="field">
               <span>Preset Registry</span>
               <select id="presetSelect">
-                <option value="generic-sketch">generic-sketch - Generic Sketch</option>
-                <option value="technical-line">technical-line - Technical Line</option>
+                <option value="default">default - Default</option>
+                <option value="technical-ink">technical-ink - Technical Ink</option>
+                <option value="pencil-construction">pencil-construction - Pencil Construction</option>
+                <option value="pen-ink-hatching">pen-ink-hatching - Pen And Ink Hatching</option>
                 <option value="manga-ink">manga-ink - Manga Ink</option>
+                <option value="blueprint">blueprint - Blueprint Construction</option>
               </select>
             </label>
 
@@ -200,59 +213,61 @@
 
           <section class="panel-section" data-panel="npr">
             <div class="section-heading">
-              <h2>NprSettings</h2>
+              <h2>DefaultDrawingSettings</h2>
               <span>active preset settings</span>
+            </div>
+            <div class="setting-toggle-grid">
+              <label class="toggle-line"><input id="showSilhouette" type="checkbox" checked><span>ShowSilhouette</span></label>
+              <label class="toggle-line"><input id="showFeature" type="checkbox" checked><span>ShowFeature</span></label>
+              <label class="toggle-line"><input id="showBoundary" type="checkbox" checked><span>ShowBoundary</span></label>
+              <label class="toggle-line"><input id="occlusionCulling" type="checkbox" checked><span>OcclusionCulling</span></label>
+              <label class="toggle-line"><input id="autoDraw" type="checkbox" checked><span>AutoDraw</span></label>
             </div>
             <div class="settings-grid">
               <div class="slider-row">
-                <label for="creaseSlider">CreaseAngleDegrees</label>
-                <input id="creaseSlider" type="range" min="5" max="85" value="34">
-                <output id="creaseValue">34</output>
+                <label for="featureAngleSlider">FeatureAngleDegrees</label>
+                <input id="featureAngleSlider" type="range" min="5" max="85" value="34">
+                <output id="featureAngleValue">34</output>
               </div>
               <div class="slider-row">
-                <label for="minAreaSlider">MinimumProjectedTriangleArea</label>
-                <input id="minAreaSlider" type="range" min="1" max="50" value="8">
-                <output id="minAreaValue">8</output>
+                <label for="minSegSlider">MinSegPx</label>
+                <input id="minSegSlider" type="range" min="0" max="8" value="1">
+                <output id="minSegValue">1</output>
               </div>
               <div class="slider-row">
-                <label for="minStrokeSlider">MinimumStrokeLength</label>
-                <input id="minStrokeSlider" type="range" min="1" max="40" value="4">
-                <output id="minStrokeValue">4</output>
+                <label for="meshStrideSlider">MeshStride</label>
+                <input id="meshStrideSlider" type="range" min="1" max="8" value="1">
+                <output id="meshStrideValue">1</output>
               </div>
               <div class="slider-row">
-                <label for="surfaceThresholdSlider">SurfaceFlowShadeThreshold</label>
-                <input id="surfaceThresholdSlider" type="range" min="0" max="100" value="52">
-                <output id="surfaceThresholdValue">0.52</output>
+                <label for="depthScaleSlider">DepthScale</label>
+                <input id="depthScaleSlider" type="range" min="25" max="150" value="100">
+                <output id="depthScaleValue">1.00</output>
               </div>
               <div class="slider-row">
-                <label for="surfaceDensitySlider">SurfaceFlowDensity</label>
-                <input id="surfaceDensitySlider" type="range" min="0" max="100" value="38">
-                <output id="surfaceDensityValue">0.38</output>
+                <label for="pathSimplifySlider">PathSimplify</label>
+                <input id="pathSimplifySlider" type="range" min="0" max="160" value="60">
+                <output id="pathSimplifyValue">0.60</output>
               </div>
               <div class="slider-row">
-                <label for="hatchThresholdSlider">HatchShadeThreshold</label>
-                <input id="hatchThresholdSlider" type="range" min="0" max="100" value="58">
-                <output id="hatchThresholdValue">0.58</output>
+                <label for="drawProgressSlider">DrawProgress</label>
+                <input id="drawProgressSlider" type="range" min="0" max="100" value="100">
+                <output id="drawProgressValue">1.00</output>
               </div>
               <div class="slider-row">
-                <label for="hatchDensitySlider">HatchDensity</label>
-                <input id="hatchDensitySlider" type="range" min="0" max="100" value="48">
-                <output id="hatchDensityValue">0.48</output>
+                <label for="lineWidthSlider">LineWidth</label>
+                <input id="lineWidthSlider" type="range" min="35" max="500" value="220">
+                <output id="lineWidthValue">2.20</output>
               </div>
               <div class="slider-row">
-                <label for="hatchLengthSlider">HatchLength</label>
-                <input id="hatchLengthSlider" type="range" min="4" max="48" value="19">
-                <output id="hatchLengthValue">19</output>
+                <label for="jitterSlider">Jitter</label>
+                <input id="jitterSlider" type="range" min="0" max="300" value="160">
+                <output id="jitterValue">1.60</output>
               </div>
               <div class="slider-row">
-                <label for="hiddenSlider">HiddenLineDepthBias</label>
-                <input id="hiddenSlider" type="range" min="0" max="80" value="25">
-                <output id="hiddenValue">0.025</output>
-              </div>
-              <div class="slider-row">
-                <label for="featureSlider">FeatureLineDensity</label>
-                <input id="featureSlider" type="range" min="0" max="100" value="86">
-                <output id="featureValue">0.86</output>
+                <label for="pressureSlider">Pressure</label>
+                <input id="pressureSlider" type="range" min="0" max="100" value="32">
+                <output id="pressureValue">0.32</output>
               </div>
             </div>
 
@@ -290,6 +305,7 @@
                   <option value="strokes">Strokes</option>
                   <option value="fill">Fill</option>
                   <option value="shading">Shading</option>
+                  <option value="tones">Tones</option>
                 </select>
               </label>
               <label class="field">
@@ -379,6 +395,12 @@
               <span id="debugDeterminism">deterministic</span>
             </div>
             <div class="metric-grid" id="graphCounters"></div>
+
+            <div class="section-heading compact-heading">
+              <h2>Default Parity Snapshot</h2>
+              <span>face-id buffer / paths / ink frame</span>
+            </div>
+            <div class="parity-grid" id="paritySummary"></div>
 
             <div class="section-heading compact-heading">
               <h2>Overlay Toggles</h2>

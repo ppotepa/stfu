@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="STFU.UI.Inspector.Load.PublicDomainAssetExplorerWindow"
+        Title="Public Domain Assets"
+        Width="520"
+        Height="360"
+        MinWidth="420"
+        MinHeight="300"
+        Background="{DynamicResource StfuBgBrush}">
+  <Border Background="{DynamicResource StfuPanelBrush}"
+          BorderBrush="{DynamicResource StfuLineBrush}"
+          BorderThickness="1"
+          Padding="16">
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+      <StackPanel Grid.Row="0" Spacing="4">
+        <TextBlock Text="PUBLIC DOMAIN EXPLORER" FontWeight="Bold" />
+        <TextBlock Text="Placeholder explorer. Selecting an item sets Selected Asset in LOAD."
+                   Foreground="{DynamicResource StfuMutedBrush}"
+                   FontSize="12" />
+      </StackPanel>
+
+      <ListBox Grid.Row="1" x:Name="AssetList">
+        <ListBoxItem Tag="suzanne.obj">Suzanne sample (.obj)</ListBoxItem>
+        <ListBoxItem Tag="walking.fbx">Walking animation sample (.fbx)</ListBoxItem>
+      </ListBox>
+
+      <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+        <Button Grid.Column="1" Content="Cancel" Click="OnCancel" />
+        <Button Grid.Column="2" Content="Use Asset" Classes="primary" Click="OnUseAsset" />
+      </Grid>
+    </Grid>
+  </Border>
+</Window>

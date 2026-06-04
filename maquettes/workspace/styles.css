@@ -158,6 +158,19 @@ button {
   font-weight: 700;
 }
 
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 1px 6px;
+  border: 1px solid #c7d7ce;
+  border-radius: 999px;
+  background: #edf5ef;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 456px;
@@ -494,7 +507,8 @@ input[type="text"] {
 }
 
 .info-table,
-.metric-grid {
+.metric-grid,
+.parity-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
@@ -510,7 +524,8 @@ input[type="text"] {
 }
 
 .info-table div,
-.metric-grid div {
+.metric-grid div,
+.parity-grid div {
   min-width: 0;
   padding: 10px;
   background: var(--panel-2);
@@ -519,12 +534,14 @@ input[type="text"] {
 }
 
 .info-table span,
-.metric-grid span {
+.metric-grid span,
+.parity-grid span {
   display: block;
 }
 
 .info-table strong,
-.metric-grid strong {
+.metric-grid strong,
+.parity-grid strong {
   display: block;
   margin-top: 4px;
   overflow-wrap: anywhere;
@@ -565,6 +582,17 @@ input[type="text"] {
 .settings-grid {
   display: grid;
   gap: 6px;
+}
+
+.setting-toggle-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+  margin: 0 0 10px;
+  padding: 8px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: var(--panel-2);
 }
 
 .slider-row {
@@ -744,6 +772,10 @@ output {
   color: var(--amber);
 }
 
+.layer-row[data-layer-type="tones"] .layer-kind {
+  color: var(--rust);
+}
+
 .layer-controls {
   display: flex;
   flex-wrap: wrap;
@@ -835,6 +867,16 @@ output {
     transparent 0 9px,
     var(--c) 9px 11px
   );
+}
+
+.preview-tone {
+  position: absolute;
+  inset: 16% 14%;
+  opacity: var(--o);
+  border-radius: 36% 44% 42% 34%;
+  background:
+    radial-gradient(circle at 35% 32%, rgba(255, 255, 255, .22), transparent 0 18%),
+    var(--c);
 }
 
 .layer-summary-table {
@@ -984,6 +1026,8 @@ output {
 
   .info-table.three,
   .info-table.four,
+  .parity-grid,
+  .setting-toggle-grid,
   .overlay-grid {
     grid-template-columns: 1fr;
   }

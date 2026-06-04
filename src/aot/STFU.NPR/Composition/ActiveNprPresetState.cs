@@ -34,8 +34,11 @@ public sealed class ActiveNprPresetState
         ActiveSettings = preset.CreateSettings();
         ActiveGrammar = preset.CreateGrammar();
         ActiveStyleSet = preset.CreateStyleSet();
-        ActivePipeline = _pipelines.TryCreate(preset.PipelineId, out var pipeline)
-            ? pipeline
-            : preset.CreatePipeline();
+        if (!_pipelines.TryCreate(preset.PipelineId, out var pipeline))
+        {
+            throw new InvalidOperationException($"NPR pipeline is not registered: {preset.PipelineId}");
+        }
+
+        ActivePipeline = pipeline;
     }
 }

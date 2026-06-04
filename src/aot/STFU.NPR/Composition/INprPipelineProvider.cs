@@ -7,4 +7,9 @@ public interface INprPipelineProvider
     string PipelineId { get; }
 
     INprPipeline CreatePipeline();
+
+    IReadOnlyList<INprPreset> CreateBuiltInPresets()
+    {
+        return [];
+    }
 }

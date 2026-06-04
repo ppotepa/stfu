@@ -8,20 +8,17 @@
     <ProjectReference Include="..\..\aot\STFU.Messaging\STFU.Messaging.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Camera\STFU.Camera.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
-    <ProjectReference Include="..\..\aot\pipelines\STFU.NPR.Pipeline.ComicSurface\STFU.NPR.Pipeline.ComicSurface.csproj" />
-    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.Blueprint\STFU.NPR.Preset.Blueprint.csproj" />
-    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.MangaInk\STFU.NPR.Preset.MangaInk.csproj" />
-    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.PencilConstruction\STFU.NPR.Preset.PencilConstruction.csproj" />
-    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.PenInkHatching\STFU.NPR.Preset.PenInkHatching.csproj" />
-    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.TechnicalInk\STFU.NPR.Preset.TechnicalInk.csproj" />
+    <ProjectReference Include="..\..\aot\npr\pipelines\STFU.NPR.Pipelines\STFU.NPR.Pipelines.csproj" />
+    <ProjectReference Include="..\..\aot\npr\presets\STFU.NPR.Presets\STFU.NPR.Presets.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Viewport\STFU.Viewport.csproj" />
+    <ProjectReference Include="..\STFU.UI.Bridge\STFU.UI.Bridge.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.4" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <PackageReference Include="Semi.Avalonia" Version="12.0.3" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -29,6 +26,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
 </Project>

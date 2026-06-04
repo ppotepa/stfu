@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:widgets="clr-namespace:STFU.UI.Inspector.Load.Widgets"
+             x:Class="STFU.UI.Inspector.Load.LoadTabView">
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="8">
+      <widgets:RecentsWidget />
+      <widgets:AssetSourceWidget />
+      <widgets:SelectedAssetWidget />
+      <widgets:ImportOptionsWidget />
+      <widgets:LoadActionWidget />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
