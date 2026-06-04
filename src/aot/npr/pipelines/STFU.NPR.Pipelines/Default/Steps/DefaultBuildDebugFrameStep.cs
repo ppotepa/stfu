@@ -7,6 +7,12 @@ public sealed class DefaultBuildDebugFrameStep : STFU.NPR.Pipeline.INprStep
 {
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
+        if (!context.IncludeDebugFrame)
+        {
+            context.DebugFrame = NprDebugFrame.Empty;
+            return;
+        }
+
         var lines = new List<NprDebugLine>();
 
         foreach (var curve in context.Graph.Curves)

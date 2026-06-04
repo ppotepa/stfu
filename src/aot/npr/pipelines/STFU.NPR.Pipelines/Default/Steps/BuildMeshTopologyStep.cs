@@ -56,6 +56,10 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
 
     private static void BuildPerTriangleEdges(STFU.NPR.Pipeline.NprContext context)
     {
+        var edgeCapacity = context.Graph.Triangles.Count * 3;
+        context.Graph.TopologyEdges.EnsureCapacity(context.Graph.TopologyEdges.Count + edgeCapacity);
+        context.Graph.Edges.EnsureCapacity(context.Graph.Edges.Count + edgeCapacity);
+
         for (var triangleIndex = 0; triangleIndex < context.Graph.Triangles.Count; triangleIndex++)
         {
             var triangle = context.Graph.Triangles[triangleIndex];

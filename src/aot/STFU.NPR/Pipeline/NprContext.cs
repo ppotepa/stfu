@@ -42,7 +42,9 @@ public sealed class NprContext
 
     public FrameHistory? PreviousFrame { get; init; }
 
-    public NprGraph Graph { get; } = new();
+    public bool IncludeDebugFrame { get; init; } = true;
+
+    public NprGraph Graph { get; init; } = new();
 
     public StrokeFrame Frame { get; set; } = StrokeFrame.Empty;
 

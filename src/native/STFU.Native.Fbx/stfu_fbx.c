@@ -8,6 +8,9 @@
 
 struct stfu_fbx_scene {
     ufbx_scene *scene;
+    ufbx_scene *evaluated_scene;
+    int cached_animation_index;
+    float cached_time_seconds;
 };
 
 static char g_last_error[2048];
@@ -163,6 +166,9 @@ stfu_fbx_scene *stfu_fbx_load(const char *path, stfu_fbx_error *error)
 void stfu_fbx_free(stfu_fbx_scene *scene)
 {
     if (!scene) return;
+    if (scene->evaluated_scene) {
+        ufbx_free_scene(scene->evaluated_scene);
+    }
     if (scene->scene) {
         ufbx_free_scene(scene->scene);
     }
@@ -224,37 +230,45 @@ int stfu_fbx_bake_mesh_at_time(
     memset(out_mesh, 0, sizeof(*out_mesh));
 
     ufbx_scene *source_scene = scene->scene;
-    ufbx_scene *evaluated_scene = NULL;
 
     if (animation_index >= 0 && (size_t)animation_index < source_scene->anim_stacks.count) {
-        ufbx_anim *anim = source_scene->anim_stacks.data[animation_index]->anim;
-        ufbx_evaluate_opts eval_opts;
-        memset(&eval_opts, 0, sizeof(eval_opts));
-        eval_opts.evaluate_skinning = true;
-        eval_opts.evaluate_caches = true;
+        if (!scene->evaluated_scene ||
+            scene->cached_animation_index != animation_index ||
+            scene->cached_time_seconds != time_seconds) {
+            if (scene->evaluated_scene) {
+                ufbx_free_scene(scene->evaluated_scene);
+                scene->evaluated_scene = NULL;
+            }
 
-        ufbx_error eval_error;
-        evaluated_scene = ufbx_evaluate_scene(source_scene, anim, (double)time_seconds, &eval_opts, &eval_error);
-        if (!evaluated_scene) {
-            return 2;
+            ufbx_anim *anim = source_scene->anim_stacks.data[animation_index]->anim;
+            ufbx_evaluate_opts eval_opts;
+            memset(&eval_opts, 0, sizeof(eval_opts));
+            eval_opts.evaluate_skinning = true;
+            eval_opts.evaluate_caches = true;
+
+            ufbx_error eval_error;
+            scene->evaluated_scene = ufbx_evaluate_scene(source_scene, anim, (double)time_seconds, &eval_opts, &eval_error);
+            if (!scene->evaluated_scene) {
+                return 2;
+            }
+
+            scene->cached_animation_index = animation_index;
+            scene->cached_time_seconds = time_seconds;
         }
 
-        source_scene = evaluated_scene;
+        source_scene = scene->evaluated_scene;
     }
 
     if (mesh_index < 0 || (size_t)mesh_index >= source_scene->meshes.count) {
-        if (evaluated_scene) ufbx_free_scene(evaluated_scene);
         return 3;
     }
 
     const ufbx_mesh *mesh = source_scene->meshes.data[mesh_index];
     if (!mesh || mesh->num_indices == 0 || mesh->num_triangles == 0) {
-        if (evaluated_scene) ufbx_free_scene(evaluated_scene);
         return 4;
     }
 
     if (mesh->num_indices > (size_t)INT32_MAX || mesh->num_triangles > (size_t)INT32_MAX) {
-        if (evaluated_scene) ufbx_free_scene(evaluated_scene);
         return 5;
     }
 
@@ -265,7 +279,6 @@ int stfu_fbx_bake_mesh_at_time(
 
     if (!out_mesh->vertices || !out_mesh->triangles) {
         stfu_fbx_free_mesh_buffer(out_mesh);
-        if (evaluated_scene) ufbx_free_scene(evaluated_scene);
         return 6;
     }
 
@@ -296,7 +309,6 @@ int stfu_fbx_bake_mesh_at_time(
     uint32_t *tri_indices = (uint32_t*)malloc(mesh->max_face_triangles * 3u * sizeof(uint32_t));
     if (!tri_indices) {
         stfu_fbx_free_mesh_buffer(out_mesh);
-        if (evaluated_scene) ufbx_free_scene(evaluated_scene);
         return 7;
     }
 
@@ -313,7 +325,6 @@ int stfu_fbx_bake_mesh_at_time(
             if (triangle_index >= mesh->num_triangles) {
                 free(tri_indices);
                 stfu_fbx_free_mesh_buffer(out_mesh);
-                if (evaluated_scene) ufbx_free_scene(evaluated_scene);
                 return 8;
             }
 
@@ -325,10 +336,6 @@ int stfu_fbx_bake_mesh_at_time(
     }
 
     free(tri_indices);
-
-    if (evaluated_scene) {
-        ufbx_free_scene(evaluated_scene);
-    }
 
     return 0;
 }

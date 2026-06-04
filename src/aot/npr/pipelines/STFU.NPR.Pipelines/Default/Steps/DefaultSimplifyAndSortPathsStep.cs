@@ -8,27 +8,31 @@ public sealed class DefaultSimplifyAndSortPathsStep : STFU.NPR.Pipeline.INprStep
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
         var epsilon = context.Settings.DefaultDrawing.PathSimplify;
-        var simplified = new List<DefaultProjectedPath>(context.Graph.DefaultPaths.Count);
+        var simplified = new List<(DefaultProjectedPath Path, float SortY)>(context.Graph.DefaultPaths.Count);
 
         foreach (var path in context.Graph.DefaultPaths)
         {
             var points = Simplify(path.Points, epsilon);
             if (points.Count > 1)
             {
-                simplified.Add(path with
+                var length = ReferenceEquals(points, path.Points)
+                    ? path.Length
+                    : DefaultPathMath.PathLength(points);
+                var simplifiedPath = path with
                 {
                     Points = points,
-                    Length = DefaultPathMath.PathLength(points)
-                });
+                    Length = length
+                };
+                simplified.Add((simplifiedPath, AverageY(points)));
             }
         }
 
-        simplified.Sort((left, right) => AverageY(left.Points).CompareTo(AverageY(right.Points)));
+        simplified.Sort((left, right) => left.SortY.CompareTo(right.SortY));
 
         context.Graph.DefaultPaths.Clear();
         for (var i = 0; i < simplified.Count; i++)
         {
-            context.Graph.DefaultPaths.Add(simplified[i] with { PathIndex = i });
+            context.Graph.DefaultPaths.Add(simplified[i].Path with { PathIndex = i });
         }
     }
 
@@ -36,24 +40,24 @@ public sealed class DefaultSimplifyAndSortPathsStep : STFU.NPR.Pipeline.INprStep
     {
         if (epsilon <= 0f || points.Count <= 2)
         {
-            return points.ToArray();
+            return points;
         }
 
-        return Rdp(points).ToArray();
+        var keep = new bool[points.Count];
+        keep[0] = true;
+        keep[^1] = true;
+        var stack = new Stack<(int Start, int End)>();
+        stack.Push((0, points.Count - 1));
 
-        List<Point2D> Rdp(IReadOnlyList<Point2D> source)
+        while (stack.Count > 0)
         {
-            if (source.Count <= 2)
-            {
-                return source.ToList();
-            }
+            var (start, end) = stack.Pop();
 
             var maxDistance = -1d;
             var index = -1;
-
-            for (var i = 1; i < source.Count - 1; i++)
+            for (var i = start + 1; i < end; i++)
             {
-                var distance = PerpendicularDistance(source[i], source[0], source[^1]);
+                var distance = PerpendicularDistance(points[i], points[start], points[end]);
                 if (distance > maxDistance)
                 {
                     maxDistance = distance;
@@ -63,15 +67,22 @@ public sealed class DefaultSimplifyAndSortPathsStep : STFU.NPR.Pipeline.INprStep
 
             if (maxDistance > epsilon)
             {
-                var left = Rdp(source.Take(index + 1).ToArray());
-                var right = Rdp(source.Skip(index).ToArray());
-                left.RemoveAt(left.Count - 1);
-                left.AddRange(right);
-                return left;
+                keep[index] = true;
+                stack.Push((start, index));
+                stack.Push((index, end));
             }
-
-            return [source[0], source[^1]];
         }
+
+        var output = new List<Point2D>(points.Count);
+        for (var i = 0; i < points.Count; i++)
+        {
+            if (keep[i])
+            {
+                output.Add(points[i]);
+            }
+        }
+
+        return output;
     }
 
     private static double PerpendicularDistance(Point2D point, Point2D a, Point2D b)
@@ -89,6 +100,17 @@ public sealed class DefaultSimplifyAndSortPathsStep : STFU.NPR.Pipeline.INprStep
 
     private static float AverageY(IReadOnlyList<Point2D> points)
     {
-        return points.Count == 0 ? 0f : points.Sum(point => point.Y) / points.Count;
+        if (points.Count == 0)
+        {
+            return 0f;
+        }
+
+        var total = 0f;
+        for (var i = 0; i < points.Count; i++)
+        {
+            total += points[i].Y;
+        }
+
+        return total / points.Count;
     }
 }

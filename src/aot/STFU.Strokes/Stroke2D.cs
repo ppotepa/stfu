@@ -32,7 +32,7 @@ public readonly record struct StrokePoint2D(
     }
 }
 
-public sealed record StrokeMetadata(
+public readonly record struct StrokeMetadata(
     int StableId,
     string? Layer,
     string? SourceKind,

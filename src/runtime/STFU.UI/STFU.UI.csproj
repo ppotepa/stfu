@@ -10,8 +10,12 @@
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
     <ProjectReference Include="..\..\aot\npr\pipelines\STFU.NPR.Pipelines\STFU.NPR.Pipelines.csproj" />
     <ProjectReference Include="..\..\aot\npr\presets\STFU.NPR.Presets\STFU.NPR.Presets.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Rendering.Abstractions\STFU.Rendering.Abstractions.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Rendering.Cpu\STFU.Rendering.Cpu.csproj" />
+    <ProjectReference Include="..\STFU.Rendering.DirectX\STFU.Rendering.DirectX.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Viewport\STFU.Viewport.csproj" />
+    <ProjectReference Include="..\STFU.Logging\STFU.Logging.csproj" />
     <ProjectReference Include="..\STFU.UI.Bridge\STFU.UI.Bridge.csproj" />
   </ItemGroup>
 

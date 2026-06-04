@@ -5,6 +5,7 @@
     <ProjectReference Include="..\..\aot\STFU.Assets\STFU.Assets.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
     <ProjectReference Include="..\STFU.Import\STFU.Import.csproj" />
+    <ProjectReference Include="..\STFU.Logging\STFU.Logging.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -12,6 +13,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NativeFbxDll>$(MSBuildThisFileDirectory)..\..\..\artifacts\native\STFU.Native.Fbx\stfu_fbx.dll</NativeFbxDll>
   </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(NativeFbxDll)')">
+    <None Include="$(NativeFbxDll)"
+          Link="stfu_fbx.dll"
+          TargetPath="stfu_fbx.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

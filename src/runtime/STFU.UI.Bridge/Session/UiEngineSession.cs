@@ -5,12 +5,15 @@ using STFU.Mesh;
 using STFU.NPR.Analysis;
 using STFU.NPR.Composition;
 using STFU.NPR.Debug;
+using STFU.Rendering.Abstractions.Backend;
 using STFU.NPR.Rendering;
 using STFU.NPR.Temporal;
+using STFU.Rendering.Abstractions.Execution;
 using STFU.Strokes;
 using STFU.UI.Bridge.Camera;
 using STFU.UI.Bridge.Npr;
 using STFU.UI.Bridge.Presets;
+using STFU.UI.Bridge.Renderer;
 using STFU.UI.Bridge.Viewport;
 using STFU.Viewport;
 
@@ -35,6 +38,9 @@ public sealed class UiEngineSession
         Debug = engine.Registry.GetRequired<NprDebugState>();
         Strokes = engine.Registry.GetRequired<StrokeState>();
         Viewport = engine.Registry.GetRequired<ViewportState>();
+        RenderScheduler = engine.Registry.GetRequired<INprRenderScheduler>();
+        GpuRenderBackend = engine.Registry.TryGet<IGpuRenderBackend>(out var gpuRenderBackend) ? gpuRenderBackend : null;
+        RendererSettingsStore = new RendererSettingsStore();
 
         Workspace = new WorkspaceViewModel(this, applyTheme);
     }
@@ -68,6 +74,14 @@ public sealed class UiEngineSession
     public StrokeState Strokes { get; }
 
     public ViewportState Viewport { get; }
+
+    public INprRenderScheduler RenderScheduler { get; }
+
+    public IGpuRenderBackend? GpuRenderBackend { get; }
+
+    public RendererSettingsStore RendererSettingsStore { get; }
+
+    public bool HasGpuRenderer => GpuRenderBackend?.IsAvailable == true;
 
     public void RefreshFromEngine()
     {

@@ -1,3 +1,5 @@
+using STFU.Logging;
+
 namespace STFU.UI;
 
 internal static class StfuUiLog
@@ -11,6 +13,12 @@ internal static class StfuUiLog
 
     public static void Write(string message)
     {
-        _write?.Invoke(message);
+        if (_write is not null)
+        {
+            _write.Invoke(message);
+            return;
+        }
+
+        StfuLog.Write(StfuLogDomain.Ui, message);
     }
 }

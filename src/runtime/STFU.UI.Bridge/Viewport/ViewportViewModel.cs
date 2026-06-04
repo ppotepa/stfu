@@ -112,6 +112,13 @@ public sealed class ViewportViewModel : BindableObject
         OnPropertyChanged(nameof(SizeLabel));
     }
 
+    public void PublishViewportSize(int width, int height)
+    {
+        Width = width;
+        Height = height;
+        OnPropertyChanged(nameof(SizeLabel));
+    }
+
     public void RefreshFromEngine()
     {
         Width = _viewport.Width;

@@ -20,7 +20,24 @@ public sealed record FeatureCurve(
 
     public EntityId EntityId { get; init; } = EntityId.None;
 
-    public float AverageDepth => Points.Count == 0 ? 0f : Points.Average(point => point.Depth);
+    public float AverageDepth
+    {
+        get
+        {
+            if (Points.Count == 0)
+            {
+                return 0f;
+            }
+
+            var total = 0f;
+            for (var i = 0; i < Points.Count; i++)
+            {
+                total += Points[i].Depth;
+            }
+
+            return total / Points.Count;
+        }
+    }
 
     public FeatureLine ToFeatureLine()
     {

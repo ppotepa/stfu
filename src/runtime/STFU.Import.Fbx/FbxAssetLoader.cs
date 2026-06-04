@@ -3,6 +3,7 @@ using STFU.Animation.Clips;
 using STFU.Animation.Skeleton;
 using STFU.Assets;
 using STFU.Import;
+using STFU.Logging;
 
 namespace STFU.Import.Fbx;
 
@@ -12,16 +13,36 @@ public sealed class FbxAssetLoader : IAssetLoader<string>
     {
         if (!File.Exists(source))
         {
+            StfuLog.Write(
+                StfuLogDomain.ImportFbx,
+                "load.missing",
+                source,
+                StfuLogLevel.Warning);
             return LoadResult<ImportedAsset>.Fail($"FBX file was not found: {source}");
         }
 
         var options = ReadOptions(context);
+        StfuLog.Write(
+            StfuLogDomain.ImportFbx,
+            "load.start",
+            source,
+            properties: new Dictionary<string, object?>
+            {
+                ["animationIndex"] = options.AnimationIndex,
+                ["timeSeconds"] = options.TimeSeconds
+            });
 
         try
         {
             var rawScene = FbxNative.Load(source, out var error);
             if (rawScene == 0)
             {
+                StfuLog.Write(
+                    StfuLogDomain.ImportFbx,
+                    "load.failed",
+                    error.GetMessage(),
+                    StfuLogLevel.Error,
+                    new Dictionary<string, object?> { ["path"] = source });
                 return LoadResult<ImportedAsset>.Fail(error.GetMessage());
             }
 
@@ -29,8 +50,26 @@ public sealed class FbxAssetLoader : IAssetLoader<string>
             var infoStatus = FbxNative.GetSceneInfo(scene.DangerousGetHandle(), out var info);
             if (infoStatus != 0)
             {
+                StfuLog.Write(
+                    StfuLogDomain.ImportFbx,
+                    "scene_info.failed",
+                    $"status={infoStatus}",
+                    StfuLogLevel.Error,
+                    new Dictionary<string, object?> { ["path"] = source });
                 return LoadResult<ImportedAsset>.Fail($"FBX native scene info failed with status {infoStatus}.");
             }
+
+            StfuLog.Write(
+                StfuLogDomain.ImportFbx,
+                "scene_info.loaded",
+                source,
+                properties: new Dictionary<string, object?>
+                {
+                    ["meshes"] = info.MeshCount,
+                    ["skinnedMeshes"] = info.SkinnedMeshCount,
+                    ["skeletons"] = info.SkeletonCount,
+                    ["animations"] = info.AnimationCount
+                });
 
             var skeletons = LoadSkeletons(scene.DangerousGetHandle(), info);
             var animations = LoadAnimations(scene.DangerousGetHandle(), info);
@@ -46,6 +85,12 @@ public sealed class FbxAssetLoader : IAssetLoader<string>
 
                 if (bakeStatus != 0)
                 {
+                    StfuLog.Write(
+                        StfuLogDomain.ImportFbx,
+                        "bake.failed",
+                        $"mesh={i} status={bakeStatus}",
+                        StfuLogLevel.Error,
+                        new Dictionary<string, object?> { ["path"] = source });
                     return LoadResult<ImportedAsset>.Fail($"FBX native mesh bake failed for mesh {i} with status {bakeStatus}.");
                 }
 
@@ -79,16 +124,19 @@ public sealed class FbxAssetLoader : IAssetLoader<string>
         }
         catch (DllNotFoundException exception)
         {
+            StfuLog.Write(StfuLogDomain.ImportFbx, "native.dll_not_found", exception.Message, StfuLogLevel.Error, exception: exception);
             return LoadResult<ImportedAsset>.Fail(
                 $"FBX native library 'stfu_fbx' was not found. Build src/native/STFU.Native.Fbx first. {exception.Message}");
         }
         catch (EntryPointNotFoundException exception)
         {
+            StfuLog.Write(StfuLogDomain.ImportFbx, "native.entrypoint_missing", exception.Message, StfuLogLevel.Error, exception: exception);
             return LoadResult<ImportedAsset>.Fail(
                 $"FBX native library 'stfu_fbx' is missing an expected entry point. {exception.Message}");
         }
         catch (BadImageFormatException exception)
         {
+            StfuLog.Write(StfuLogDomain.ImportFbx, "native.bad_image", exception.Message, StfuLogLevel.Error, exception: exception);
             return LoadResult<ImportedAsset>.Fail(
                 $"FBX native library 'stfu_fbx' has an incompatible architecture. {exception.Message}");
         }

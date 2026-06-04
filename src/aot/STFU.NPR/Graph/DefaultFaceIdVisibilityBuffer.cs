@@ -87,6 +87,44 @@ public sealed class DefaultFaceIdVisibilityBuffer
         return false;
     }
 
+    public bool SampleOwnedFaceAtScreen(
+        float screenX,
+        float screenY,
+        int viewportWidth,
+        int viewportHeight,
+        int firstAllowedFace,
+        int secondAllowedFace)
+    {
+        var cx = ToBufferX(screenX, viewportWidth);
+        var cy = ToBufferY(screenY, viewportHeight);
+
+        for (var dy = -1; dy <= 1; dy++)
+        {
+            var yy = cy + dy;
+            if ((uint)yy >= (uint)Height)
+            {
+                continue;
+            }
+
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                var xx = cx + dx;
+                if ((uint)xx >= (uint)Width)
+                {
+                    continue;
+                }
+
+                var faceId = FaceId[yy * Width + xx];
+                if (faceId == firstAllowedFace || faceId == secondAllowedFace)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public void MarkVisibleFaces()
     {
         Array.Fill(FaceVisible, false);

@@ -64,9 +64,11 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         ProjectedVertex b,
         ProjectedVertex c)
     {
-        var av = ToBufferVertex(context, buffer, a);
-        var bv = ToBufferVertex(context, buffer, b);
-        var cv = ToBufferVertex(context, buffer, c);
+        var scaleX = buffer.Width / (float)Math.Max(context.Width, 1);
+        var scaleY = buffer.Height / (float)Math.Max(context.Height, 1);
+        var av = ToBufferVertex(scaleX, scaleY, a);
+        var bv = ToBufferVertex(scaleX, scaleY, b);
+        var cv = ToBufferVertex(scaleX, scaleY, c);
         var area = DefaultFaceIdVisibilityBuffer.EdgeFunction(av.X, av.Y, bv.X, bv.Y, cv.X, cv.Y);
         if (MathF.Abs(area) < 1e-7f)
         {
@@ -78,22 +80,36 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         var minY = Math.Max(0, (int)MathF.Floor(MathF.Min(av.Y, MathF.Min(bv.Y, cv.Y)) - 1f));
         var maxY = Math.Min(buffer.Height - 1, (int)MathF.Ceiling(MathF.Max(av.Y, MathF.Max(bv.Y, cv.Y)) + 1f));
 
+        var stepX0 = cv.Y - bv.Y;
+        var stepY0 = -(cv.X - bv.X);
+        var stepX1 = av.Y - cv.Y;
+        var stepY1 = -(av.X - cv.X);
+        var stepX2 = bv.Y - av.Y;
+        var stepY2 = -(bv.X - av.X);
+        var rowStartX = minX + 0.5f;
+        var rowStartY = minY + 0.5f;
+        var rowW0 = DefaultFaceIdVisibilityBuffer.EdgeFunction(bv.X, bv.Y, cv.X, cv.Y, rowStartX, rowStartY);
+        var rowW1 = DefaultFaceIdVisibilityBuffer.EdgeFunction(cv.X, cv.Y, av.X, av.Y, rowStartX, rowStartY);
+        var rowW2 = DefaultFaceIdVisibilityBuffer.EdgeFunction(av.X, av.Y, bv.X, bv.Y, rowStartX, rowStartY);
+        var positiveArea = area >= 0f;
+
         for (var y = minY; y <= maxY; y++)
         {
+            var w0 = rowW0;
+            var w1 = rowW1;
+            var w2 = rowW2;
+
             for (var x = minX; x <= maxX; x++)
             {
-                var px = x + 0.5f;
-                var py = y + 0.5f;
-                var w0 = DefaultFaceIdVisibilityBuffer.EdgeFunction(bv.X, bv.Y, cv.X, cv.Y, px, py);
-                var w1 = DefaultFaceIdVisibilityBuffer.EdgeFunction(cv.X, cv.Y, av.X, av.Y, px, py);
-                var w2 = DefaultFaceIdVisibilityBuffer.EdgeFunction(av.X, av.Y, bv.X, bv.Y, px, py);
-
-                var inside = area >= 0f
+                var inside = positiveArea
                     ? w0 >= -1e-5f && w1 >= -1e-5f && w2 >= -1e-5f
                     : w0 <= 1e-5f && w1 <= 1e-5f && w2 <= 1e-5f;
 
                 if (!inside)
                 {
+                    w0 += stepX0;
+                    w1 += stepX1;
+                    w2 += stepX2;
                     continue;
                 }
 
@@ -104,6 +120,9 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
 
                 if (depth is < 0f or > 1f)
                 {
+                    w0 += stepX0;
+                    w1 += stepX1;
+                    w2 += stepX2;
                     continue;
                 }
 
@@ -113,15 +132,23 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
                     buffer.Depth[index] = depth;
                     buffer.FaceId[index] = triangleIndex;
                 }
+
+                w0 += stepX0;
+                w1 += stepX1;
+                w2 += stepX2;
             }
+
+            rowW0 += stepY0;
+            rowW1 += stepY1;
+            rowW2 += stepY2;
         }
     }
 
-    private static BufferVertex ToBufferVertex(STFU.NPR.Pipeline.NprContext context, DefaultFaceIdVisibilityBuffer buffer, ProjectedVertex vertex)
+    private static BufferVertex ToBufferVertex(float scaleX, float scaleY, ProjectedVertex vertex)
     {
         return new BufferVertex(
-            (vertex.Position.X / Math.Max(context.Width, 1)) * buffer.Width,
-            (vertex.Position.Y / Math.Max(context.Height, 1)) * buffer.Height,
+            vertex.Position.X * scaleX,
+            vertex.Position.Y * scaleY,
             vertex.Depth01);
     }
 

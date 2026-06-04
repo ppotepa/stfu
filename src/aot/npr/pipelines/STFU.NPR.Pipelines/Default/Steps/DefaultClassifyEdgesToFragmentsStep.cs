@@ -19,6 +19,13 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         context.Graph.VisibilitySegments.Clear();
         context.Graph.Curves.Clear();
         context.Graph.FeatureLines.Clear();
+        context.Graph.DefaultFragments.EnsureCapacity(context.Graph.TopologyEdges.Count);
+        context.Graph.VisibilitySegments.EnsureCapacity(context.Graph.TopologyEdges.Count);
+        if (context.IncludeDebugFrame)
+        {
+            context.Graph.Curves.EnsureCapacity(context.Graph.TopologyEdges.Count);
+            context.Graph.FeatureLines.EnsureCapacity(context.Graph.TopologyEdges.Count);
+        }
 
         var visibleFaces = ComputeVisibleFaces(context, buffer);
         var featureThreshold = DegreesToRadians(drawing.FeatureAngleDegrees);
@@ -56,53 +63,16 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
                 continue;
             }
 
-            var fragments = VisibleFragmentsForEdge(context, buffer, edge, lineKind);
-            if (fragments.Count == 0)
-            {
-                continue;
-            }
-
-            foreach (var fragment in fragments)
-            {
-                context.Graph.DefaultFragments.Add(fragment);
-
-                var visibility = new VisibilitySegment(
-                    fragment.StableId,
-                    fragment.EdgeStableId,
-                    curveKind,
-                    intent,
-                    VisibilityState.Visible,
-                    fragment.StartT,
-                    fragment.EndT,
-                    fragment.P0,
-                    fragment.P1,
-                    fragment.Depth,
-                    0f,
-                    lineKind == DefaultLineKind.Silhouette ? 1f : 0.7f,
-                    1f,
-                    null,
-                    context.Graph.Triangles[Math.Max(0, edge.FirstTriangleIndex)].EntityId);
-                context.Graph.VisibilitySegments.Add(visibility);
-
-                var curve = FeatureCurve.FromLine(
-                    fragment.StableId,
-                    curveKind,
-                    intent,
-                    new FeaturePoint(fragment.P0, fragment.Depth),
-                    new FeaturePoint(fragment.P1, fragment.Depth),
-                    new FeatureCurveSource(
-                        edge.StartVertexIndex,
-                        edge.EndVertexIndex,
-                        edge.FirstTriangleIndex,
-                        edge.SecondTriangleIndex),
-                    0f,
-                    lineKind == DefaultLineKind.Silhouette ? 1f : 0.7f,
-                    1f,
-                    lineKind == DefaultLineKind.Silhouette ? FeatureCurveFlags.ViewDependent : FeatureCurveFlags.None,
-                    entityId: context.Graph.Triangles[Math.Max(0, edge.FirstTriangleIndex)].EntityId);
-
-                context.Graph.AddCurve(curve);
-            }
+            AppendVisibleFragmentsForEdge(
+                context,
+                buffer,
+                edge,
+                lineKind,
+                curveKind,
+                intent,
+                start,
+                end,
+                length);
         }
     }
 
@@ -170,39 +140,55 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         return false;
     }
 
-    private static IReadOnlyList<DefaultLineFragment> VisibleFragmentsForEdge(
+    private static void AppendVisibleFragmentsForEdge(
         STFU.NPR.Pipeline.NprContext context,
         DefaultFaceIdVisibilityBuffer buffer,
         TopologyEdge edge,
-        DefaultLineKind lineKind)
+        DefaultLineKind lineKind,
+        FeatureCurveKind curveKind,
+        NprStrokeIntent intent,
+        ProjectedVertex start,
+        ProjectedVertex end,
+        float length)
     {
         var drawing = context.Settings.DefaultDrawing;
-        var start = context.Graph.Vertices[edge.StartVertexIndex];
-        var end = context.Graph.Vertices[edge.EndVertexIndex];
-        var length = DefaultPathMath.SegmentLength(start.Position, end.Position);
-        if (length < Math.Max(0.5f, drawing.MinSegPx))
+        var minSegmentLength = Math.Max(0.5f, drawing.MinSegPx);
+        if (length < minSegmentLength)
         {
-            return [];
+            return;
         }
 
         if (!drawing.OcclusionCulling)
         {
-            return [CreateFragment(context, edge, lineKind, start.Position, end.Position, 0f, 1f, 0)];
+            AppendFragment(
+                context,
+                edge,
+                lineKind,
+                curveKind,
+                intent,
+                start.Position,
+                end.Position,
+                0f,
+                1f,
+                0);
+            return;
         }
 
-        var allowedFaces = EdgeAllowedFaces(edge);
-        if (allowedFaces.Count == 0)
+        var firstAllowedFace = edge.FirstTriangleIndex;
+        var secondAllowedFace = edge.SecondTriangleIndex;
+        if (firstAllowedFace < 0 && secondAllowedFace < 0)
         {
-            return [];
+            return;
         }
 
         var samples = Math.Min(96, Math.Max(7, (int)MathF.Ceiling(length / 4f)));
-        var fragments = new List<DefaultLineFragment>();
-        Point2D? runStart = null;
-        Point2D? previousPoint = null;
+        var runStart = default(Point2D);
+        var previousPoint = default(Point2D);
         var runStartT = 0f;
         var previousT = 0f;
         var previousVisible = false;
+        var hasRunStart = false;
+        var hasPreviousPoint = false;
         var fragmentIndex = 0;
 
         for (var i = 0; i <= samples; i++)
@@ -211,36 +197,122 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
             var point = Lerp(start.Position, end.Position, t);
             var ndc = Vector3.Lerp(start.Ndc, end.Ndc, t);
             var inClip = !(ndc.X < -1f || ndc.X > 1f || ndc.Y < -1f || ndc.Y > 1f || ndc.Z < -1f || ndc.Z > 1f);
-            var visible = inClip && buffer.SampleOwnedFaceAtScreen(point.X, point.Y, context.Width, context.Height, allowedFaces);
+            var visible = inClip && buffer.SampleOwnedFaceAtScreen(
+                point.X,
+                point.Y,
+                context.Width,
+                context.Height,
+                firstAllowedFace,
+                secondAllowedFace);
 
             if (visible && !previousVisible)
             {
                 runStart = point;
                 runStartT = t;
+                hasRunStart = true;
             }
 
-            if (!visible && previousVisible && runStart is not null && previousPoint is not null)
+            if (!visible && previousVisible && hasRunStart && hasPreviousPoint)
             {
-                if (DefaultPathMath.SegmentLength(runStart.Value, previousPoint.Value) >= Math.Max(0.5f, drawing.MinSegPx))
+                if (DefaultPathMath.SegmentLength(runStart, previousPoint) >= minSegmentLength)
                 {
-                    fragments.Add(CreateFragment(context, edge, lineKind, runStart.Value, previousPoint.Value, runStartT, previousT, fragmentIndex++));
+                    AppendFragment(
+                        context,
+                        edge,
+                        lineKind,
+                        curveKind,
+                        intent,
+                        runStart,
+                        previousPoint,
+                        runStartT,
+                        previousT,
+                        fragmentIndex++);
                 }
 
-                runStart = null;
+                hasRunStart = false;
             }
 
             previousVisible = visible;
             previousPoint = point;
             previousT = t;
+            hasPreviousPoint = true;
         }
 
-        if (previousVisible && runStart is not null && previousPoint is not null &&
-            DefaultPathMath.SegmentLength(runStart.Value, previousPoint.Value) >= Math.Max(0.5f, drawing.MinSegPx))
+        if (previousVisible && hasRunStart && hasPreviousPoint &&
+            DefaultPathMath.SegmentLength(runStart, previousPoint) >= minSegmentLength)
         {
-            fragments.Add(CreateFragment(context, edge, lineKind, runStart.Value, previousPoint.Value, runStartT, previousT, fragmentIndex));
+            AppendFragment(
+                context,
+                edge,
+                lineKind,
+                curveKind,
+                intent,
+                runStart,
+                previousPoint,
+                runStartT,
+                previousT,
+                fragmentIndex);
         }
+    }
 
-        return fragments;
+    private static void AppendFragment(
+        STFU.NPR.Pipeline.NprContext context,
+        TopologyEdge edge,
+        DefaultLineKind lineKind,
+        FeatureCurveKind curveKind,
+        NprStrokeIntent intent,
+        Point2D start,
+        Point2D end,
+        float startT,
+        float endT,
+        int fragmentIndex)
+    {
+        var fragment = CreateFragment(context, edge, lineKind, start, end, startT, endT, fragmentIndex);
+        context.Graph.DefaultFragments.Add(fragment);
+
+        var importance = lineKind == DefaultLineKind.Silhouette ? 1f : 0.7f;
+        var entityId = context.Graph.Triangles[Math.Max(0, edge.FirstTriangleIndex)].EntityId;
+        var visibility = new VisibilitySegment(
+            fragment.StableId,
+            fragment.EdgeStableId,
+            curveKind,
+            intent,
+            VisibilityState.Visible,
+            fragment.StartT,
+            fragment.EndT,
+            fragment.P0,
+            fragment.P1,
+            fragment.Depth,
+            0f,
+            importance,
+            1f,
+            null,
+            entityId);
+        context.Graph.VisibilitySegments.Add(visibility);
+
+        if (context.IncludeDebugFrame)
+        {
+            var source = new FeatureCurveSource(
+                edge.StartVertexIndex,
+                edge.EndVertexIndex,
+                edge.FirstTriangleIndex,
+                edge.SecondTriangleIndex);
+            var flags = lineKind == DefaultLineKind.Silhouette ? FeatureCurveFlags.ViewDependent : FeatureCurveFlags.None;
+            var curve = FeatureCurve.FromLine(
+                fragment.StableId,
+                curveKind,
+                intent,
+                new FeaturePoint(fragment.P0, fragment.Depth),
+                new FeaturePoint(fragment.P1, fragment.Depth),
+                source,
+                0f,
+                importance,
+                1f,
+                flags,
+                entityId: entityId);
+
+            context.Graph.AddCurve(curve);
+        }
     }
 
     private static DefaultLineFragment CreateFragment(
@@ -274,22 +346,6 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         }
     }
 
-    private static HashSet<int> EdgeAllowedFaces(TopologyEdge edge)
-    {
-        var allowedFaces = new HashSet<int>();
-        if (edge.FirstTriangleIndex >= 0)
-        {
-            allowedFaces.Add(edge.FirstTriangleIndex);
-        }
-
-        if (edge.SecondTriangleIndex >= 0)
-        {
-            allowedFaces.Add(edge.SecondTriangleIndex);
-        }
-
-        return allowedFaces;
-    }
-
     private static bool IsFaceVisible(bool[] visibleFaces, int index)
     {
         return (uint)index < (uint)visibleFaces.Length && visibleFaces[index];
@@ -319,4 +375,5 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
     {
         return degrees * MathF.PI / 180f;
     }
+
 }

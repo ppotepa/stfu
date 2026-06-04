@@ -2,7 +2,7 @@ using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
 
-public sealed record DefaultLineFragment(
+public readonly record struct DefaultLineFragment(
     int StableId,
     DefaultLineKind Type,
     Point2D P0,

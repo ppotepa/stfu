@@ -15,13 +15,19 @@ public sealed class UiFrameClock
 
         var nowTicks = Stopwatch.GetTimestamp();
         var elapsedSeconds = (nowTicks - _sampleStartTicks) / (double)Stopwatch.Frequency;
+        if (elapsedSeconds <= 0)
+        {
+            return LastFps;
+        }
+
+        var sampledFps = _sampleFrameCount / elapsedSeconds;
         if (elapsedSeconds >= 1.0)
         {
-            LastFps = _sampleFrameCount / elapsedSeconds;
+            LastFps = sampledFps;
             _sampleFrameCount = 0;
             _sampleStartTicks = nowTicks;
         }
 
-        return LastFps;
+        return LastFps > 0 ? LastFps : sampledFps;
     }
 }

@@ -21,13 +21,23 @@
     <Project Path="src/aot/npr/pipelines/STFU.NPR.Pipelines/STFU.NPR.Pipelines.csproj" />
     <Project Path="src/aot/npr/presets/STFU.NPR.Presets/STFU.NPR.Presets.csproj" />
   </Folder>
+  <Folder Name="/src/aot/rendering/">
+    <Project Path="src/aot/STFU.Rendering.Abstractions/STFU.Rendering.Abstractions.csproj" />
+    <Project Path="src/aot/STFU.Rendering.Cpu/STFU.Rendering.Cpu.csproj" />
+  </Folder>
   <Folder Name="/src/runtime/" />
+  <Folder Name="/src/runtime/foundation/">
+    <Project Path="src/runtime/STFU.Logging/STFU.Logging.csproj" />
+  </Folder>
   <Folder Name="/src/runtime/apps/">
     <Project Path="src/runtime/STFU.App/STFU.App.csproj" />
   </Folder>
   <Folder Name="/src/runtime/import/">
     <Project Path="src/runtime/STFU.Import/STFU.Import.csproj" />
     <Project Path="src/runtime/STFU.Import.Fbx/STFU.Import.Fbx.csproj" />
+  </Folder>
+  <Folder Name="/src/runtime/rendering/">
+    <Project Path="src/runtime/STFU.Rendering.DirectX/STFU.Rendering.DirectX.csproj" />
   </Folder>
   <Folder Name="/src/runtime/ui/">
     <Project Path="src/runtime/STFU.UI.Bridge/STFU.UI.Bridge.csproj" />

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\aot\STFU.Abstractions\STFU.Abstractions.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Assets\STFU.Assets.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Camera\STFU.Camera.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Common\STFU.Common.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Engine\STFU.Engine.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Rendering.Abstractions\STFU.Rendering.Abstractions.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />
+    <ProjectReference Include="..\STFU.Logging\STFU.Logging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+    <PackageReference Include="Vortice.DirectX" Version="3.8.3" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Shaders\*.hlsl" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

@@ -20,6 +20,10 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         var session = new UiEngineSession(StfuRuntimeBootstrap.CreateEngine(), UiThemeService.Apply);
+        session.Workspace.Renderer.ApplyLaunchOverrides(
+            startupOptions.BackendPreference,
+            startupOptions.ApiPreference,
+            startupOptions.PresentationPreference);
         DataContext = session.Workspace;
 
         _workspace = new WorkspaceView(session, startupOptions);

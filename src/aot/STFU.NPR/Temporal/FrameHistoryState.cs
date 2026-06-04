@@ -46,7 +46,7 @@ public sealed class FrameHistoryState
 
         var pathsByStableId = frame.Paths
             .Where(path => path.Metadata is not null)
-            .GroupBy(path => path.Metadata!.StableId)
+            .GroupBy(path => path.Metadata!.Value.StableId)
             .ToDictionary(group => group.Key, group => group.First());
 
         var strokes = new Dictionary<int, PreviousStroke>(graph.StyledStrokes.Count);

@@ -145,49 +145,50 @@ public sealed class SvgStrokeExporter : IStrokeExporter<SvgExportOptions>
             return;
         }
 
-        writer.Write($" data-stfu-stable-id=\"{path.Metadata.StableId}\"");
+        var metadata = path.Metadata.Value;
+        writer.Write($" data-stfu-stable-id=\"{metadata.StableId}\"");
 
-        if (!string.IsNullOrWhiteSpace(path.Metadata.Layer))
+        if (!string.IsNullOrWhiteSpace(metadata.Layer))
         {
-            writer.Write($" data-stfu-layer=\"{Escape(path.Metadata.Layer!)}\"");
+            writer.Write($" data-stfu-layer=\"{Escape(metadata.Layer!)}\"");
         }
 
-        if (!string.IsNullOrWhiteSpace(path.Metadata.SourceKind))
+        if (!string.IsNullOrWhiteSpace(metadata.SourceKind))
         {
-            writer.Write($" data-stfu-source-kind=\"{Escape(path.Metadata.SourceKind!)}\"");
+            writer.Write($" data-stfu-source-kind=\"{Escape(metadata.SourceKind!)}\"");
         }
 
-        if (!string.IsNullOrWhiteSpace(path.Metadata.Intent))
+        if (!string.IsNullOrWhiteSpace(metadata.Intent))
         {
-            writer.Write($" data-stfu-intent=\"{Escape(path.Metadata.Intent!)}\"");
+            writer.Write($" data-stfu-intent=\"{Escape(metadata.Intent!)}\"");
         }
 
-        if (path.Metadata.SourceFeatureId is int sourceFeatureId)
+        if (metadata.SourceFeatureId is int sourceFeatureId)
         {
             writer.Write($" data-stfu-feature-id=\"{sourceFeatureId}\"");
         }
 
-        if (path.Metadata.SourceSegmentId is int sourceSegmentId)
+        if (metadata.SourceSegmentId is int sourceSegmentId)
         {
             writer.Write($" data-stfu-segment-id=\"{sourceSegmentId}\"");
         }
 
-        if (!string.IsNullOrWhiteSpace(path.Metadata.Visibility))
+        if (!string.IsNullOrWhiteSpace(metadata.Visibility))
         {
-            writer.Write($" data-stfu-visibility=\"{Escape(path.Metadata.Visibility!)}\"");
+            writer.Write($" data-stfu-visibility=\"{Escape(metadata.Visibility!)}\"");
         }
 
-        if (!string.IsNullOrWhiteSpace(path.Metadata.StyleId))
+        if (!string.IsNullOrWhiteSpace(metadata.StyleId))
         {
-            writer.Write($" data-stfu-style=\"{Escape(path.Metadata.StyleId!)}\"");
+            writer.Write($" data-stfu-style=\"{Escape(metadata.StyleId!)}\"");
         }
 
-        if (!string.IsNullOrWhiteSpace(path.Metadata.Variant))
+        if (!string.IsNullOrWhiteSpace(metadata.Variant))
         {
-            writer.Write($" data-stfu-variant=\"{Escape(path.Metadata.Variant!)}\"");
+            writer.Write($" data-stfu-variant=\"{Escape(metadata.Variant!)}\"");
         }
 
-        writer.Write($" data-stfu-layer-order=\"{path.Metadata.LayerOrder}\"");
+        writer.Write($" data-stfu-layer-order=\"{metadata.LayerOrder}\"");
     }
 
     private static Dictionary<string, List<StrokePath2D>> GroupPaths(

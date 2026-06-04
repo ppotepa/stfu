@@ -15,9 +15,11 @@ internal static class NprPipelineRunner
         foreach (var step in steps)
         {
             var inputCount = CountItems(context);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
             var stopwatch = Stopwatch.StartNew();
             step.Execute(context);
             stopwatch.Stop();
+            var allocatedBytes = Math.Max(0, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
 
             var outputCount = CountItems(context);
             context.StepTraces.Add(new STFU.NPR.Debug.NprStepTrace(
@@ -26,7 +28,8 @@ internal static class NprPipelineRunner
                 inputCount,
                 outputCount,
                 Math.Max(0, inputCount - outputCount),
-                BuildNotes(context, step)));
+                BuildNotes(context, step),
+                allocatedBytes));
         }
 
         if (!ReferenceEquals(context.DebugFrame, STFU.NPR.Debug.NprDebugFrame.Empty))

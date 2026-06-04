@@ -37,6 +37,17 @@ public sealed class AssetRegistry
         return handle;
     }
 
+    public bool ReplaceMesh(MeshHandle handle, MeshData mesh)
+    {
+        if (!_meshes.ContainsKey(handle))
+        {
+            return false;
+        }
+
+        _meshes[handle] = mesh;
+        return true;
+    }
+
     public SkinnedMeshHandle AddSkinnedMesh(SkinnedMeshData mesh)
     {
         var handle = new SkinnedMeshHandle(++_nextSkinnedMeshId);

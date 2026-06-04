@@ -8,6 +8,14 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
 {
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
+        var triangleCapacity = context.Graph.Triangles.Count;
+        for (var meshIndex = 0; meshIndex < context.Graph.Meshes.Count; meshIndex++)
+        {
+            triangleCapacity += context.Graph.Meshes[meshIndex].Mesh.Triangles.Count;
+        }
+
+        context.Graph.Triangles.EnsureCapacity(triangleCapacity);
+
         for (var meshIndex = 0; meshIndex < context.Graph.Meshes.Count; meshIndex++)
         {
             var projectedMesh = context.Graph.Meshes[meshIndex];
@@ -78,7 +86,6 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
             return false;
         }
 
-        viewDirection = Vector3.Normalize(viewDirection);
         return Vector3.Dot(normal, viewDirection) > 0f;
     }
 }

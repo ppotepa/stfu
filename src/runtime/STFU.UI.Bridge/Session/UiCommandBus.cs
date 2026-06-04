@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using STFU.Engine;
+using STFU.Logging;
 using STFU.Messaging.Commands;
 
 namespace STFU.UI.Bridge.Session;
@@ -52,6 +53,15 @@ public sealed class UiCommandBus
     public void Record(string label, int handledCount = 0)
     {
         Log.Insert(0, new UiCommandLogEntry(DateTimeOffset.Now, label, handledCount));
+        StfuLog.Write(
+            StfuLogDomain.Commands,
+            "record",
+            label,
+            properties: new Dictionary<string, object?>
+            {
+                ["handled"] = handledCount
+            });
+
         while (Log.Count > MaxLogEntries)
         {
             Log.RemoveAt(Log.Count - 1);

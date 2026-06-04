@@ -1,5 +1,7 @@
 using System.Numerics;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using STFU.Logging;
 using STFU.Mesh;
 
 namespace STFU.Import.Fbx;
@@ -7,6 +9,71 @@ namespace STFU.Import.Fbx;
 internal static partial class FbxNative
 {
     private const string LibraryName = "stfu_fbx";
+    private static int _loggedNativeLibraryPath;
+    private static int _loggedNativeLibraryMissing;
+
+    static FbxNative()
+    {
+        try
+        {
+            NativeLibrary.SetDllImportResolver(typeof(FbxNative).Assembly, ResolveNativeLibrary);
+        }
+        catch (InvalidOperationException)
+        {
+            // Another resolver for this assembly is already installed.
+        }
+    }
+
+    private static IntPtr ResolveNativeLibrary(
+        string libraryName,
+        Assembly assembly,
+        DllImportSearchPath? searchPath)
+    {
+        if (!string.Equals(libraryName, LibraryName, StringComparison.Ordinal))
+        {
+            return IntPtr.Zero;
+        }
+
+        foreach (var candidate in EnumerateNativeLibraryCandidates())
+        {
+            if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var handle))
+            {
+                if (Interlocked.Exchange(ref _loggedNativeLibraryPath, 1) == 0)
+                {
+                    StfuLog.Write(
+                        StfuLogDomain.ImportFbx,
+                        "native.loaded",
+                        candidate);
+                }
+
+                return handle;
+            }
+        }
+
+        if (Interlocked.Exchange(ref _loggedNativeLibraryMissing, 1) == 0)
+        {
+            StfuLog.Write(
+                StfuLogDomain.ImportFbx,
+                "native.missing",
+                "stfu_fbx native library could not be resolved.",
+                StfuLogLevel.Warning);
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private static IEnumerable<string> EnumerateNativeLibraryCandidates()
+    {
+        yield return Path.Combine(AppContext.BaseDirectory, "stfu_fbx.dll");
+        yield return Path.Combine(Environment.CurrentDirectory, "stfu_fbx.dll");
+
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            yield return Path.Combine(directory.FullName, "artifacts", "native", "STFU.Native.Fbx", "stfu_fbx.dll");
+            directory = directory.Parent;
+        }
+    }
 
     [LibraryImport(LibraryName, EntryPoint = "stfu_fbx_load", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial nint Load(string path, out FbxNativeError error);

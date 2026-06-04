@@ -31,6 +31,11 @@ public sealed class MeshAnalysisCacheStore
         return _caches.TryGetValue(handle, out cache!);
     }
 
+    public void Invalidate(MeshHandle handle)
+    {
+        _caches.Remove(handle);
+    }
+
     private static TopologyCache BuildTopology(MeshData mesh)
     {
         var edges = new Dictionary<long, PendingEdge>();

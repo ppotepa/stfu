@@ -13,6 +13,8 @@ using STFU.Messaging.Commands;
 using STFU.NPR.Composition;
 using STFU.NPR.Pipelines;
 using STFU.NPR.Presets;
+using STFU.Rendering.Cpu;
+using STFU.Rendering.DirectX;
 using STFU.Strokes;
 using STFU.Viewport;
 
@@ -32,6 +34,8 @@ public static class StfuRuntimeBootstrap
             .AddModule(new NprModule(
                 BuiltInNprPresets.CreateAll(),
                 BuiltInNprPipelines.CreateAll()))
+            .AddModule(new CpuRenderingModule())
+            .AddModule(new DirectXRenderingModule())
             .AddModule(new ViewportModule())
             .Build();
 

@@ -9,11 +9,24 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 {
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
-        var paths = new List<StrokePath2D>();
+        var paths = new List<StrokePath2D>(EstimateStrokePathCapacity(context));
+        var silhouetteStyle = CreateLineStyle(context, DefaultLineKind.Silhouette);
+        var featureStyle = CreateLineStyle(context, DefaultLineKind.Feature);
+        var boundaryStyle = CreateLineStyle(context, DefaultLineKind.Boundary);
+        var layerBuckets = new List<LayerBucket>(3);
+        var silhouetteBucket = GetOrCreateLayerBucket(layerBuckets, silhouetteStyle);
+        var featureBucket = GetOrCreateLayerBucket(layerBuckets, featureStyle);
+        var boundaryBucket = GetOrCreateLayerBucket(layerBuckets, boundaryStyle);
 
         foreach (var path in context.Graph.DefaultDrawablePaths)
         {
-            AddStyledPath(context, path, paths);
+            var (lineStyle, layerBucket) = path.Type switch
+            {
+                DefaultLineKind.Silhouette => (silhouetteStyle, silhouetteBucket),
+                DefaultLineKind.Feature => (featureStyle, featureBucket),
+                _ => (boundaryStyle, boundaryBucket)
+            };
+            AddStyledPath(context, path, lineStyle, layerBucket, paths);
         }
 
         context.Frame = new StrokeFrame(context.Width, context.Height, paths);
@@ -21,11 +34,56 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             context.Width,
             context.Height,
             new NprPaper(context.Settings.DefaultDrawing.PaperColor, 1f),
-            BuildLayers(paths),
+            BuildLayers(layerBuckets),
             context.Frame);
     }
 
-    private static void AddStyledPath(STFU.NPR.Pipeline.NprContext context, DefaultProjectedPath path, List<StrokePath2D> output)
+    private static int EstimateStrokePathCapacity(STFU.NPR.Pipeline.NprContext context)
+    {
+        var passes = context.Settings.DefaultDrawing.StrokeStyle switch
+        {
+            STFU.NPR.Settings.DefaultStrokeStyle.Pencil => 3,
+            STFU.NPR.Settings.DefaultStrokeStyle.Brush => 2,
+            STFU.NPR.Settings.DefaultStrokeStyle.ComicInk => 2,
+            _ => 1
+        };
+
+        var capacity = 0;
+        foreach (var path in context.Graph.DefaultDrawablePaths)
+        {
+            capacity += Math.Max(0, path.Points.Count - 1) * passes;
+        }
+
+        return Math.Max(0, capacity);
+    }
+
+    private static StyledLineInfo CreateLineStyle(STFU.NPR.Pipeline.NprContext context, DefaultLineKind lineKind)
+    {
+        var drawing = context.Settings.DefaultDrawing;
+        var intent = ToIntent(lineKind);
+        var curveKind = ToCurveKind(lineKind);
+        var layerName = context.Style.ResolveOutputLayer(curveKind, intent, VisibilityState.Visible);
+        var layerOrder = context.Style.GetLayerOrder(curveKind, intent, VisibilityState.Visible);
+        var profile = context.Style.Stroke.FindProfile(curveKind, intent, layerName) ?? context.Style.Stroke.FindProfile(intent);
+        var strokeColor = profile?.Color ?? drawing.StrokeColor;
+        var baseWidth = Math.Max(0.35f, (profile?.BaseThickness ?? drawing.LineWidth) * context.Style.Stroke.ThicknessScale);
+        var baseOpacity = Math.Clamp((profile?.BaseOpacity ?? 1f) * context.Style.Stroke.OpacityScale, 0f, 1f);
+
+        return new StyledLineInfo(
+            intent.ToString(),
+            layerName,
+            layerOrder,
+            strokeColor,
+            baseWidth,
+            baseOpacity);
+    }
+
+    private static void AddStyledPath(
+        STFU.NPR.Pipeline.NprContext context,
+        DefaultProjectedPath path,
+        StyledLineInfo lineStyle,
+        LayerBucket layerBucket,
+        List<StrokePath2D> output)
     {
         if (path.Points.Count < 2)
         {
@@ -33,14 +91,6 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         }
 
         var drawing = context.Settings.DefaultDrawing;
-        var intent = ToIntent(path.Type);
-        var curveKind = ToCurveKind(path.Type);
-        var layerName = context.Style.ResolveOutputLayer(curveKind, intent, VisibilityState.Visible);
-        var layerOrder = context.Style.GetLayerOrder(curveKind, intent, VisibilityState.Visible);
-        var profile = context.Style.Stroke.FindProfile(curveKind, intent, layerName) ?? context.Style.Stroke.FindProfile(intent);
-        var strokeColor = profile?.Color ?? drawing.StrokeColor;
-        var baseWidth = Math.Max(0.35f, (profile?.BaseThickness ?? drawing.LineWidth) * context.Style.Stroke.ThicknessScale);
-        var baseOpacity = Math.Clamp((profile?.BaseOpacity ?? 1f) * context.Style.Stroke.OpacityScale, 0f, 1f);
         var style = drawing.StrokeStyle;
         var comic = style == STFU.NPR.Settings.DefaultStrokeStyle.ComicInk;
         var baseJitter = drawing.Jitter * (path.Type == DefaultLineKind.Feature ? 0.8f : 1f);
@@ -91,7 +141,7 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                 var taper = comic
                     ? 0.82d + 0.30d * Math.Sin(Math.PI * t)
                     : 1d;
-                var lineWidth = Math.Max(0.35d, baseWidth * widthMultiplier * pressureNoise * taper);
+                var lineWidth = Math.Max(0.35d, lineStyle.BaseWidth * widthMultiplier * pressureNoise * taper);
 
                 if (style == STFU.NPR.Settings.DefaultStrokeStyle.Pencil &&
                     DefaultNoise.Noise01(i * 2.13d + pass, seed, drawing.EnableFastNoise) < 0.06d)
@@ -105,46 +155,85 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                     continue;
                 }
 
-                var segmentStyle = new StrokeStyle2D((float)lineWidth, Math.Clamp(alpha * baseOpacity, 0f, 1f), strokeColor);
-                output.Add(new StrokePath2D(
+                var segmentStyle = new StrokeStyle2D((float)lineWidth, Math.Clamp(alpha * lineStyle.BaseOpacity, 0f, 1f), lineStyle.StrokeColor);
+                var strokePath = new StrokePath2D(
                     [start, end],
                     segmentStyle,
-                    [
-                        StrokePoint2D.FromPoint(start, segmentStyle),
-                        StrokePoint2D.FromPoint(end, segmentStyle)
-                    ],
+                    null,
                     new StrokeMetadata(
                         HashStroke(path.StableId, pass, i),
-                        layerName,
+                        lineStyle.LayerName,
                         "DefaultInkSegment",
-                        intent.ToString(),
+                        lineStyle.IntentText,
                         path.StableId,
                         i,
                         "Visible",
                         context.Style.StyleId,
                         null,
-                        layerOrder)));
+                        lineStyle.LayerOrder));
+
+                output.Add(strokePath);
+                layerBucket.Paths.Add(strokePath);
             }
         }
     }
 
-    private static IReadOnlyList<NprLayerFrame> BuildLayers(IReadOnlyList<StrokePath2D> paths)
+    private static IReadOnlyList<NprLayerFrame> BuildLayers(IReadOnlyList<LayerBucket> buckets)
     {
-        return paths
-            .GroupBy(path => path.Metadata?.Layer ?? "default")
-            .Select(group => new NprLayerFrame(
-                group.Key,
-                LayerTitle(group.Key),
+        if (buckets.Count == 0)
+        {
+            return [];
+        }
+
+        var ordered = new List<LayerBucket>(buckets.Count);
+        for (var i = 0; i < buckets.Count; i++)
+        {
+            if (buckets[i].Paths.Count > 0)
+            {
+                ordered.Add(buckets[i]);
+            }
+        }
+
+        if (ordered.Count == 0)
+        {
+            return [];
+        }
+
+        ordered.Sort((left, right) => left.Order.CompareTo(right.Order));
+
+        var layers = new NprLayerFrame[ordered.Count];
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var bucket = ordered[i];
+            layers[i] = new NprLayerFrame(
+                bucket.Id,
+                LayerTitle(bucket.Id),
                 NprSceneRole.Foreground,
-                group.First().Metadata?.LayerOrder ?? 100,
+                bucket.Order,
                 true,
                 1f,
                 NprLayerBlendMode.Normal,
                 [],
                 [],
-                group.ToArray()))
-            .OrderBy(layer => layer.Order)
-            .ToArray();
+                bucket.Paths);
+        }
+
+        return layers;
+    }
+
+    private static LayerBucket GetOrCreateLayerBucket(List<LayerBucket> buckets, StyledLineInfo lineStyle)
+    {
+        for (var i = 0; i < buckets.Count; i++)
+        {
+            if (string.Equals(buckets[i].Id, lineStyle.LayerName, StringComparison.Ordinal))
+            {
+                return buckets[i];
+            }
+        }
+
+        var bucket = new LayerBucket(lineStyle.LayerName, lineStyle.LayerOrder);
+        buckets.Add(bucket);
+        return bucket;
     }
 
     private static string LayerTitle(string layer)
@@ -206,5 +295,28 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         {
             return pathId * 397 ^ pass * 97 ^ segmentIndex;
         }
+    }
+
+    private readonly record struct StyledLineInfo(
+        string IntentText,
+        string LayerName,
+        int LayerOrder,
+        StrokeColor StrokeColor,
+        float BaseWidth,
+        float BaseOpacity);
+
+    private sealed class LayerBucket
+    {
+        public LayerBucket(string id, int order)
+        {
+            Id = id;
+            Order = order;
+        }
+
+        public string Id { get; }
+
+        public int Order { get; }
+
+        public List<StrokePath2D> Paths { get; } = [];
     }
 }

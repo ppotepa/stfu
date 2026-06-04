@@ -1,10 +1,18 @@
+using System.Diagnostics;
+using System.Numerics;
+using STFU.Animation.Clips;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using STFU.Assets;
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Engine.Commands;
+using STFU.Import.Fbx;
+using STFU.Logging;
+using STFU.Mesh;
 using STFU.Mesh.Commands;
 using STFU.Mesh.Loading;
+using STFU.NPR.Analysis;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Scene;
 using STFU.UI.Bridge.Session;
@@ -14,6 +22,8 @@ namespace STFU.UI.Bridge.Assets;
 
 public sealed class AssetPanelViewModel : BindableObject
 {
+    private const double AnimationBakeIntervalSeconds = 1.0 / 30.0;
+
     private readonly UiEngineSession _session;
     private readonly ScenePanelViewModel _scene;
     private AssetListItem? _selectedAsset;
@@ -22,6 +32,12 @@ public sealed class AssetPanelViewModel : BindableObject
     private bool _normalizeSize = true;
     private bool _centerPivot = true;
     private bool _loadAnimations = true;
+    private FbxBakedAnimationSampler? _fbxAnimation;
+    private MeshHandle _animatedMeshHandle;
+    private int _animatedClipIndex;
+    private double _animatedTimeSeconds;
+    private double _animatedDurationSeconds;
+    private long _lastAnimationTick = Stopwatch.GetTimestamp();
 
     public AssetPanelViewModel(UiEngineSession session, ScenePanelViewModel scene)
     {
@@ -35,7 +51,7 @@ public sealed class AssetPanelViewModel : BindableObject
         Recents =
         [
             new("Suzanne", ResolveAssetPath("suzanne.obj"), "Project Assets", ".obj"),
-            new("Walking", Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "assets", "walking.fbx")), "Hard Drive", ".fbx")
+            new("Walking", ResolveAssetPath("walking.fbx"), "Project Assets", ".fbx")
         ];
         SelectSourceCommand = new RelayCommand(parameter =>
         {
@@ -214,6 +230,15 @@ public sealed class AssetPanelViewModel : BindableObject
 
         SelectedRecent = item;
         _session.Commands.Record($"Selected asset candidate: {fullPath}");
+        StfuLog.Write(
+            StfuLogDomain.Assets,
+            "candidate.selected",
+            fullPath,
+            properties: new Dictionary<string, object?>
+            {
+                ["source"] = source,
+                ["format"] = GetFormat(fullPath)
+            });
     }
 
     public void SelectSource(string id)
@@ -226,6 +251,45 @@ public sealed class AssetPanelViewModel : BindableObject
         }
     }
 
+    public void TickAnimation()
+    {
+        if (_fbxAnimation is null || _animatedMeshHandle.Value == 0 || _animatedDurationSeconds <= 0)
+        {
+            return;
+        }
+
+        var now = Stopwatch.GetTimestamp();
+        var deltaSeconds = (now - _lastAnimationTick) / (double)Stopwatch.Frequency;
+        if (deltaSeconds < AnimationBakeIntervalSeconds)
+        {
+            return;
+        }
+
+        deltaSeconds = Math.Min(deltaSeconds, 0.1);
+        _lastAnimationTick = now;
+        _animatedTimeSeconds = (_animatedTimeSeconds + deltaSeconds) % _animatedDurationSeconds;
+
+        try
+        {
+            var mesh = _fbxAnimation.BakeCombinedMesh(_animatedClipIndex, _animatedTimeSeconds);
+            if (_session.Assets.ReplaceMesh(_animatedMeshHandle, mesh))
+            {
+                _session.Analysis.Invalidate(_animatedMeshHandle);
+            }
+        }
+        catch (Exception exception)
+        {
+            StopFbxAnimation();
+            _session.Commands.Record($"FBX animation stopped: {exception.Message}");
+            StfuLog.Write(
+                StfuLogDomain.Assets,
+                "fbx.animation.stop",
+                exception.Message,
+                StfuLogLevel.Warning,
+                exception: exception);
+        }
+    }
+
     private void LoadAsset()
     {
         var path = SelectedRecent?.Path ?? SelectedAsset?.Path;
@@ -234,6 +298,7 @@ public sealed class AssetPanelViewModel : BindableObject
             path = ResolveAssetPath("suzanne.obj");
         }
 
+        StfuLog.Write(StfuLogDomain.Assets, "load.request", path);
         var handle = LoadMesh(path, "LoadMeshCommand");
         if (handle.Value == 0)
         {
@@ -244,6 +309,7 @@ public sealed class AssetPanelViewModel : BindableObject
         _session.Commands.Execute(
             new AssignMeshToEntityCommand(entity.Id, handle),
             $"LOAD -> AssignMeshToEntityCommand({entity.IdLabel}, MeshHandle({handle.Value}))");
+        ApplyImportTransform(entity.Id, handle);
         _scene.RefreshFromEngine(entity.Id);
         _session.Workspace.Viewport.RenderMode = ViewportRenderMode.Mesh;
     }
@@ -278,17 +344,194 @@ public sealed class AssetPanelViewModel : BindableObject
         if (!File.Exists(fullPath))
         {
             _session.Commands.Record($"{commandName} failed: {fullPath} was not found");
+            StfuLog.Write(
+                StfuLogDomain.Assets,
+                "load.missing",
+                fullPath,
+                StfuLogLevel.Warning);
             return default;
+        }
+
+        if (string.Equals(Path.GetExtension(fullPath), ".fbx", StringComparison.OrdinalIgnoreCase))
+        {
+            return LoadFbxMesh(fullPath, commandName);
         }
 
         var loader = _session.Engine.Registry.GetRequired<IMeshLoader<string>>();
         var mesh = _session.MeshFactory.Load(fullPath, loader);
         var handle = _session.Assets.AddMesh(fullPath, mesh);
+        StfuLog.Write(
+            StfuLogDomain.Assets,
+            "mesh.loaded",
+            fullPath,
+            properties: new Dictionary<string, object?>
+            {
+                ["handle"] = handle.Value,
+                ["vertices"] = mesh.Vertices.Count,
+                ["triangles"] = mesh.Triangles.Count
+            });
         RefreshFromEngine();
         SelectedAsset = Assets.FirstOrDefault(item => item.Handle == handle.Value);
         _session.Commands.Record($"{commandName}(\"{fullPath}\") -> MeshHandle({handle.Value})");
         AddRecent(fullPath);
         return handle;
+    }
+
+    private MeshHandle LoadFbxMesh(string fullPath, string commandName)
+    {
+        StopFbxAnimation();
+
+        FbxBakedAnimationSampler sampler;
+        try
+        {
+            sampler = FbxBakedAnimationSampler.Load(fullPath);
+        }
+        catch (Exception exception)
+        {
+            _session.Commands.Record($"{commandName} failed: {exception.Message}");
+            StfuLog.Write(
+                StfuLogDomain.ImportFbx,
+                "load.failed",
+                exception.Message,
+                StfuLogLevel.Error,
+                new Dictionary<string, object?> { ["path"] = fullPath },
+                exception);
+            return default;
+        }
+
+        MeshData mesh;
+        try
+        {
+            mesh = sampler.BakeCombinedMesh(animationIndex: -1, timeSeconds: 0);
+        }
+        catch (Exception exception)
+        {
+            sampler.Dispose();
+            _session.Commands.Record($"{commandName} failed: {exception.Message}");
+            StfuLog.Write(
+                StfuLogDomain.ImportFbx,
+                "bake.failed",
+                exception.Message,
+                StfuLogLevel.Error,
+                new Dictionary<string, object?> { ["path"] = fullPath },
+                exception);
+            return default;
+        }
+
+        var handle = _session.Assets.AddMesh(fullPath, mesh);
+        foreach (var animation in sampler.Animations)
+        {
+            _session.Assets.AddAnimationClip(animation);
+        }
+
+        RefreshFromEngine();
+        SelectedAsset = Assets.FirstOrDefault(item => item.Handle == handle.Value);
+        AddRecent(fullPath);
+
+        _session.Commands.Record(
+            $"{commandName}(\"{fullPath}\") -> MeshHandle({handle.Value}), " +
+            $"fbxMeshes={sampler.MeshCount}, animations={sampler.Animations.Count}");
+        StfuLog.Write(
+            StfuLogDomain.ImportFbx,
+            "load.completed",
+            fullPath,
+            properties: new Dictionary<string, object?>
+            {
+                ["handle"] = handle.Value,
+                ["meshes"] = sampler.MeshCount,
+                ["animations"] = sampler.Animations.Count,
+                ["vertices"] = mesh.Vertices.Count,
+                ["triangles"] = mesh.Triangles.Count
+            });
+
+        if (LoadAnimations && sampler.Animations.Count > 0)
+        {
+            StartFbxAnimation(sampler, handle, sampler.Animations[0]);
+        }
+        else
+        {
+            sampler.Dispose();
+        }
+
+        return handle;
+    }
+
+    private void StartFbxAnimation(
+        FbxBakedAnimationSampler sampler,
+        MeshHandle handle,
+        AnimationClip clip)
+    {
+        _fbxAnimation = sampler;
+        _animatedMeshHandle = handle;
+        _animatedClipIndex = 0;
+        _animatedTimeSeconds = 0;
+        _animatedDurationSeconds = Math.Max(0.001, clip.DurationSeconds);
+        _lastAnimationTick = Stopwatch.GetTimestamp();
+        _session.Commands.Record($"FBX animation playing: {clip.Name} ({_animatedDurationSeconds:0.00}s)");
+        StfuLog.Write(
+            StfuLogDomain.Assets,
+            "fbx.animation.start",
+            clip.Name,
+            properties: new Dictionary<string, object?>
+            {
+                ["handle"] = handle.Value,
+                ["durationSeconds"] = _animatedDurationSeconds
+            });
+    }
+
+    private void StopFbxAnimation()
+    {
+        _fbxAnimation?.Dispose();
+        _fbxAnimation = null;
+        _animatedMeshHandle = default;
+        _animatedClipIndex = 0;
+        _animatedTimeSeconds = 0;
+        _animatedDurationSeconds = 0;
+    }
+
+    private void ApplyImportTransform(EntityId entityId, MeshHandle handle)
+    {
+        if (!NormalizeSize && !CenterPivot)
+        {
+            return;
+        }
+
+        if (!_session.Assets.TryGetMesh(handle, out var mesh) || mesh.Vertices.Count == 0)
+        {
+            return;
+        }
+
+        var entity = _session.Engine.Scene.Entities.FirstOrDefault(candidate => candidate.Id == entityId);
+        if (entity is null)
+        {
+            return;
+        }
+
+        entity.Transform = CreateImportTransform(mesh);
+    }
+
+    private Transform3D CreateImportTransform(MeshData mesh)
+    {
+        var min = mesh.Vertices[0].Position;
+        var max = mesh.Vertices[0].Position;
+
+        for (var i = 1; i < mesh.Vertices.Count; i++)
+        {
+            var position = mesh.Vertices[i].Position;
+            min = Vector3.Min(min, position);
+            max = Vector3.Max(max, position);
+        }
+
+        var center = (min + max) * 0.5f;
+        var size = max - min;
+        var maxDimension = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
+        var scale = NormalizeSize && maxDimension > 1e-6f ? 1.8f / maxDimension : 1f;
+        var positionOffset = CenterPivot ? -center * scale : Vector3.Zero;
+
+        return new Transform3D(
+            positionOffset,
+            Vector3.Zero,
+            new Vector3(scale, scale, scale));
     }
 
     private EntityListItem EnsureTargetEntity()
@@ -331,13 +574,17 @@ public sealed class AssetPanelViewModel : BindableObject
     private static AssetListItem CreateAssetItem(AssetMeshEntry entry)
     {
         var id = Path.GetFileNameWithoutExtension(entry.Path);
+        var loader = string.Equals(Path.GetExtension(entry.Path), ".fbx", StringComparison.OrdinalIgnoreCase)
+            ? "FbxAssetLoader"
+            : "ObjMeshLoader";
+
         return new AssetListItem(
             string.IsNullOrWhiteSpace(id) ? $"mesh-{entry.Handle.Value}" : id,
             entry.Path,
             entry.Handle.Value,
             entry.Mesh.Vertices.Count,
             entry.Mesh.Triangles.Count,
-            "ObjMeshLoader",
+            loader,
             "Loaded");
     }
 

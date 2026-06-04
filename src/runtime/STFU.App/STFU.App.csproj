@@ -12,6 +12,8 @@
     <ProjectReference Include="..\..\aot\STFU.Viewport\STFU.Viewport.csproj" />
     <ProjectReference Include="..\STFU.Import.Fbx\STFU.Import.Fbx.csproj" />
     <ProjectReference Include="..\STFU.Import\STFU.Import.csproj" />
+    <ProjectReference Include="..\STFU.Logging\STFU.Logging.csproj" />
+    <ProjectReference Include="..\STFU.Rendering.DirectX\STFU.Rendering.DirectX.csproj" />
     <ProjectReference Include="..\STFU.UI\STFU.UI.csproj" />
   </ItemGroup>
 
@@ -26,6 +28,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
 </Project>

@@ -13,7 +13,13 @@ public sealed class DefaultApplyDrawProgressStep : STFU.NPR.Pipeline.INprStep
             return;
         }
 
-        var totalLength = context.Graph.DefaultPaths.Sum(path => path.Length);
+        context.Graph.DefaultDrawablePaths.EnsureCapacity(context.Graph.DefaultPaths.Count);
+
+        var totalLength = 0f;
+        foreach (var path in context.Graph.DefaultPaths)
+        {
+            totalLength += path.Length;
+        }
         if (totalLength <= 0f)
         {
             totalLength = 1f;

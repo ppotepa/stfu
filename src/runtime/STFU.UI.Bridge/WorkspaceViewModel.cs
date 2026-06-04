@@ -10,6 +10,7 @@ using STFU.UI.Bridge.Inspector;
 using STFU.UI.Bridge.Layers;
 using STFU.UI.Bridge.Npr;
 using STFU.UI.Bridge.Presets;
+using STFU.UI.Bridge.Renderer;
 using STFU.UI.Bridge.Scene;
 using STFU.UI.Bridge.Session;
 using STFU.UI.Bridge.Viewport;
@@ -38,6 +39,7 @@ public sealed class WorkspaceViewModel : BindableObject
         Layers = new LayerStackViewModel(session);
         Debug = new DebugPanelViewModel(session);
         Export = new ExportPanelViewModel(session);
+        Renderer = new RendererSettingsViewModel(session, session.RendererSettingsStore, session.RendererSettingsStore.Load());
 
         SetMeshModeCommand = new RelayCommand(() => Viewport.RenderMode = ViewportRenderMode.Mesh);
         SetNprModeCommand = new RelayCommand(() => Viewport.RenderMode = ViewportRenderMode.Npr);
@@ -71,6 +73,8 @@ public sealed class WorkspaceViewModel : BindableObject
     public DebugPanelViewModel Debug { get; }
 
     public ExportPanelViewModel Export { get; }
+
+    public RendererSettingsViewModel Renderer { get; }
 
     public ObservableCollection<UiCommandLogEntry> CommandLog => Presets.Commands.Log;
 

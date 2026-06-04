@@ -6,4 +6,5 @@ public readonly record struct NprStepTrace(
     int InputCount,
     int OutputCount,
     int RejectedCount,
-    string Notes);
+    string Notes,
+    long AllocatedBytes = 0);

@@ -7,8 +7,12 @@
     <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Messaging\STFU.Messaging.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Rendering.Abstractions\STFU.Rendering.Abstractions.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Viewport\STFU.Viewport.csproj" />
+    <ProjectReference Include="..\STFU.Import\STFU.Import.csproj" />
+    <ProjectReference Include="..\STFU.Import.Fbx\STFU.Import.Fbx.csproj" />
+    <ProjectReference Include="..\STFU.Logging\STFU.Logging.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
