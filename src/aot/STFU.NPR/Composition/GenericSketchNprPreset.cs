@@ -9,7 +9,12 @@ public sealed class GenericSketchNprPreset : INprPreset
         "generic-sketch",
         "Generic Sketch",
         "Editable built-in NPR sketch preset using feature lines, hatching, density pruning, and approximate hidden-line filtering.",
-        true);
+        true,
+        new Version(1, 0, 0),
+        new Version(1, 0, 0),
+        "STFU",
+        ["sketch", "npr", "built-in"],
+        PresetPackaging.BuiltInAot);
 
     public INprPipeline CreatePipeline()
     {
@@ -19,5 +24,10 @@ public sealed class GenericSketchNprPreset : INprPreset
     public NprSettings CreateSettings()
     {
         return SketchNprPreset.CreateSettings();
+    }
+
+    public StyleGrammar CreateGrammar()
+    {
+        return SketchNprPreset.CreateGrammar();
     }
 }

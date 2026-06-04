@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\STFU.Engine\STFU.Engine.csproj" />
     <ProjectReference Include="..\STFU.Messaging\STFU.Messaging.csproj" />
+    <ProjectReference Include="..\STFU.NPR\STFU.NPR.csproj" />
     <ProjectReference Include="..\STFU.Strokes\STFU.Strokes.csproj" />
   </ItemGroup>
 

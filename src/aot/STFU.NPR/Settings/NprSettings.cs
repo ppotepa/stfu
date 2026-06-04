@@ -24,7 +24,17 @@ public sealed class NprSettings
 
     public float HiddenLineDepthBias { get; set; } = 0.025f;
 
+    public float NearClipDepth { get; set; } = 0.05f;
+
+    public float FarClipDepth { get; set; } = 500f;
+
+    public float ScreenClipMarginPixels { get; set; } = 128f;
+
+    public float MaxProjectedTriangleAreaRatio { get; set; } = 6f;
+
     public float FeatureLineDensity { get; set; } = 0.82f;
+
+    public float MinimumSalience { get; set; } = 0.28f;
 
     public NprStrokeStyle StrokeStyle { get; } = new();
 }

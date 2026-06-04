@@ -18,13 +18,22 @@ public sealed class BuildSurfaceSamplesStep : INprStep
                 continue;
             }
 
+            var projectedMesh = context.Graph.Meshes[triangle.ProjectedMeshIndex];
+            var cache = context.Analysis.GetOrCreate(projectedMesh.MeshHandle, projectedMesh.Mesh);
+            var curvature = cache.Curvature?.GetTriangleCurvature(triangle.MeshTriangleIndex) ?? 0f;
+            var smoothedCurvature = cache.Curvature?.GetSmoothedTriangleCurvature(triangle.MeshTriangleIndex) ?? curvature;
+            var curvatureDirection = cache.Curvature?.GetTriangleDirection(triangle.MeshTriangleIndex) ?? triangle.Normal;
+
             context.Graph.SurfaceSamples.Add(new SurfaceSample(
                 triangle.StableId,
                 triangleIndex,
                 triangle.Normal,
+                curvatureDirection,
                 triangle.ScreenCenter,
                 triangle.Depth,
-                triangle.Shade));
+                triangle.Shade,
+                curvature,
+                smoothedCurvature));
         }
     }
 }

@@ -5,8 +5,14 @@
     <ProjectReference Include="..\..\aot\STFU.Camera\STFU.Camera.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Engine\STFU.Engine.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Mesh.IO\STFU.Mesh.IO.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Messaging\STFU.Messaging.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.Blueprint\STFU.NPR.Preset.Blueprint.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.MangaInk\STFU.NPR.Preset.MangaInk.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.PencilConstruction\STFU.NPR.Preset.PencilConstruction.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.PenInkHatching\STFU.NPR.Preset.PenInkHatching.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.NPR.Preset.TechnicalInk\STFU.NPR.Preset.TechnicalInk.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />
   </ItemGroup>
 

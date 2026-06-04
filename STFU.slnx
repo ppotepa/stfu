@@ -11,6 +11,11 @@
     <Project Path="src/aot/STFU.Messaging/STFU.Messaging.csproj" />
     <Project Path="src/aot/STFU.Camera/STFU.Camera.csproj" />
     <Project Path="src/aot/STFU.NPR/STFU.NPR.csproj" />
+    <Project Path="src/aot/STFU.NPR.Preset.Blueprint/STFU.NPR.Preset.Blueprint.csproj" />
+    <Project Path="src/aot/STFU.NPR.Preset.MangaInk/STFU.NPR.Preset.MangaInk.csproj" />
+    <Project Path="src/aot/STFU.NPR.Preset.PencilConstruction/STFU.NPR.Preset.PencilConstruction.csproj" />
+    <Project Path="src/aot/STFU.NPR.Preset.PenInkHatching/STFU.NPR.Preset.PenInkHatching.csproj" />
+    <Project Path="src/aot/STFU.NPR.Preset.TechnicalInk/STFU.NPR.Preset.TechnicalInk.csproj" />
     <Project Path="src/aot/STFU.Strokes/STFU.Strokes.csproj" />
     <Project Path="src/aot/STFU.Viewport/STFU.Viewport.csproj" />
   </Folder>

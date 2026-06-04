@@ -1,4 +1,5 @@
 using STFU.Viewport.Snapshots;
+using STFU.NPR.Debug;
 
 namespace STFU.Viewport;
 
@@ -10,11 +11,14 @@ public sealed class ViewportState
 
     public ViewportRenderMode RenderMode { get; private set; } = ViewportRenderMode.Mesh;
 
+    public DebugOverlayKind DebugOverlay { get; private set; } = DebugOverlayKind.None;
+
     public ViewportSnapshot Snapshot { get; private set; } = new(
         1280,
         720,
         ViewportRenderMode.Mesh,
-        Strokes.StrokeFrame.Empty);
+        Strokes.StrokeFrame.Empty,
+        NprDebugFrame.Empty);
 
     public void Resize(int width, int height)
     {
@@ -25,6 +29,11 @@ public sealed class ViewportState
     public void SetRenderMode(ViewportRenderMode renderMode)
     {
         RenderMode = renderMode;
+    }
+
+    public void SetDebugOverlay(DebugOverlayKind debugOverlay)
+    {
+        DebugOverlay = debugOverlay;
     }
 
     public void Publish(ViewportSnapshot snapshot)

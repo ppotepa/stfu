@@ -10,4 +10,6 @@ public interface INprPreset
     INprPipeline CreatePipeline();
 
     NprSettings CreateSettings();
+
+    StyleGrammar CreateGrammar();
 }

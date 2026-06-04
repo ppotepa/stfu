@@ -17,14 +17,17 @@
       <div class="toolbar" role="toolbar" aria-label="Viewport commands">
         <button class="tool-button is-active" type="button" data-mode="npr">NPR</button>
         <button class="tool-button" type="button" data-mode="mesh">Mesh</button>
-        <button class="icon-button" type="button" id="resetCamera" title="Reset camera" aria-label="Reset camera">R</button>
-        <button class="icon-button" type="button" id="exportSvg" title="Export SVG" aria-label="Export SVG">E</button>
+        <button class="icon-button" type="button" id="orbitCommand" title="OrbitCameraCommand" aria-label="Orbit camera">Orb</button>
+        <button class="icon-button" type="button" id="panCommand" title="PanCameraCommand" aria-label="Pan camera">Pan</button>
+        <button class="icon-button" type="button" id="resetCamera" title="SetCameraCommand(CameraState.Default)" aria-label="Reset camera">Rst</button>
+        <button class="icon-button" type="button" id="exportSvg" title="Export stroke frame" aria-label="Export SVG">SVG</button>
       </div>
 
       <div class="top-meta">
         <span id="activePreset">generic-sketch</span>
+        <span id="presetEditBadge" class="soft-pill">editable</span>
         <span class="status-dot"></span>
-        <span>AOT viewport</span>
+        <span id="renderModeLabel">ViewportRenderMode.Npr</span>
       </div>
     </header>
 
@@ -33,12 +36,14 @@
         <canvas id="previewCanvas" width="1100" height="760"></canvas>
         <div class="viewport-overlay top-left">
           <span id="modeBadge">NPR</span>
-          <span>1280 x 720</span>
+          <span id="viewportSize">1280 x 720</span>
+          <span id="graphHash">graph 8fd9a1</span>
         </div>
         <div class="viewport-overlay bottom-left">
-          <span>LMB orbit</span>
-          <span>Ctrl+LMB pan</span>
-          <span>Wheel FOV</span>
+          <span id="cameraCompact">Camera (0, 0, 4) -> (0, 0, 0), 60 deg</span>
+        </div>
+        <div class="viewport-overlay bottom-right">
+          <span id="lastCommand">CommandBuffer idle</span>
         </div>
       </section>
 
@@ -48,130 +53,370 @@
           <button class="tab" type="button" data-tab="general">GENERAL</button>
           <button class="tab" type="button" data-tab="camera">CAMERA</button>
           <button class="tab" type="button" data-tab="npr">NPR</button>
-          <button class="tab" type="button" data-tab="strokes">STROKES</button>
+          <button class="tab" type="button" data-tab="strokes">LAYERS</button>
           <button class="tab" type="button" data-tab="debug">DEBUG</button>
         </nav>
 
         <div class="inspector-header">
           <h1 id="panelTitle">Load</h1>
-          <p id="panelSubtitle">Assets and scene input.</p>
+          <p id="panelSubtitle">Assets, mesh handles, and scene entities.</p>
         </div>
 
-        <section class="panel-section is-active" data-panel="load">
-          <label class="field">
-            <span>Model</span>
-            <select id="modelSelect">
-              <option>Suzanne OBJ</option>
-              <option>Prototype Cube</option>
-              <option>Future GLB Import</option>
-            </select>
-          </label>
-          <button class="wide-command" type="button">Load Asset</button>
-          <button class="wide-command secondary" type="button">Reload Current</button>
-          <div class="info-table">
-            <div><span>Vertices</span><strong>511</strong></div>
-            <div><span>Triangles</span><strong>968</strong></div>
-            <div><span>Mesh Handle</span><strong>#1</strong></div>
-          </div>
-        </section>
+        <div class="panel-stack">
+          <section class="panel-section is-active" data-panel="load">
+            <div class="section-heading">
+              <h2>Asset Registry</h2>
+              <span id="loaderStatus">ObjMeshLoader ready</span>
+            </div>
+            <div class="asset-list" id="assetList" aria-label="Loaded mesh assets"></div>
 
-        <section class="panel-section" data-panel="general">
-          <label class="field">
-            <span>Preset</span>
-            <select id="presetSelect">
-              <option>generic-sketch</option>
-              <option>technical-line</option>
-              <option>manga-ink</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Seed</span>
-            <input id="seedInput" type="number" value="1337">
-          </label>
-          <label class="toggle-line">
-            <input id="stableRandom" type="checkbox" checked>
-            <span>Deterministic strokes</span>
-          </label>
-          <label class="toggle-line">
-            <input id="showGrid" type="checkbox" checked>
-            <span>Viewport grid</span>
-          </label>
-        </section>
+            <div class="command-grid">
+              <button class="wide-command" id="loadAsset" type="button">Load Asset</button>
+              <button class="wide-command secondary" id="reloadAsset" type="button">Reload Current</button>
+              <button class="wide-command secondary" id="assignMesh" type="button">Assign Mesh</button>
+            </div>
 
-        <section class="panel-section" data-panel="camera">
-          <div class="slider-row">
-            <label for="fovSlider">FOV</label>
-            <input id="fovSlider" type="range" min="25" max="100" value="60">
-            <output id="fovValue">60</output>
-          </div>
-          <div class="slider-row">
-            <label for="orbitSlider">Orbit</label>
-            <input id="orbitSlider" type="range" min="-45" max="45" value="0">
-            <output id="orbitValue">0</output>
-          </div>
-          <button class="wide-command" type="button">Frame Selection</button>
-        </section>
+            <div class="section-heading">
+              <h2>Scene Entities</h2>
+              <span id="sceneSummary">1 selected</span>
+            </div>
+            <div class="entity-list" id="entityList" aria-label="Scene entities"></div>
+            <div class="command-grid">
+              <button class="wide-command" id="createEntity" type="button">Create Entity</button>
+              <button class="wide-command secondary" id="deleteEntity" type="button">Delete Selected</button>
+            </div>
 
-        <section class="panel-section" data-panel="npr">
-          <div class="slider-row">
-            <label for="creaseSlider">Crease</label>
-            <input id="creaseSlider" type="range" min="5" max="85" value="34">
-            <output id="creaseValue">34</output>
-          </div>
-          <div class="slider-row">
-            <label for="hiddenSlider">Hidden Bias</label>
-            <input id="hiddenSlider" type="range" min="0" max="100" value="25">
-            <output id="hiddenValue">0.025</output>
-          </div>
-          <div class="slider-row">
-            <label for="featureSlider">Feature Density</label>
-            <input id="featureSlider" type="range" min="0" max="100" value="86">
-            <output id="featureValue">0.86</output>
-          </div>
-          <label class="toggle-line">
-            <input id="occlusionToggle" type="checkbox" checked>
-            <span>Approx hidden-line filtering</span>
-          </label>
-        </section>
+            <div class="section-heading compact-heading">
+              <h2>Entity.Position</h2>
+              <span id="selectedEntityLabel">EntityId(1)</span>
+            </div>
+            <div class="vector-grid" data-vector="entity-position">
+              <label><span>X</span><input id="entityPosX" type="number" step="0.1" value="0"></label>
+              <label><span>Y</span><input id="entityPosY" type="number" step="0.1" value="0"></label>
+              <label><span>Z</span><input id="entityPosZ" type="number" step="0.1" value="0"></label>
+            </div>
+          </section>
 
-        <section class="panel-section" data-panel="strokes">
-          <div class="slider-row">
-            <label for="hatchSlider">Hatch Density</label>
-            <input id="hatchSlider" type="range" min="0" max="100" value="48">
-            <output id="hatchValue">0.48</output>
-          </div>
-          <div class="slider-row">
-            <label for="jitterSlider">Jitter</label>
-            <input id="jitterSlider" type="range" min="0" max="100" value="45">
-            <output id="jitterValue">0.95</output>
-          </div>
-          <div class="slider-row">
-            <label for="thicknessSlider">Thickness</label>
-            <input id="thicknessSlider" type="range" min="50" max="220" value="128">
-            <output id="thicknessValue">1.28</output>
-          </div>
-          <div class="slider-row">
-            <label for="overshootSlider">Overshoot</label>
-            <input id="overshootSlider" type="range" min="0" max="100" value="55">
-            <output id="overshootValue">1.85</output>
-          </div>
-        </section>
+          <section class="panel-section" data-panel="general">
+            <div class="section-heading">
+              <h2>NprPresetMetadata</h2>
+              <span>NprPresetRegistry.ActivePreset</span>
+            </div>
+            <div class="info-table four">
+              <div><span>Id</span><strong id="presetId">generic-sketch</strong></div>
+              <div><span>Name</span><strong id="presetName">Generic Sketch</strong></div>
+              <div><span>IsEditable</span><strong id="presetEditable">true</strong></div>
+              <div><span>Pipeline</span><strong>13 steps</strong></div>
+            </div>
+            <p class="description-box" id="presetDescription">Editable built-in NPR sketch preset using feature lines, hatching, density pruning, and approximate hidden-line filtering.</p>
 
-        <section class="panel-section" data-panel="debug">
-          <div class="metric-grid">
-            <div><span>Paths</span><strong id="pathsMetric">443</strong></div>
-            <div><span>Features</span><strong id="featuresMetric">447</strong></div>
-            <div><span>Hatch</span><strong id="hatchMetric">43</strong></div>
-            <div><span>Triangles</span><strong>968</strong></div>
-            <div><span>Samples</span><strong id="samplesMetric">311</strong></div>
-            <div><span>Topology</span><strong>1452</strong></div>
-          </div>
-          <button class="wide-command secondary" type="button">Copy Counters</button>
-        </section>
+            <label class="field">
+              <span>Preset Registry</span>
+              <select id="presetSelect">
+                <option value="generic-sketch">generic-sketch - Generic Sketch</option>
+                <option value="technical-line">technical-line - Technical Line</option>
+                <option value="manga-ink">manga-ink - Manga Ink</option>
+              </select>
+            </label>
+
+            <div class="section-heading compact-heading">
+              <h2>Render Mode</h2>
+              <span>SetViewportRenderModeCommand</span>
+            </div>
+            <div class="segmented-control" role="group" aria-label="Viewport render mode">
+              <button class="segment is-active" type="button" data-mode="npr">ViewportRenderMode.Npr</button>
+              <button class="segment" type="button" data-mode="mesh">ViewportRenderMode.Mesh</button>
+            </div>
+
+            <label class="field">
+              <span>Seed</span>
+              <input id="seedInput" type="number" value="1337">
+            </label>
+            <label class="toggle-line">
+              <input id="stableRandom" type="checkbox" checked>
+              <span>Deterministic strokes</span>
+            </label>
+            <label class="toggle-line">
+              <input id="showGrid" type="checkbox" checked>
+              <span>Viewport grid</span>
+            </label>
+
+            <div class="section-heading compact-heading">
+              <h2>Command Log</h2>
+              <span>latest engine commands</span>
+            </div>
+            <ol class="command-log" id="commandLogGeneral"></ol>
+          </section>
+
+          <section class="panel-section" data-panel="camera">
+            <div class="section-heading">
+              <h2>CameraState</h2>
+              <span>Position / Target / FieldOfViewDegrees</span>
+            </div>
+            <div class="vector-block">
+              <span class="block-label">Position</span>
+              <div class="vector-grid">
+                <label><span>X</span><input id="cameraPosX" type="number" step="0.1" value="0"></label>
+                <label><span>Y</span><input id="cameraPosY" type="number" step="0.1" value="0"></label>
+                <label><span>Z</span><input id="cameraPosZ" type="number" step="0.1" value="4"></label>
+              </div>
+            </div>
+            <div class="vector-block">
+              <span class="block-label">Target</span>
+              <div class="vector-grid">
+                <label><span>X</span><input id="cameraTargetX" type="number" step="0.1" value="0"></label>
+                <label><span>Y</span><input id="cameraTargetY" type="number" step="0.1" value="0"></label>
+                <label><span>Z</span><input id="cameraTargetZ" type="number" step="0.1" value="0"></label>
+              </div>
+            </div>
+            <div class="slider-row">
+              <label for="fovSlider">FOV</label>
+              <input id="fovSlider" type="range" min="25" max="100" value="60">
+              <output id="fovValue">60</output>
+            </div>
+            <div class="slider-row">
+              <label for="orbitYawSlider">Orbit Yaw</label>
+              <input id="orbitYawSlider" type="range" min="-75" max="75" value="0">
+              <output id="orbitYawValue">0</output>
+            </div>
+            <div class="slider-row">
+              <label for="orbitPitchSlider">Orbit Pitch</label>
+              <input id="orbitPitchSlider" type="range" min="-45" max="45" value="0">
+              <output id="orbitPitchValue">0</output>
+            </div>
+
+            <div class="command-grid">
+              <button class="wide-command" id="frameModel" type="button">Frame Model</button>
+              <button class="wide-command secondary" id="cameraResetPanel" type="button">Reset Camera</button>
+            </div>
+
+            <div class="command-surface">
+              <div><span>Orbit</span><strong>OrbitCameraCommand(deltaYaw, deltaPitch)</strong></div>
+              <div><span>Pan</span><strong>PanCameraCommand(deltaRight, deltaUp)</strong></div>
+              <div><span>FOV</span><strong>AdjustCameraFovCommand(deltaDegrees)</strong></div>
+              <div><span>Set</span><strong>SetCameraCommand(CameraState)</strong></div>
+            </div>
+          </section>
+
+          <section class="panel-section" data-panel="npr">
+            <div class="section-heading">
+              <h2>NprSettings</h2>
+              <span>active preset settings</span>
+            </div>
+            <div class="settings-grid">
+              <div class="slider-row">
+                <label for="creaseSlider">CreaseAngleDegrees</label>
+                <input id="creaseSlider" type="range" min="5" max="85" value="34">
+                <output id="creaseValue">34</output>
+              </div>
+              <div class="slider-row">
+                <label for="minAreaSlider">MinimumProjectedTriangleArea</label>
+                <input id="minAreaSlider" type="range" min="1" max="50" value="8">
+                <output id="minAreaValue">8</output>
+              </div>
+              <div class="slider-row">
+                <label for="minStrokeSlider">MinimumStrokeLength</label>
+                <input id="minStrokeSlider" type="range" min="1" max="40" value="4">
+                <output id="minStrokeValue">4</output>
+              </div>
+              <div class="slider-row">
+                <label for="surfaceThresholdSlider">SurfaceFlowShadeThreshold</label>
+                <input id="surfaceThresholdSlider" type="range" min="0" max="100" value="52">
+                <output id="surfaceThresholdValue">0.52</output>
+              </div>
+              <div class="slider-row">
+                <label for="surfaceDensitySlider">SurfaceFlowDensity</label>
+                <input id="surfaceDensitySlider" type="range" min="0" max="100" value="38">
+                <output id="surfaceDensityValue">0.38</output>
+              </div>
+              <div class="slider-row">
+                <label for="hatchThresholdSlider">HatchShadeThreshold</label>
+                <input id="hatchThresholdSlider" type="range" min="0" max="100" value="58">
+                <output id="hatchThresholdValue">0.58</output>
+              </div>
+              <div class="slider-row">
+                <label for="hatchDensitySlider">HatchDensity</label>
+                <input id="hatchDensitySlider" type="range" min="0" max="100" value="48">
+                <output id="hatchDensityValue">0.48</output>
+              </div>
+              <div class="slider-row">
+                <label for="hatchLengthSlider">HatchLength</label>
+                <input id="hatchLengthSlider" type="range" min="4" max="48" value="19">
+                <output id="hatchLengthValue">19</output>
+              </div>
+              <div class="slider-row">
+                <label for="hiddenSlider">HiddenLineDepthBias</label>
+                <input id="hiddenSlider" type="range" min="0" max="80" value="25">
+                <output id="hiddenValue">0.025</output>
+              </div>
+              <div class="slider-row">
+                <label for="featureSlider">FeatureLineDensity</label>
+                <input id="featureSlider" type="range" min="0" max="100" value="86">
+                <output id="featureValue">0.86</output>
+              </div>
+            </div>
+
+            <div class="section-heading compact-heading">
+              <h2>NPR Pipeline</h2>
+              <span>input / output counters</span>
+            </div>
+            <div class="pipeline-list" id="pipelineList" aria-label="NPR pipeline counters"></div>
+          </section>
+
+          <section class="panel-section" data-panel="strokes">
+            <div class="section-heading">
+              <h2>NPR Layer Stack</h2>
+              <span id="layerStackSummary">strokes / fills / shading</span>
+            </div>
+            <div class="layer-stack" id="layerStack" aria-label="NPR layer stack"></div>
+            <div class="command-grid">
+              <button class="wide-command" id="addLayer" type="button">Add Layer</button>
+              <button class="wide-command secondary" id="duplicateLayer" type="button">Duplicate</button>
+              <button class="wide-command secondary" id="deleteLayer" type="button">Delete Layer</button>
+            </div>
+
+            <div class="section-heading compact-heading">
+              <h2>Active Layer</h2>
+              <span id="activeLayerId">stroke-layer:silhouette</span>
+            </div>
+            <label class="field">
+              <span>Name</span>
+              <input id="layerNameInput" type="text" value="Silhouette Ink">
+            </label>
+            <div class="two-field-grid">
+              <label class="field">
+                <span>Layer Type</span>
+                <select id="layerTypeSelect">
+                  <option value="strokes">Strokes</option>
+                  <option value="fill">Fill</option>
+                  <option value="shading">Shading</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Blend</span>
+                <select id="layerBlendSelect">
+                  <option value="normal">Normal</option>
+                  <option value="multiply">Multiply</option>
+                  <option value="screen">Screen</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="settings-grid">
+              <div class="slider-row">
+                <label for="layerOpacitySlider">Opacity</label>
+                <input id="layerOpacitySlider" type="range" min="0" max="100" value="100">
+                <output id="layerOpacityValue">1.00</output>
+              </div>
+              <div class="slider-row">
+                <label for="layerDensitySlider">Density</label>
+                <input id="layerDensitySlider" type="range" min="0" max="160" value="100">
+                <output id="layerDensityValue">1.00</output>
+              </div>
+              <div class="slider-row">
+                <label for="layerBaseThicknessSlider">BaseThickness</label>
+                <input id="layerBaseThicknessSlider" type="range" min="40" max="350" value="128">
+                <output id="layerBaseThicknessValue">1.28</output>
+              </div>
+              <div class="slider-row">
+                <label for="layerThicknessVariationSlider">ThicknessVariation</label>
+                <input id="layerThicknessVariationSlider" type="range" min="0" max="100" value="42">
+                <output id="layerThicknessVariationValue">0.42</output>
+              </div>
+              <div class="slider-row">
+                <label for="layerEndpointJitterSlider">EndpointJitter</label>
+                <input id="layerEndpointJitterSlider" type="range" min="0" max="220" value="95">
+                <output id="layerEndpointJitterValue">0.95</output>
+              </div>
+              <div class="slider-row">
+                <label for="layerOvershootSlider">Overshoot</label>
+                <input id="layerOvershootSlider" type="range" min="0" max="420" value="185">
+                <output id="layerOvershootValue">1.85</output>
+              </div>
+              <div class="slider-row">
+                <label for="layerFillCoverageSlider">FillCoverage</label>
+                <input id="layerFillCoverageSlider" type="range" min="0" max="100" value="35">
+                <output id="layerFillCoverageValue">0.35</output>
+              </div>
+              <div class="slider-row">
+                <label for="layerShadeThresholdSlider">ShadeThreshold</label>
+                <input id="layerShadeThresholdSlider" type="range" min="0" max="100" value="58">
+                <output id="layerShadeThresholdValue">0.58</output>
+              </div>
+            </div>
+
+            <div class="section-heading compact-heading">
+              <h2>Intent Inputs</h2>
+              <span>NprStrokeIntent routing</span>
+            </div>
+            <div class="intent-list compact" id="layerIntentList"></div>
+
+            <div class="section-heading compact-heading">
+              <h2>Preview</h2>
+              <span id="layerPreviewSummary">active + composite</span>
+            </div>
+            <div class="layer-preview-grid">
+              <div class="layer-preview-card">
+                <span>Active Layer</span>
+                <div class="layer-preview active-layer-preview" id="activeLayerPreview"></div>
+              </div>
+              <div class="layer-preview-card">
+                <span>Composite</span>
+                <div class="layer-preview composite-layer-preview" id="compositeLayerPreview"></div>
+              </div>
+            </div>
+
+            <div class="info-table three layer-summary-table">
+              <div><span>Visible layers</span><strong id="visibleLayerCount">0</strong></div>
+              <div><span>Stroke output</span><strong id="layerStrokeCount">0</strong></div>
+              <div><span>Fill / shading</span><strong id="layerToneCount">0</strong></div>
+            </div>
+          </section>
+
+          <section class="panel-section" data-panel="debug">
+            <div class="section-heading">
+              <h2>NprGraph Counters</h2>
+              <span id="debugDeterminism">deterministic</span>
+            </div>
+            <div class="metric-grid" id="graphCounters"></div>
+
+            <div class="section-heading compact-heading">
+              <h2>Overlay Toggles</h2>
+              <span>debug draw layers</span>
+            </div>
+            <div class="overlay-grid">
+              <label class="toggle-line"><input type="checkbox" data-overlay="projectedVertices"><span>projected vertices</span></label>
+              <label class="toggle-line"><input type="checkbox" data-overlay="projectedTriangles"><span>projected triangles</span></label>
+              <label class="toggle-line"><input type="checkbox" data-overlay="topologyEdges"><span>topology edges</span></label>
+              <label class="toggle-line"><input type="checkbox" data-overlay="featureLines" checked><span>feature lines</span></label>
+              <label class="toggle-line"><input type="checkbox" data-overlay="surfaceSamples"><span>surface samples</span></label>
+              <label class="toggle-line"><input type="checkbox" data-overlay="finalStrokes" checked><span>final strokes</span></label>
+              <label class="toggle-line wide-toggle"><input type="checkbox" data-overlay="hiddenCandidates"><span>occluded / hidden candidates</span></label>
+            </div>
+
+            <div class="section-heading compact-heading">
+              <h2>Pipeline Trace</h2>
+              <span>before / after / timing</span>
+            </div>
+            <div class="trace-list" id="pipelineTrace"></div>
+
+            <div class="info-table three">
+              <div><span>Graph hash</span><strong id="graphHashDebug">8fd9a1</strong></div>
+              <div><span>Seed</span><strong id="debugSeed">1337</strong></div>
+              <div><span>Status</span><strong id="determinismStatus">stable</strong></div>
+            </div>
+
+            <div class="section-heading compact-heading">
+              <h2>Command Log</h2>
+              <span>engine command surface</span>
+            </div>
+            <ol class="command-log" id="commandLogDebug"></ol>
+          </section>
+        </div>
 
         <footer class="inspector-footer">
-          <button type="button" class="wide-command secondary">Reset Tab</button>
-          <button type="button" class="wide-command">Apply</button>
+          <button type="button" id="resetTab" class="wide-command secondary">Reset Tab</button>
+          <button type="button" id="applySettings" class="wide-command">Apply</button>
         </footer>
       </aside>
     </main>

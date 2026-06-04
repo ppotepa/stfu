@@ -1,5 +1,6 @@
 using System.Numerics;
 using STFU.Common.Math;
+using STFU.NPR.Analysis;
 using STFU.NPR.Graph;
 using STFU.NPR.Pipeline;
 
@@ -9,7 +10,7 @@ public sealed class ProjectMeshStep : INprStep
 {
     public void Execute(NprContext context)
     {
-        var projector = CameraProjector.Create(context.Camera, context.Width, context.Height);
+        var projection = context.View.Projection;
 
         foreach (var entity in context.Scene.Entities)
         {
@@ -18,9 +19,14 @@ public sealed class ProjectMeshStep : INprStep
                 continue;
             }
 
+            var analysis = context.Analysis.GetOrCreate(entity.Mesh, mesh);
+            var curvature = analysis.Curvature ?? CurvatureCache.Empty;
+
             var vertexOffset = context.Graph.Vertices.Count;
             var triangleOffset = context.Graph.Triangles.Count;
             context.Graph.Meshes.Add(new ProjectedMesh(
+                entity.Id,
+                entity.Mesh,
                 mesh,
                 vertexOffset,
                 mesh.Vertices.Count,
@@ -31,14 +37,19 @@ public sealed class ProjectMeshStep : INprStep
             {
                 var worldPosition = Transform(mesh.Vertices[index].Position, entity.Transform);
                 var worldNormal = TransformNormal(mesh.Vertices[index].Normal, entity.Transform);
-                var isVisible = projector.TryProject(worldPosition, out var projected, out var depth);
+                var isVisible = projection.TryProject(worldPosition, out var projected, out var depth);
                 context.Graph.Vertices.Add(new ProjectedVertex(
                     index,
                     worldPosition,
                     worldNormal,
                     projected,
                     depth,
-                    isVisible));
+                    isVisible,
+                    curvature.GetVertexCurvature(index),
+                    curvature.GetSmoothedVertexCurvature(index),
+                    curvature.GetVertexSignedCurvature(index),
+                    curvature.GetSmoothedVertexSignedCurvature(index),
+                    curvature.GetVertexDirection(index)));
             }
         }
     }

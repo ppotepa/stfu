@@ -1,8 +1,13 @@
 using STFU.Assets;
 using STFU.Camera;
 using STFU.Engine.Scenes;
+using STFU.NPR.Debug;
+using STFU.NPR.Analysis;
 using STFU.NPR.Graph;
+using STFU.NPR.Composition;
 using STFU.NPR.Settings;
+using STFU.NPR.Temporal;
+using STFU.NPR.Visibility;
 using STFU.Strokes;
 
 namespace STFU.NPR.Pipeline;
@@ -21,7 +26,38 @@ public sealed class NprContext
 
     public required NprSettings Settings { get; init; }
 
+    public required StyleGrammar Style { get; init; }
+
+    public required MeshAnalysisCacheStore Analysis { get; init; }
+
+    public required IVisibilityResolver VisibilityResolver { get; init; }
+
+    public required IOcclusionQuery OcclusionQuery { get; init; }
+
+    public required FrameHistoryState FrameHistoryState { get; init; }
+
+    public required int FrameId { get; init; }
+
+    public required float TimeSeconds { get; init; }
+
+    public FrameHistory? PreviousFrame { get; init; }
+
     public NprGraph Graph { get; } = new();
 
     public StrokeFrame Frame { get; set; } = StrokeFrame.Empty;
+
+    public NprDebugFrame DebugFrame { get; set; } = NprDebugFrame.Empty;
+
+    public List<NprStepTrace> StepTraces { get; } = [];
+
+    public NprViewContext View => new(
+        Camera,
+        ProjectionInfo.Create(Camera, Width, Height, Settings),
+        LightContext.Default,
+        Settings,
+        Style,
+        Style.StyleId,
+        FrameId,
+        TimeSeconds,
+        PreviousFrame);
 }

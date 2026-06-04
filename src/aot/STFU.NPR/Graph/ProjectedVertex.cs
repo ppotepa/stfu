@@ -9,4 +9,9 @@ public readonly record struct ProjectedVertex(
     Vector3 WorldNormal,
     Point2D Position,
     float Depth,
-    bool IsVisible);
+    bool IsVisible,
+    float Curvature = 0f,
+    float SmoothedCurvature = 0f,
+    float SignedCurvature = 0f,
+    float SmoothedSignedCurvature = 0f,
+    Vector3 CurvatureDirection = default);

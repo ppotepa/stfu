@@ -20,12 +20,45 @@ public readonly record struct Stroke2D(
     Point2D End,
     float Thickness);
 
+public readonly record struct StrokePoint2D(
+    Point2D Position,
+    float Thickness,
+    float Opacity,
+    float Pressure = 1f)
+{
+    public static StrokePoint2D FromPoint(Point2D position, StrokeStyle2D style, float pressure = 1f)
+    {
+        return new StrokePoint2D(position, style.Thickness, style.Opacity, pressure);
+    }
+}
+
+public sealed record StrokeMetadata(
+    int StableId,
+    string? Layer,
+    string? SourceKind,
+    string? Intent = null,
+    int? SourceFeatureId = null,
+    int? SourceSegmentId = null,
+    string? Visibility = null,
+    string? StyleId = null,
+    string? Variant = null,
+    int LayerOrder = 0);
+
 public sealed record StrokePath2D(
     IReadOnlyList<Point2D> Points,
-    StrokeStyle2D Style)
+    StrokeStyle2D Style,
+    IReadOnlyList<StrokePoint2D>? RichPoints = null,
+    StrokeMetadata? Metadata = null)
 {
     public static StrokePath2D Line(Point2D start, Point2D end, StrokeStyle2D style)
     {
-        return new StrokePath2D([start, end], style);
+        var points = new[] { start, end };
+        var richPoints = new[]
+        {
+            StrokePoint2D.FromPoint(start, style),
+            StrokePoint2D.FromPoint(end, style)
+        };
+
+        return new StrokePath2D(points, style, richPoints);
     }
 }

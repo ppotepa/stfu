@@ -1,5 +1,6 @@
 using STFU.NPR.Graph;
 using STFU.NPR.Pipeline;
+using STFU.NPR.Temporal;
 using STFU.NPR.Styles;
 using STFU.Strokes;
 
@@ -7,62 +8,94 @@ namespace STFU.NPR.Steps.Strokes;
 
 public sealed class HumanizeStrokesStep : INprStep
 {
+    private static readonly STFU.NPR.Styles.IStrokeHumanizer Humanizer = new STFU.NPR.Styles.DefaultStrokeHumanizer();
+
     public void Execute(NprContext context)
     {
-        foreach (var stroke in context.Graph.Strokes)
+        foreach (var stroke in context.Graph.StyledStrokes)
         {
-            Humanize(stroke, context.Settings.StrokeStyle, context.Settings.Seed);
+            var profile = context.Style.Stroke.FindProfile(
+                stroke.Kind,
+                stroke.Intent,
+                context.Style.ResolveOutputLayer(stroke.Kind, stroke.Intent, stroke.Visibility, stroke.HatchLayerKind));
+            Humanizer.Humanize(stroke, CreateProfiledStyle(context.Settings.StrokeStyle, profile), context.Settings.Seed);
+            BlendWithPreviousStroke(context, stroke);
         }
     }
 
-    private static void Humanize(NprStroke stroke, NprStrokeStyle style, int globalSeed)
+    private static NprStrokeStyle CreateProfiledStyle(NprStrokeStyle source, Composition.StyleStrokeProfile? profile)
     {
-        if (stroke.Points.Count < 2)
+        if (profile is null)
+        {
+            return source;
+        }
+
+        return new NprStrokeStyle
+        {
+            Seed = source.Seed,
+            Medium = profile.MediumOverride ?? source.Medium,
+            BaseThickness = source.BaseThickness,
+            ThicknessVariation = source.ThicknessVariation * profile.HumanizationScale * profile.ThicknessVariationScale,
+            EndpointJitter = source.EndpointJitter * profile.HumanizationScale * profile.EndpointJitterScale,
+            Overshoot = source.Overshoot * profile.HumanizationScale * profile.OvershootScale
+        };
+    }
+
+    private static void BlendWithPreviousStroke(NprContext context, StyledStroke stroke)
+    {
+        if (context.PreviousFrame is null ||
+            !context.Graph.StrokeMatchesByStableId.TryGetValue(stroke.StableId, out var match) ||
+            !context.PreviousFrame.StrokesByStableId.TryGetValue(match.PreviousStableId, out var previousStroke) ||
+            previousStroke.Path.Points.Count == 0 ||
+            stroke.Points.Count == 0)
         {
             return;
         }
 
-        var originalStart = stroke.Points[0];
-        var originalEnd = stroke.Points[^1];
-        var dx = originalEnd.X - originalStart.X;
-        var dy = originalEnd.Y - originalStart.Y;
-        var length = MathF.Sqrt(dx * dx + dy * dy);
+        var blend = match.Kind switch
+        {
+            TemporalMatchKind.DirectStableIdMatch => 0.3f,
+            TemporalMatchKind.SourceScreenOverlapMatch => 0.18f,
+            _ => 0f
+        };
 
-        if (length <= 0.001f)
+        if (blend <= 0f)
         {
             return;
         }
 
-        var dirX = dx / length;
-        var dirY = dy / length;
-        var normalX = -dirY;
-        var normalY = dirX;
-        var seed = NprRandom.Hash(globalSeed, stroke.StableId);
-        var overshootStart = style.Overshoot * (0.55f + NprRandom.Float01(NprRandom.Hash(seed, 1)) * 0.65f);
-        var overshootEnd = style.Overshoot * (0.55f + NprRandom.Float01(NprRandom.Hash(seed, 2)) * 0.65f);
-        var startNormalJitter = NprRandom.SignedFloat(seed, 3) * style.EndpointJitter;
-        var endNormalJitter = NprRandom.SignedFloat(seed, 4) * style.EndpointJitter;
-        var startTangentialJitter = NprRandom.SignedFloat(seed, 5) * style.EndpointJitter * 0.35f;
-        var endTangentialJitter = NprRandom.SignedFloat(seed, 6) * style.EndpointJitter * 0.35f;
-        var midpointBend = NprRandom.SignedFloat(seed, 8) * style.EndpointJitter * 1.25f;
+        if (previousStroke.Path.Points.Count == stroke.Points.Count)
+        {
+            for (var index = 0; index < stroke.Points.Count; index++)
+            {
+                stroke.Points[index] = Lerp(previousStroke.Path.Points[index], stroke.Points[index], 1f - blend);
+            }
 
-        var start = new Point2D(
-            originalStart.X - dirX * overshootStart + normalX * startNormalJitter + dirX * startTangentialJitter,
-            originalStart.Y - dirY * overshootStart + normalY * startNormalJitter + dirY * startTangentialJitter);
+            return;
+        }
 
-        var end = new Point2D(
-            originalEnd.X + dirX * overshootEnd + normalX * endNormalJitter + dirX * endTangentialJitter,
-            originalEnd.Y + dirY * overshootEnd + normalY * endNormalJitter + dirY * endTangentialJitter);
+        var previousStart = previousStroke.Path.Points[0];
+        var previousEnd = previousStroke.Path.Points[^1];
+        stroke.Points[0] = Lerp(previousStart, stroke.Points[0], 1f - blend);
+        stroke.Points[^1] = Lerp(previousEnd, stroke.Points[^1], 1f - blend);
 
-        var mid = new Point2D(
-            (start.X + end.X) * 0.5f + normalX * midpointBend,
-            (start.Y + end.Y) * 0.5f + normalY * midpointBend);
+        if (stroke.Points.Count > 2)
+        {
+            var previousMid = Midpoint(previousStart, previousEnd);
+            var currentMidIndex = stroke.Points.Count / 2;
+            stroke.Points[currentMidIndex] = Lerp(previousMid, stroke.Points[currentMidIndex], 1f - blend);
+        }
+    }
 
-        stroke.Points.Clear();
-        stroke.Points.Add(start);
-        stroke.Points.Add(mid);
-        stroke.Points.Add(end);
+    private static Point2D Lerp(Point2D start, Point2D end, float t)
+    {
+        return new Point2D(
+            start.X + (end.X - start.X) * t,
+            start.Y + (end.Y - start.Y) * t);
+    }
 
-        stroke.Thickness = MathF.Max(0.35f, stroke.Thickness + NprRandom.SignedFloat(seed, 7) * style.ThicknessVariation);
+    private static Point2D Midpoint(Point2D start, Point2D end)
+    {
+        return new Point2D((start.X + end.X) * 0.5f, (start.Y + end.Y) * 0.5f);
     }
 }
