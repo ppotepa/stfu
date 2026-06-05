@@ -1,14 +1,18 @@
 [CmdletBinding()]
 param(
-    [string]$Solution = 'STFU.slnx',
-    [switch]$NoRestore
+    [Parameter(Position = 0)]
+    [string]$Solution,
+
+    [switch]$NoRestore,
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Args
 )
 
-$ErrorActionPreference = 'Stop'
-
-$args = @('build', $Solution, '-v', 'minimal')
-if ($NoRestore) {
-    $args += '--no-restore'
-}
-
-dotnet @args
+$AgentRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Forward = @()
+if ($Solution) { $Forward += @("--solution", $Solution) }
+if ($NoRestore) { $Forward += "--no-restore" }
+$Forward += $Args
+& (Join-Path $AgentRoot "agent.ps1") build @Forward
+exit $LASTEXITCODE

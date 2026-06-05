@@ -1,24 +1,16 @@
 [CmdletBinding()]
 param(
     [string[]]$Path = @(),
-    [int]$MaxLines = 220
+
+    [int]$MaxLines,
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Args
 )
 
-$ErrorActionPreference = 'Stop'
-
-Write-Output "## git status"
-git status --short
-
-Write-Output ""
-Write-Output "## diff stat"
-git diff --stat 2>$null
-
-Write-Output ""
-Write-Output "## changed files"
-git diff --name-only 2>$null | Select-Object -First 120
-
-if ($Path.Count -gt 0) {
-    Write-Output ""
-    Write-Output "## focused diff"
-    git diff -- $Path 2>$null | Select-Object -First $MaxLines
-}
+$AgentRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Forward = @()
+if ($MaxLines -gt 0) { $Forward += @("--max", $MaxLines) }
+$Forward += $Args
+& (Join-Path $AgentRoot "agent.ps1") diff @Forward
+exit $LASTEXITCODE

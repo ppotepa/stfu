@@ -66,6 +66,7 @@ blob-report/
 # Generated local bundles / concatenations
 concat.txt
 concat.zip
+release/
 *.tmp
 *.temp
 *.bak

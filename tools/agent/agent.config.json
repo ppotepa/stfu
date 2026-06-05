@@ -1,0 +1,67 @@
+{
+  "schema": "agent.config.v1",
+  "defaultSolution": "STFU.slnx",
+  "defaultFormat": "table",
+  "cacheDirectory": ".agents/cache",
+  "generatedPatterns": [
+    "**/obj/**",
+    "**/bin/**",
+    "**/*.g.cs",
+    "**/*.Designer.cs",
+    "**/Generated/**"
+  ],
+  "excludePatterns": [
+    "**/bin/**",
+    "**/obj/**",
+    "**/.git/**",
+    "**/.vs/**",
+    "**/third_party/**",
+    "**/assets/**",
+    "**/concat.txt",
+    "**/concat.zip"
+  ],
+  "scopes": {
+    "all": {
+      "include": [ "src/**/*.cs" ],
+      "exclude": [ "**/bin/**", "**/obj/**" ]
+    },
+    "runtime": {
+      "projects": [ "src/runtime/**/*.csproj" ]
+    },
+    "tests": {
+      "projects": [ "tests/**/*.csproj", "src/**/*Tests*.csproj" ]
+    },
+    "ui": {
+      "projects": [ "*UI*", "*Bridge*", "*App*" ]
+    },
+    "import": {
+      "projects": [ "*Import*" ]
+    },
+    "render": {
+      "projects": [ "*Render*", "*Rendering*" ]
+    },
+    "native": {
+      "include": [ "native/**/*", "src/native/**/*" ]
+    }
+  },
+  "hotspotRules": {
+    "default": [
+      "alloc-in-loop",
+      "linq-in-loop",
+      "sync-wait",
+      "large-struct-copy",
+      "reflection",
+      "pinvoke",
+      "unsafe",
+      "boxing",
+      "string-concat-loop"
+    ]
+  },
+  "presets": {
+    "stfu": {
+      "fbx-mesh-regression": "tools/agent/presets/stfu/fbx-mesh-regression.ps1",
+      "npr-parity-audit": "tools/agent/presets/stfu/npr-parity-audit.ps1",
+      "gpu-readback-audit": "tools/agent/presets/stfu/gpu-readback-audit.ps1"
+    }
+  }
+}
