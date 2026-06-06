@@ -19,12 +19,12 @@ public sealed class CpuToneRasterizer
         CpuRasterWorkspace workspace,
         CancellationToken cancellationToken = default)
     {
-        if (tone.Width <= 0 || tone.Height <= 0 || tone.Rgba.Length < tone.Width * tone.Height * 4)
+        if (tone.Width <= 0 || tone.Height <= 0 || tone.Rgba.Length < tone.Width * tone.Height * PixelMemoryMath.Bgra32BytesPerPixel)
         {
             return;
         }
 
-        var opacity = NumericMath.Clamp01(tone.Opacity * layerOpacity);
+        var opacity = ToneMath.EffectiveOpacity(tone.Opacity, layerOpacity);
         if (opacity <= 0f)
         {
             return;
@@ -43,7 +43,7 @@ public sealed class CpuToneRasterizer
             for (var x = 0; x < target.Width; x++)
             {
                 var sourceX = sameSize ? x : sourceXMap![x];
-                var si = (sourceY * tone.Width + sourceX) * 4;
+                var si = PixelMemoryMath.Bgra32LinearIndex(sourceX, sourceY, tone.Width) * PixelMemoryMath.Bgra32BytesPerPixel;
 
                 var alpha = alphaLut[tone.Rgba[si + 3]];
                 if (alpha == 0)
@@ -51,9 +51,9 @@ public sealed class CpuToneRasterizer
                     continue;
                 }
 
-                var premulR = CpuPixelBlender.Premultiply(tone.Rgba[si], alpha);
-                var premulG = CpuPixelBlender.Premultiply(tone.Rgba[si + 1], alpha);
-                var premulB = CpuPixelBlender.Premultiply(tone.Rgba[si + 2], alpha);
+                var premulR = ColorBlendMath.Premultiply(tone.Rgba[si], alpha);
+                var premulG = ColorBlendMath.Premultiply(tone.Rgba[si + 1], alpha);
+                var premulB = ColorBlendMath.Premultiply(tone.Rgba[si + 2], alpha);
                 CpuPixelBlender.BlendSourceOverBgraPremultiplied(target, x, y, premulB, premulG, premulR, alpha);
             }
         };
@@ -122,7 +122,7 @@ public sealed class CpuToneRasterizer
 
         for (var i = 0; i < _alphaLut.Length; i++)
         {
-            _alphaLut[i] = NumericMath.ScaleByte((byte)i, opacity);
+            _alphaLut[i] = ToneMath.ScaleAlpha((byte)i, opacity);
         }
 
         _alphaLutOpacity = opacity;

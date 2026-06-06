@@ -297,7 +297,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
                 var depth = (a.Depth + b.Depth) * 0.5f;
                 var stableStartVertexIndex = projectedMesh.VertexOffset + ResolveEncounterStart(cached, visibleFirstTriangle);
                 var stableEndVertexIndex = projectedMesh.VertexOffset + ResolveEncounterEnd(cached, visibleFirstTriangle);
-                var stableId = unchecked((firstTriangle.StableId * 397) ^ (stableStartVertexIndex * 17) ^ stableEndVertexIndex);
+                var stableId = HashMath.StableUndirectedEdge(firstTriangle.StableId, stableStartVertexIndex, stableEndVertexIndex);
                 var isBoundary = adjacentTriangleIndex < 0;
 
                 topologyEdges.Add(new TopologyEdge(
@@ -471,7 +471,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         var a = vertices[aIndex];
         var b = vertices[bIndex];
         var depth = (a.Depth + b.Depth) * 0.5f;
-        var stableId = (triangle.StableId * 397) ^ (edgeIndex * 131) ^ aIndex ^ (bIndex * 17);
+        var stableId = HashMath.StablePerTriangleEdge(triangle.StableId, edgeIndex, aIndex, bIndex);
 
         _topologyEdgeScratch[slotIndex] = new TopologyEdge(
             stableId,
@@ -504,7 +504,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         var a = vertices[aIndex];
         var b = vertices[bIndex];
         var depth = (a.Depth + b.Depth) * 0.5f;
-        var stableId = (triangle.StableId * 397) ^ (edgeIndex * 131) ^ aIndex ^ (bIndex * 17);
+        var stableId = HashMath.StablePerTriangleEdge(triangle.StableId, edgeIndex, aIndex, bIndex);
 
         topologyEdges[topologyOutputIndex] = new TopologyEdge(
             stableId,
@@ -545,7 +545,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
 
         if (!edges.TryGetValue(key, out var info))
         {
-            info = new EdgeInfo((triangle.StableId * 397) ^ (a * 17) ^ b, min, max, triangleIndex, -1);
+            info = new EdgeInfo(HashMath.StableUndirectedEdge(triangle.StableId, a, b), min, max, triangleIndex, -1);
         }
         else if (info.SecondTriangleIndex < 0)
         {

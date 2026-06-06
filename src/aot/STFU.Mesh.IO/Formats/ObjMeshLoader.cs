@@ -176,8 +176,7 @@ public sealed class ObjMeshLoader : IMeshLoader<string>
             return false;
         }
 
-        index = parsed > 0 ? parsed - 1 : count + parsed;
-        return index >= 0 && index < count;
+        return IndexMath.TryResolveOneBasedOrRelativeIndex(parsed, count, out index);
     }
 
     private static void AccumulateGeneratedNormal(

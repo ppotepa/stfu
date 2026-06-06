@@ -216,12 +216,12 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
             var start = vertices[edge.StartVertexIndex];
             var end = vertices[edge.EndVertexIndex];
 
-            if (drawing.CullOutside && NdcOutsideSameSide(start.Ndc, end.Ndc))
+            if (drawing.CullOutside && ClipSpaceMath.SegmentOutsideCanonicalClipXY(start.Ndc, end.Ndc))
             {
                 continue;
             }
 
-            var length = DefaultPointPathAdapter.SegmentLength(start.Position, end.Position);
+            var length = Geometry2D.SegmentLength(start.Position.X, start.Position.Y, end.Position.X, end.Position.Y);
             if (drawing.MinSegPx > 0f && length < drawing.MinSegPx)
             {
                 continue;
@@ -463,7 +463,7 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
 
             if (!visible && previousVisible && hasRunStart && hasPreviousPoint)
             {
-                if (DefaultPointPathAdapter.SegmentLength(runStart, previousPoint) >= minSegmentLength)
+                if (Geometry2D.SegmentLength(runStart.X, runStart.Y, previousPoint.X, previousPoint.Y) >= minSegmentLength)
                 {
                     if (AppendFragment(
                         fragments,
@@ -498,7 +498,7 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         }
 
         if (previousVisible && hasRunStart && hasPreviousPoint &&
-            DefaultPointPathAdapter.SegmentLength(runStart, previousPoint) >= minSegmentLength)
+            Geometry2D.SegmentLength(runStart.X, runStart.Y, previousPoint.X, previousPoint.Y) >= minSegmentLength)
         {
             if (AppendFragment(
                 fragments,
@@ -545,8 +545,7 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
             t);
         point = new Point2D(interpolated.X, interpolated.Y);
         var ndc = Vector3.Lerp(start.Ndc, end.Ndc, t);
-        var inClip = !(ndc.X < -1f || ndc.X > 1f || ndc.Y < -1f || ndc.Y > 1f || ndc.Z < -1f || ndc.Z > 1f);
-        if (!inClip)
+        if (!ClipSpaceMath.IsInsideCanonicalClip(ndc))
         {
             return false;
         }
@@ -575,7 +574,7 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         float t1,
         int fragmentIndex)
     {
-        if (DefaultPointPathAdapter.SegmentLength(p0, p1) <= 0.5f)
+        if (Geometry2D.SegmentLength(p0.X, p0.Y, p1.X, p1.Y) <= 0.5f)
         {
             return false;
         }
@@ -647,14 +646,6 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         return triangleIndex >= 0 &&
                triangleIndex < triangles.Count &&
                triangles[triangleIndex].IsFrontFacing;
-    }
-
-    private static bool NdcOutsideSameSide(Vector3 a, Vector3 b)
-    {
-        return (a.X < -1f && b.X < -1f) ||
-               (a.X > 1f && b.X > 1f) ||
-               (a.Y < -1f && b.Y < -1f) ||
-               (a.Y > 1f && b.Y > 1f);
     }
 
     private sealed class EdgePartitionBuffer

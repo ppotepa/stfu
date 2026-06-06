@@ -74,13 +74,7 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             };
 
             var seed = context.Settings.Seed + path.StableId * 17;
-            var passes = drawing.StrokeStyle switch
-            {
-                DefaultStrokeStyle.Pencil => 3,
-                DefaultStrokeStyle.Brush => 2,
-                DefaultStrokeStyle.ComicInk => 2,
-                _ => 1
-            };
+            var passes = StrokeHumanizationMath.PassCount(drawing.StrokeStyle.ToString());
             var count = CountStyledPathSegments(path, drawing, seed, drawing.StrokeStyle);
             _styledPaths[pathIndex] = new StyledPathInfo(path, lineStyle, layerIndex, passes, drawing, seed, drawing.StrokeStyle);
             _pathSegmentCounts[pathIndex] = count;
@@ -277,19 +271,14 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             return 0;
         }
 
-        var passes = style switch
-        {
-            DefaultStrokeStyle.Pencil => 3,
-            DefaultStrokeStyle.Brush => 2,
-            DefaultStrokeStyle.ComicInk => 2,
-            _ => 1
-        };
+        var styleName = style.ToString();
+        var passes = StrokeHumanizationMath.PassCount(styleName);
         var count = 0;
         for (var pass = 0; pass < passes; pass++)
         {
             for (var i = 1; i < path.Points.Count; i++)
             {
-                if (ShouldSkipSegment(path, drawing, style, seed, pass, i))
+                if (StrokeHumanizationMath.ShouldSkipSegment(styleName, i, seed, pass, drawing.EnableFastNoise))
                 {
                     continue;
                 }
@@ -314,6 +303,7 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 
         var drawing = info.Drawing;
         var style = drawing.StrokeStyle;
+        var styleName = style.ToString();
         var comic = style == DefaultStrokeStyle.ComicInk;
         var baseJitter = drawing.Jitter * (path.Type == DefaultLineKind.Feature ? 0.8f : 1f);
         var pressure = comic ? NumericMath.AtLeast((double)drawing.Pressure, 0.54d) : drawing.Pressure;
@@ -325,36 +315,17 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 
         for (var pass = 0; pass < info.Passes; pass++)
         {
-            var alpha = style switch
-            {
-                DefaultStrokeStyle.Pencil => 0.18f,
-                DefaultStrokeStyle.Brush => pass == 0 ? 0.28f : 0.75f,
-                DefaultStrokeStyle.ComicInk => pass == 0 ? 0.98f : 0.34f,
-                _ => 0.92f
-            };
-
-            var passJitter = style switch
-            {
-                DefaultStrokeStyle.Pencil => baseJitter * (1f + pass * 0.55f),
-                DefaultStrokeStyle.Brush => baseJitter * (pass == 0 ? 1.1f : 0.35f),
-                DefaultStrokeStyle.ComicInk => baseJitter * (pass == 0 ? 0.16f : 0.46f),
-                _ => baseJitter * 0.35f
-            };
-
-            var widthMultiplier = style switch
-            {
-                DefaultStrokeStyle.Pencil => 0.9f,
-                DefaultStrokeStyle.Brush => pass == 0 ? 1.6f : 0.85f,
-                DefaultStrokeStyle.ComicInk => pass == 0 ? 1.10f : 0.54f,
-                _ => 0.75f
-            };
+            var passStyle = StrokeHumanizationMath.Pass(styleName, baseJitter, pass);
+            var alpha = passStyle.Alpha;
+            var passJitter = passStyle.Jitter;
+            var widthMultiplier = passStyle.WidthMultiplier;
 
             BuildJitteredPoints(path.Points, startPoints, passJitter, info.Seed + pass * 11, drawing.EnableFastNoise);
             BuildJitteredPoints(path.Points, endPoints, passJitter, info.Seed + pass * 11 + 3, drawing.EnableFastNoise);
 
             for (var i = 1; i < pointCount; i++)
             {
-                if (ShouldSkipSegment(path, drawing, style, info.Seed, pass, i))
+                if (StrokeHumanizationMath.ShouldSkipSegment(styleName, i, info.Seed, pass, drawing.EnableFastNoise))
                 {
                     continue;
                 }
@@ -362,13 +333,9 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                 var start = startPoints[i - 1];
                 var end = endPoints[i];
                 var t = i / (double)NumericMath.AtLeast(pointCount - 1, 1);
-                var pressureNoise = 1d + pressure *
-                    ((NoiseMath.Noise01(t * 9d + pass * 1.7d, info.Seed, drawing.EnableFastNoise) - 0.5d) *
-                        (comic ? 1.25d : 1.7d));
-                var taper = comic
-                    ? 0.82d + 0.30d * NumericMath.Sin(NumericMath.Pi * t)
-                    : 1d;
-                var lineWidth = NumericMath.AtLeast(info.LineStyle.BaseWidth * widthMultiplier * pressureNoise * taper, 0.35d);
+                var pressureNoise = StrokeHumanizationMath.PressureNoise(pressure, t, info.Seed, pass, comic, drawing.EnableFastNoise);
+                var taper = StrokeHumanizationMath.Taper(t, comic);
+                var lineWidth = StrokeHumanizationMath.LineWidth(info.LineStyle.BaseWidth, widthMultiplier, pressureNoise, taper);
 
                 var segmentStyle = new StrokeStyle2D((float)lineWidth, NumericMath.Clamp01(alpha * info.LineStyle.BaseOpacity), info.LineStyle.StrokeColor);
                 destination[written++] = new StrokeSegment2D(
@@ -403,30 +370,6 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         {
             destination[i] = JitterPoint(points, i, amount, seed, fastNoise);
         }
-    }
-
-    private static bool ShouldSkipSegment(
-        in DefaultProjectedPath path,
-        DefaultDrawingSettings drawing,
-        DefaultStrokeStyle style,
-        int seed,
-        int pass,
-        int index)
-    {
-        var comic = style == DefaultStrokeStyle.ComicInk;
-        if (style == DefaultStrokeStyle.Pencil &&
-            NoiseMath.Noise01(index * 2.13d + pass, seed, drawing.EnableFastNoise) < 0.06d)
-        {
-            return true;
-        }
-
-        if (comic && pass == 1 &&
-            NoiseMath.Noise01(index * 3.81d, seed, drawing.EnableFastNoise) < 0.26d)
-        {
-            return true;
-        }
-
-        return false;
     }
 
     private static StyledLineInfo CreateLineStyle(STFU.NPR.Pipeline.NprContext context, DefaultLineKind lineKind)
@@ -531,20 +474,18 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         var point = points[index];
         var previous = points[NumericMath.AtLeast(index - 1, 0)];
         var next = points[NumericMath.AtMost(points.Count - 1, index + 1)];
-        var tx = next.X - previous.X;
-        var ty = next.Y - previous.Y;
-        var length = Geometry2D.SegmentLength(previous.X, previous.Y, next.X, next.Y);
-        if (length <= 1e-5f)
-        {
-            length = 1f;
-        }
-
-        var nx = -ty / length;
-        var ny = tx / length;
-        var noise = NoiseMath.Noise01(index * 5.31d, seed, fastNoise) - 0.5d;
-        return new Point2D(
-            point.X + nx * amount * (float)noise,
-            point.Y + ny * amount * (float)noise);
+        var jittered = StrokeHumanizationMath.JitterPoint(
+            point.X,
+            point.Y,
+            previous.X,
+            previous.Y,
+            next.X,
+            next.Y,
+            index,
+            amount,
+            seed,
+            fastNoise);
+        return new Point2D(jittered.X, jittered.Y);
     }
 
     private static NprStrokeIntent ToIntent(DefaultLineKind lineKind)

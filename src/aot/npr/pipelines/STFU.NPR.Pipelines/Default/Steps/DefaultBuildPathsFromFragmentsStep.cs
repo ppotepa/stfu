@@ -7,6 +7,9 @@ namespace STFU.NPR.Pipeline.Default.Steps;
 
 public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprStep
 {
+    private static readonly Func<Point2D, float> GetX = static point => point.X;
+    private static readonly Func<Point2D, float> GetY = static point => point.Y;
+
     private const float Quantization = 2.5f;
     private readonly List<DefaultLineFragment> _silhouette = [];
     private readonly List<DefaultLineFragment> _feature = [];
@@ -204,7 +207,7 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
             return;
         }
 
-        var length = DefaultPointPathAdapter.PathLength(points);
+        var length = PathMath.PathLength(points, GetX, GetY);
         unchecked
         {
             var stableId = ((int)lineKind * 73856093) ^ (pathIndex * 19349663);

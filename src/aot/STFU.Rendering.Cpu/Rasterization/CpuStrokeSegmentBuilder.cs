@@ -138,27 +138,24 @@ public static class CpuStrokeSegmentBuilder
 
         const float dash = 6f;
         const float gap = 4f;
-        var dx = end.X - start.X;
-        var dy = end.Y - start.Y;
-        var length = Geometry2D.SegmentLength(start.X, start.Y, end.X, end.Y);
-        if (length <= 0.001f)
+        if (!StrokeDashMath.TryCreateBasis(start.X, start.Y, end.X, end.Y, out var basis))
         {
             return;
         }
 
-        var ux = dx / length;
-        var uy = dy / length;
-        for (var offset = 0f; offset < length; offset += dash + gap)
+        for (var offset = 0f; offset < basis.Length; offset = StrokeDashMath.Advance(offset, dash, gap))
         {
             var a = offset;
-            var b = NumericMath.AtMost(offset + dash, length);
+            var b = StrokeDashMath.ClampDashEnd(offset, dash, basis.Length);
             if (b <= a)
             {
                 continue;
             }
 
-            var s = new Point2D(start.X + ux * a, start.Y + uy * a);
-            var e = new Point2D(start.X + ux * b, start.Y + uy * b);
+            var startPoint = StrokeDashMath.PointAtDistance(start.X, start.Y, basis, a);
+            var endPoint = StrokeDashMath.PointAtDistance(start.X, start.Y, basis, b);
+            var s = new Point2D(startPoint.X, startPoint.Y);
+            var e = new Point2D(endPoint.X, endPoint.Y);
             output.Add(new CpuStrokeSegment(s, e, color, thickness, opacity, order++));
         }
     }

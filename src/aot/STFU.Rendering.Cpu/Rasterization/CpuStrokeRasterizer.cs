@@ -327,10 +327,7 @@ public sealed class CpuStrokeRasterizer
         var ay = segment.Start.Y;
         var bx = segment.End.X;
         var by = segment.End.Y;
-        var dx = bx - ax;
-        var dy = by - ay;
-        var lenSq = dx * dx + dy * dy;
-        if (lenSq <= 0.000001f)
+        if (!StrokeRasterCoverageMath.TryProjectPointToSegment(ax, ay, bx, by, ax, ay, out _))
         {
             return;
         }
@@ -346,21 +343,17 @@ public sealed class CpuStrokeRasterizer
             for (var x = minX; x <= maxX; x++)
             {
                 var px = x + 0.5f;
-                var t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
-                t = NumericMath.Clamp01(t);
-                var cx = ax + dx * t;
-                var cy = ay + dy * t;
-                var ddx = px - cx;
-                var ddy = py - cy;
-                var distanceSq = ddx * ddx + ddy * ddy;
-                if (distanceSq >= maxDistanceSq)
+                if (!StrokeRasterCoverageMath.TryProjectPointToSegment(ax, ay, bx, by, px, py, out var projection) ||
+                    projection.DistanceSquared >= maxDistanceSq)
                 {
                     continue;
                 }
 
-                var coverage = quality.AntialiasLines
-                    ? NumericMath.Clamp01((radius + softness - NumericMath.Sqrt(distanceSq)) / softness)
-                    : 1f;
+                var coverage = StrokeRasterCoverageMath.Coverage(
+                    projection.DistanceSquared,
+                    radius,
+                    softness,
+                    quality.AntialiasLines);
 
                 if (coverage <= 0f)
                 {

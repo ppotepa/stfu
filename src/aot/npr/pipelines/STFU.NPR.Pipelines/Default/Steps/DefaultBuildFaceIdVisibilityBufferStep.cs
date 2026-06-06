@@ -360,7 +360,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         var b = vertices[triangle.B];
         var c = vertices[triangle.C];
 
-                if (Geometry3D.TriangleOutsideClip(a.Ndc, b.Ndc, c.Ndc))
+                if (ClipSpaceMath.TriangleOutsideCanonicalClip(a.Ndc, b.Ndc, c.Ndc))
         {
             return default;
         }
@@ -443,7 +443,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             var b = vertexSpan[triangle.B];
             var c = vertexSpan[triangle.C];
 
-            if (Geometry3D.TriangleOutsideClip(a.Ndc, b.Ndc, c.Ndc))
+            if (ClipSpaceMath.TriangleOutsideCanonicalClip(a.Ndc, b.Ndc, c.Ndc))
             {
                 continue;
             }
@@ -559,10 +559,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
                             var currentDepth = *depthCursor;
                             var currentFace = *faceCursor;
 
-                            if (depth is >= 0f and <= 1f &&
-                                (currentFace < 0 ||
-                                 depth < currentDepth ||
-                                 (NumericMath.Abs(depth - currentDepth) <= 1e-7f && triangleIndex < currentFace)))
+                            if (RasterDepthMath.ShouldWriteDepth(depth, currentDepth, triangleIndex, currentFace))
                             {
                                 *depthCursor = depth;
                                 *faceCursor = triangleIndex;
@@ -602,10 +599,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
                             var currentDepth = *depthCursor;
                             var currentFace = *faceCursor;
 
-                            if (depth is >= 0f and <= 1f &&
-                                (currentFace < 0 ||
-                                 depth < currentDepth ||
-                                 (NumericMath.Abs(depth - currentDepth) <= 1e-7f && triangleIndex < currentFace)))
+                            if (RasterDepthMath.ShouldWriteDepth(depth, currentDepth, triangleIndex, currentFace))
                             {
                                 *depthCursor = depth;
                                 *faceCursor = triangleIndex;
@@ -687,7 +681,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
                     {
                         var depth = w0 * depthScale0 + w1 * depthScale1 + w2 * depthScale2;
 
-                        if (depth is >= 0f and <= 1f && depth < depthBuffer[rowIndex])
+                        if (RasterDepthMath.ShouldWriteDepth(depth, depthBuffer[rowIndex], triangleIndex, faceBuffer[rowIndex]))
                         {
                             depthBuffer[rowIndex] = depth;
                             faceBuffer[rowIndex] = triangleIndex;
@@ -722,7 +716,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
                     {
                         var depth = w0 * depthScale0 + w1 * depthScale1 + w2 * depthScale2;
 
-                        if (depth is >= 0f and <= 1f && depth < depthBuffer[rowIndex])
+                        if (RasterDepthMath.ShouldWriteDepth(depth, depthBuffer[rowIndex], triangleIndex, faceBuffer[rowIndex]))
                         {
                             depthBuffer[rowIndex] = depth;
                             faceBuffer[rowIndex] = triangleIndex;

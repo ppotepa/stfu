@@ -1,10 +1,15 @@
 using STFU.Common.Math;
 using STFU.NPR.Graph;
+using STFU.Strokes;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
 
 public sealed class DefaultApplyDrawProgressStep : STFU.NPR.Pipeline.INprStep
 {
+    private static readonly Func<Point2D, float> GetX = static point => point.X;
+    private static readonly Func<Point2D, float> GetY = static point => point.Y;
+    private static readonly Func<float, float, Point2D> CreatePoint = static (x, y) => new Point2D(x, y);
+
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
         context.Graph.DefaultDrawablePaths.Clear();
@@ -43,13 +48,13 @@ public sealed class DefaultApplyDrawProgressStep : STFU.NPR.Pipeline.INprStep
                 continue;
             }
 
-            var partial = DefaultPointPathAdapter.PartialPath(path.Points, remaining);
+            var partial = PathMath.PartialPath(path.Points, remaining, GetX, GetY, CreatePoint);
             if (partial.Count > 1)
             {
                 context.Graph.DefaultDrawablePaths.Add(path with
                 {
                     Points = partial,
-                    Length = DefaultPointPathAdapter.PathLength(partial)
+                    Length = PathMath.PathLength(partial, GetX, GetY)
                 });
             }
 

@@ -31,7 +31,7 @@ public static class PixelSurfaceDiff
             var rightRow = y * right.Stride;
             for (var x = 0; x < left.Width; x++)
             {
-                var offset = x * 4;
+                var offset = PixelMemoryMath.Bgra32ByteOffset(x);
                 var bDelta = MetricMath.AbsoluteDelta(left.Pixels[leftRow + offset], right.Pixels[rightRow + offset]);
                 var gDelta = MetricMath.AbsoluteDelta(left.Pixels[leftRow + offset + 1], right.Pixels[rightRow + offset + 1]);
                 var rDelta = MetricMath.AbsoluteDelta(left.Pixels[leftRow + offset + 2], right.Pixels[rightRow + offset + 2]);
@@ -50,28 +50,12 @@ public static class PixelSurfaceDiff
                 {
                     firstDifferentX = x;
                     firstDifferentY = y;
-                    firstDifferentChannel = FirstChannelName(bDelta, gDelta, rDelta, aDelta, tolerance);
+                    firstDifferentChannel = PixelDiffMath.FirstChannelName(bDelta, gDelta, rDelta, aDelta, tolerance);
                 }
 
-                if (bDelta > maxChannelDelta)
-                {
-                    maxChannelDelta = bDelta;
-                }
-
-                if (gDelta > maxChannelDelta)
-                {
-                    maxChannelDelta = gDelta;
-                }
-
-                if (rDelta > maxChannelDelta)
-                {
-                    maxChannelDelta = rDelta;
-                }
-
-                if (aDelta > maxChannelDelta)
-                {
-                    maxChannelDelta = aDelta;
-                }
+                maxChannelDelta = NumericMath.AtLeast(
+                    maxChannelDelta,
+                    PixelDiffMath.MaxChannelDelta(bDelta, gDelta, rDelta, aDelta));
             }
         }
 
@@ -84,30 +68,6 @@ public static class PixelSurfaceDiff
             firstDifferentChannel);
     }
 
-    private static string? FirstChannelName(int bDelta, int gDelta, int rDelta, int aDelta, byte tolerance)
-    {
-        if (bDelta > tolerance)
-        {
-            return "B";
-        }
-
-        if (gDelta > tolerance)
-        {
-            return "G";
-        }
-
-        if (rDelta > tolerance)
-        {
-            return "R";
-        }
-
-        if (aDelta > tolerance)
-        {
-            return "A";
-        }
-
-        return null;
-    }
 }
 
 public sealed record PixelSurfaceDiffResult(

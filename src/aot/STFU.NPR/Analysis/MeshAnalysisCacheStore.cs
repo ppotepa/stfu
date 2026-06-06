@@ -354,7 +354,7 @@ public sealed class MeshAnalysisCacheStore
         int secondTriangleIndex,
         bool isBoundary)
     {
-        var stableId = unchecked((triangleIndex * 397) ^ (edgeIndex * 131) ^ a ^ (b * 17));
+        var stableId = HashMath.StablePerTriangleEdge(triangleIndex, edgeIndex, a, b);
         return new DefaultNprTopologyEdge(
             stableId,
             a,
@@ -457,20 +457,19 @@ public sealed class MeshAnalysisCacheStore
 
                 var neighbor = mesh.Vertices[neighborIndex];
                 var delta = neighbor.Position - vertex.Position;
-                var tangentDelta = delta - vertexNormal * System.Numerics.Vector3.Dot(delta, vertexNormal);
-                if (tangentDelta.LengthSquared() <= 0.0001f)
+                if (CurvatureMath.TryComputeFlowContribution(
+                        delta,
+                        vertexNormal,
+                        vertexCurvature[vertexIndex],
+                        vertexCurvature[neighborIndex],
+                        out var contribution))
                 {
-                    continue;
+                    flow += contribution;
                 }
-
-                var weight = 0.35f + NumericMath.Abs(vertexCurvature[neighborIndex] - vertexCurvature[vertexIndex]) * 0.65f;
-                flow += System.Numerics.Vector3.Normalize(tangentDelta) * weight;
             }
 
             smoothedVertexCurvature[vertexIndex] = NumericMath.Clamp01(totalCurvature / (adjacent.Count + 1));
-            vertexDirections[vertexIndex] = flow.LengthSquared() <= 0.0001f
-                ? System.Numerics.Vector3.Zero
-                : System.Numerics.Vector3.Normalize(flow);
+            vertexDirections[vertexIndex] = CurvatureMath.NormalizeOrZero(flow);
         }
 
         var vertexSignedCurvature = new float[mesh.Vertices.Count];
@@ -495,21 +494,16 @@ public sealed class MeshAnalysisCacheStore
             {
                 var neighbor = mesh.Vertices[neighborIndex];
                 var delta = neighbor.Position - vertex.Position;
-                if (delta.LengthSquared() <= 0.0001f)
+                if (CurvatureMath.TryComputeSignedContribution(
+                        delta,
+                        vertexNormal,
+                        SafeNormal(neighbor.Normal),
+                        flowDirection,
+                        out var contribution))
                 {
-                    continue;
+                    signed += contribution;
+                    count++;
                 }
-
-                var tangentDelta = delta - vertexNormal * System.Numerics.Vector3.Dot(delta, vertexNormal);
-                if (tangentDelta.LengthSquared() <= 0.0001f)
-                {
-                    continue;
-                }
-
-                var directionAlignment = System.Numerics.Vector3.Dot(System.Numerics.Vector3.Normalize(tangentDelta), flowDirection);
-                var normalDelta = SafeNormal(neighbor.Normal) - vertexNormal;
-                signed += System.Numerics.Vector3.Dot(normalDelta, flowDirection) * directionAlignment;
-                count++;
             }
 
             vertexSignedCurvature[vertexIndex] = count == 0
@@ -566,9 +560,7 @@ public sealed class MeshAnalysisCacheStore
                 smoothedVertexSignedCurvature[triangle.C]) / 3f;
 
             var direction = vertexDirections[triangle.A] + vertexDirections[triangle.B] + vertexDirections[triangle.C];
-            triangleDirections[triangleIndex] = direction.LengthSquared() <= 0.0001f
-                ? System.Numerics.Vector3.Zero
-                : System.Numerics.Vector3.Normalize(direction);
+            triangleDirections[triangleIndex] = CurvatureMath.NormalizeOrZero(direction);
 
             var faceNormal = SafeNormal(
                 mesh.Vertices[triangle.A].Normal +
@@ -585,7 +577,7 @@ public sealed class MeshAnalysisCacheStore
                 smoothedTriangleSignedCurvature[triangleIndex],
                 triangleDirections[triangleIndex],
                 Vector3.Cross(faceNormal, triangleDirections[triangleIndex]),
-                ComputeCurvatureConfidence(smoothedTriangleCurvature[triangleIndex], triangleDirections[triangleIndex]));
+                CurvatureMath.Confidence(smoothedTriangleCurvature[triangleIndex], triangleDirections[triangleIndex]));
         }
 
         for (var vertexIndex = 0; vertexIndex < mesh.Vertices.Count; vertexIndex++)
@@ -600,7 +592,7 @@ public sealed class MeshAnalysisCacheStore
                 smoothedVertexSignedCurvature[vertexIndex],
                 direction1,
                 Vector3.Cross(normal, direction1),
-                ComputeCurvatureConfidence(smoothedVertexCurvature[vertexIndex], direction1));
+                CurvatureMath.Confidence(smoothedVertexCurvature[vertexIndex], direction1));
         }
 
         var meanEdgeLength = Geometry3D.MeanTriangleEdgeLength(
@@ -630,12 +622,6 @@ public sealed class MeshAnalysisCacheStore
             quality);
     }
 
-    private static float ComputeCurvatureConfidence(float curvature, Vector3 direction)
-    {
-        var directionFactor = direction.LengthSquared() <= 0.0001f ? 0.2f : 1f;
-        return NumericMath.Clamp01(curvature * 0.8f + directionFactor * 0.2f);
-    }
-
     private static CurvatureQuality ResolveCurvatureQuality(IReadOnlyList<float> smoothedVertexCurvature, IReadOnlyList<Vector3> vertexDirections)
     {
         if (smoothedVertexCurvature.Count == 0)
@@ -644,7 +630,7 @@ public sealed class MeshAnalysisCacheStore
         }
 
         var avgCurvature = smoothedVertexCurvature.Average();
-        var directionalFraction = vertexDirections.Count(direction => direction.LengthSquared() > 0.0001f) / (float)NumericMath.AtLeast(vertexDirections.Count, 1);
+        var directionalFraction = CurvatureMath.DirectionalFraction(vertexDirections);
 
         if (avgCurvature >= 0.12f && directionalFraction >= 0.45f)
         {
@@ -724,7 +710,7 @@ public sealed class MeshAnalysisCacheStore
         if (!edges.TryGetValue(key, out var edge))
         {
             edge = new PendingDefaultNprEdge(
-                unchecked((triangleIndex * 397) ^ (a * 17) ^ b),
+                HashMath.StableUndirectedEdge(triangleIndex, a, b),
                 min,
                 max,
                 triangleIndex,

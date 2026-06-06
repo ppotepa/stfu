@@ -9,12 +9,12 @@ public static class CpuPixelBlender
 {
     public static void Clear(PixelSurface surface, StrokeColor color, byte alpha = 255)
     {
-        var r = Premultiply(color.R, alpha);
-        var g = Premultiply(color.G, alpha);
-        var b = Premultiply(color.B, alpha);
-        var packed = (uint)(b | (g << 8) | (r << 16) | (alpha << 24));
+        var r = ColorBlendMath.Premultiply(color.R, alpha);
+        var g = ColorBlendMath.Premultiply(color.G, alpha);
+        var b = ColorBlendMath.Premultiply(color.B, alpha);
+        var packed = ColorBlendMath.PackBgra32Premultiplied(color.R, color.G, color.B, alpha);
 
-        if (BitConverter.IsLittleEndian && surface.Stride == surface.Width * 4)
+        if (PixelMemoryMath.CanFillContiguousBgra32AsPackedUInt32(surface.Width, surface.Stride))
         {
             MemoryMarshal.Cast<byte, uint>(surface.Span).Fill(packed);
             return;
@@ -23,7 +23,7 @@ public static class CpuPixelBlender
         for (var y = 0; y < surface.Height; y++)
         {
             var row = surface.Span.Slice(y * surface.Stride, surface.Width * 4);
-            if (BitConverter.IsLittleEndian)
+            if (PixelMemoryMath.CanFillBgra32RowAsPackedUInt32())
             {
                 MemoryMarshal.Cast<byte, uint>(row).Fill(packed);
                 continue;
@@ -31,7 +31,7 @@ public static class CpuPixelBlender
 
             for (var x = 0; x < surface.Width; x++)
             {
-                var i = x * 4;
+                var i = PixelMemoryMath.Bgra32ByteOffset(x);
                 row[i] = b;
                 row[i + 1] = g;
                 row[i + 2] = r;
@@ -59,17 +59,15 @@ public static class CpuPixelBlender
         }
 
         var srcA = NumericMath.UnitToByte(alpha);
-        var srcB = Premultiply(color.B, srcA);
-        var srcG = Premultiply(color.G, srcA);
-        var srcR = Premultiply(color.R, srcA);
-        var dstIndex = y * surface.Stride + x * 4;
+        var srcB = ColorBlendMath.Premultiply(color.B, srcA);
+        var srcG = ColorBlendMath.Premultiply(color.G, srcA);
+        var srcR = ColorBlendMath.Premultiply(color.R, srcA);
+        var dstIndex = y * surface.Stride + PixelMemoryMath.Bgra32ByteOffset(x);
         var pixels = surface.Pixels;
-        var invA = 255 - srcA;
-
-        pixels[dstIndex] = NumericMath.SaturatingAddByte(srcB, pixels[dstIndex] * invA / 255);
-        pixels[dstIndex + 1] = NumericMath.SaturatingAddByte(srcG, pixels[dstIndex + 1] * invA / 255);
-        pixels[dstIndex + 2] = NumericMath.SaturatingAddByte(srcR, pixels[dstIndex + 2] * invA / 255);
-        pixels[dstIndex + 3] = NumericMath.SaturatingAddByte(srcA, pixels[dstIndex + 3] * invA / 255);
+        pixels[dstIndex] = ColorBlendMath.SourceOverChannel(srcB, pixels[dstIndex], srcA);
+        pixels[dstIndex + 1] = ColorBlendMath.SourceOverChannel(srcG, pixels[dstIndex + 1], srcA);
+        pixels[dstIndex + 2] = ColorBlendMath.SourceOverChannel(srcR, pixels[dstIndex + 2], srcA);
+        pixels[dstIndex + 3] = ColorBlendMath.SourceOverChannel(srcA, pixels[dstIndex + 3], srcA);
     }
 
     public static void BlendSourceOverBgraPremultiplied(
@@ -86,18 +84,12 @@ public static class CpuPixelBlender
             return;
         }
 
-        var dstIndex = y * surface.Stride + x * 4;
+        var dstIndex = y * surface.Stride + PixelMemoryMath.Bgra32ByteOffset(x);
         var pixels = surface.Pixels;
-        var invA = 255 - alpha;
-
-        pixels[dstIndex] = NumericMath.SaturatingAddByte(premulB, pixels[dstIndex] * invA / 255);
-        pixels[dstIndex + 1] = NumericMath.SaturatingAddByte(premulG, pixels[dstIndex + 1] * invA / 255);
-        pixels[dstIndex + 2] = NumericMath.SaturatingAddByte(premulR, pixels[dstIndex + 2] * invA / 255);
-        pixels[dstIndex + 3] = NumericMath.SaturatingAddByte(alpha, pixels[dstIndex + 3] * invA / 255);
+        pixels[dstIndex] = ColorBlendMath.SourceOverChannel(premulB, pixels[dstIndex], alpha);
+        pixels[dstIndex + 1] = ColorBlendMath.SourceOverChannel(premulG, pixels[dstIndex + 1], alpha);
+        pixels[dstIndex + 2] = ColorBlendMath.SourceOverChannel(premulR, pixels[dstIndex + 2], alpha);
+        pixels[dstIndex + 3] = ColorBlendMath.SourceOverChannel(alpha, pixels[dstIndex + 3], alpha);
     }
 
-    public static byte Premultiply(byte color, byte alpha)
-    {
-        return (byte)(color * alpha / 255);
-    }
 }

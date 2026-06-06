@@ -113,6 +113,22 @@ public static class HashMath
         }
     }
 
+    public static int StablePerTriangleEdge(int triangleStableId, int edgeIndex, int startVertexIndex, int endVertexIndex)
+    {
+        unchecked
+        {
+            return (triangleStableId * 397) ^ (edgeIndex * 131) ^ startVertexIndex ^ (endVertexIndex * 17);
+        }
+    }
+
+    public static int StableUndirectedEdge(int triangleStableId, int startVertexIndex, int endVertexIndex)
+    {
+        unchecked
+        {
+            return (triangleStableId * 397) ^ (startVertexIndex * 17) ^ endVertexIndex;
+        }
+    }
+
     public static int StableSequence31(int a, int b, int c)
     {
         unchecked
