@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.Strokes;
 
 namespace STFU.NPR.Graph;
@@ -26,7 +27,7 @@ public sealed class NprStroke
         Visibility = visibility;
         Tone = tone;
         Density = density;
-        ScreenLength = MeasureLength(Points);
+        ScreenLength = PathMath.PathLength(Points, static point => point.X, static point => point.Y);
     }
 
     public int StableId { get; }
@@ -57,17 +58,4 @@ public sealed class NprStroke
 
     public StrokeColor Color { get; set; } = StrokeColor.Black;
 
-    private static float MeasureLength(IReadOnlyList<Point2D> points)
-    {
-        var length = 0f;
-
-        for (var index = 1; index < points.Count; index++)
-        {
-            var dx = points[index].X - points[index - 1].X;
-            var dy = points[index].Y - points[index - 1].Y;
-            length += MathF.Sqrt(dx * dx + dy * dy);
-        }
-
-        return length;
-    }
 }

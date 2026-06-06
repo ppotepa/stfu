@@ -6,6 +6,9 @@ namespace STFU.NPR.Temporal;
 
 public sealed class FrameHistoryState
 {
+    private readonly Dictionary<int, List<VisibilitySegment>> _segmentGroups = [];
+    private readonly Dictionary<int, StrokePath2D> _pathsByStableId = [];
+
     public int LastFrameId => Latest?.PreviousFrameId ?? 0;
 
     public FrameHistory? Latest { get; private set; }
@@ -29,30 +32,53 @@ public sealed class FrameHistoryState
     {
         var previous = Latest;
         var curves = new Dictionary<int, PreviousFeatureCurve>(graph.Curves.Count);
-        var groupedSegments = graph.VisibilitySegments
-            .GroupBy(segment => segment.FeatureCurveId)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<VisibilitySegment>)group.ToArray());
-
-        foreach (var curve in graph.Curves)
+        _segmentGroups.Clear();
+        for (var i = 0; i < graph.VisibilitySegments.Count; i++)
         {
+            var segment = graph.VisibilitySegments[i];
+            if (!_segmentGroups.TryGetValue(segment.FeatureCurveId, out var list))
+            {
+                list = [];
+                _segmentGroups.Add(segment.FeatureCurveId, list);
+            }
+
+            list.Add(segment);
+        }
+
+        for (var i = 0; i < graph.Curves.Count; i++)
+        {
+            var curve = graph.Curves[i];
             curves[curve.StableId] = new PreviousFeatureCurve(
                 curve.StableId,
                 curve.Kind,
                 curve.Source,
                 curve.Points.ToArray(),
-                groupedSegments.GetValueOrDefault(curve.StableId, Array.Empty<VisibilitySegment>()),
+                _segmentGroups.TryGetValue(curve.StableId, out var segments)
+                    ? segments.ToArray()
+                    : Array.Empty<VisibilitySegment>(),
                 graph.GetSalience(curve.StableId, curve.Importance));
         }
 
-        var pathsByStableId = frame.Paths
-            .Where(path => path.Metadata is not null)
-            .GroupBy(path => path.Metadata!.Value.StableId)
-            .ToDictionary(group => group.Key, group => group.First());
+        _pathsByStableId.Clear();
+        for (var i = 0; i < frame.Paths.Count; i++)
+        {
+            var path = frame.Paths[i];
+            if (path.Metadata is not StrokeMetadata metadata)
+            {
+                continue;
+            }
+
+            if (!_pathsByStableId.ContainsKey(metadata.StableId))
+            {
+                _pathsByStableId.Add(metadata.StableId, path);
+            }
+        }
 
         var strokes = new Dictionary<int, PreviousStroke>(graph.StyledStrokes.Count);
-        foreach (var styled in graph.StyledStrokes)
+        for (var i = 0; i < graph.StyledStrokes.Count; i++)
         {
-            if (!pathsByStableId.TryGetValue(styled.StableId, out var path))
+            var styled = graph.StyledStrokes[i];
+            if (!_pathsByStableId.TryGetValue(styled.StableId, out var path))
             {
                 continue;
             }

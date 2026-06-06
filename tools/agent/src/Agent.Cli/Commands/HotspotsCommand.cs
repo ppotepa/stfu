@@ -19,10 +19,15 @@ public static class HotspotsCommand
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var files = options.FromStdin
-            ? StdinItems.ReadLocations().Select(location => Path.Combine(root, location.File)).Where(File.Exists).Distinct().ToArray()
+            ? StdinItems.ReadLocations()
+                .Select(location => Path.GetFullPath(Path.Combine(root, location.File)))
+                .Where(File.Exists)
+                .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                .Where(path => PathFilter.IsAllowedForConcat(root, config, options, path, out _))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
             : Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
-                .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-                .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+                .Where(path => !PathFilter.IsHardExcluded(Path.GetRelativePath(root, path), config))
                 .ToArray();
 
         foreach (var file in files)

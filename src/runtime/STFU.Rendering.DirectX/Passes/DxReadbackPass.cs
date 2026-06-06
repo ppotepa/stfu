@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using STFU.Common.Math;
 using STFU.Rendering.Abstractions.Gpu;
 using STFU.Rendering.Abstractions.Surfaces;
 using STFU.Rendering.DirectX.Device;
@@ -26,42 +27,32 @@ public sealed class DxReadbackPass
             throw new InvalidOperationException("GPU texture handle could not be resolved for readback.");
         }
 
-        var desc = resource.Texture.Description;
-        var stagingDesc = new Texture2DDescription
+        using (_device.Lock())
         {
-            Width = desc.Width,
-            Height = desc.Height,
-            MipLevels = 1,
-            ArraySize = 1,
-            Format = desc.Format,
-            SampleDescription = new Vortice.DXGI.SampleDescription(1, 0),
-            Usage = ResourceUsage.Staging,
-            BindFlags = BindFlags.None,
-            CPUAccessFlags = CpuAccessFlags.Read,
-            MiscFlags = ResourceOptionFlags.None
-        };
-
-        using var staging = _device.Device.CreateTexture2D(stagingDesc);
-        _device.Context.CopyResource(staging, resource.Texture);
-        var mapped = _device.Context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
-        try
-        {
-            var lease = _surfacePool.Rent(handle.Width, handle.Height, PixelSurfaceFormat.Bgra8888Premultiplied);
-            var surface = lease.Surface;
-            var rowBytes = Math.Min(surface.Stride, (int)mapped.RowPitch);
-
-            for (var y = 0; y < surface.Height; y++)
+            var desc = resource.Texture.Description;
+            using var stagingLease = _device.ReadbackTexturePool.Rent((int)desc.Width, (int)desc.Height, desc.Format);
+            var staging = stagingLease.Texture;
+            _device.Context.CopyResource(staging, resource.Texture);
+            var mapped = _device.Context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None);
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var source = IntPtr.Add(mapped.DataPointer, y * (int)mapped.RowPitch);
-                Marshal.Copy(source, surface.Pixels, y * surface.Stride, rowBytes);
-            }
+                var lease = _surfacePool.Rent(handle.Width, handle.Height, PixelSurfaceFormat.Bgra8888Premultiplied);
+                var surface = lease.Surface;
+                var rowBytes = NumericMath.AtMost(surface.Stride, (int)mapped.RowPitch);
 
-            return lease;
-        }
-        finally
-        {
-            _device.Context.Unmap(staging, 0);
+                for (var y = 0; y < surface.Height; y++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var source = IntPtr.Add(mapped.DataPointer, y * (int)mapped.RowPitch);
+                    Marshal.Copy(source, surface.Pixels, y * surface.Stride, rowBytes);
+                }
+
+                return lease;
+            }
+            finally
+            {
+                _device.Context.Unmap(staging, 0);
+            }
         }
     }
 }

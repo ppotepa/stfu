@@ -10,6 +10,7 @@
     <ProjectReference Include="..\STFU.Assets\STFU.Assets.csproj" />
     <ProjectReference Include="..\STFU.Camera\STFU.Camera.csproj" />
     <ProjectReference Include="..\STFU.Mesh\STFU.Mesh.csproj" />
+    <ProjectReference Include="..\STFU.Parallelism\STFU.Parallelism.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

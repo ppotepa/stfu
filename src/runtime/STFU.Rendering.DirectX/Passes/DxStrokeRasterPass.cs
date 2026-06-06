@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using STFU.Rendering.Abstractions.Diagnostics;
+using STFU.Common.Math;
 using STFU.Rendering.Abstractions.Requests;
+using STFU.Rendering.DirectX.Diagnostics;
 using STFU.Rendering.DirectX.Device;
 using STFU.Rendering.DirectX.Upload;
 using STFU.Strokes;
@@ -16,6 +18,11 @@ public sealed class DxStrokeRasterPass : IDisposable
     private readonly ID3D11VertexShader _vertexShader;
     private readonly ID3D11PixelShader _pixelShader;
     private readonly ID3D11Buffer _frameConstants;
+    private readonly List<DxStrokeInstance> _instances = [];
+    private readonly List<DxStrokeInstanceBuilder.PathSortEntry> _sortScratch = [];
+    private ID3D11Buffer? _instanceBuffer;
+    private ID3D11ShaderResourceView? _instanceBufferSrv;
+    private int _instanceCapacity;
     private bool _disposed;
 
     public DxStrokeRasterPass(DirectXDevice device)
@@ -26,6 +33,7 @@ public sealed class DxStrokeRasterPass : IDisposable
         var vertexShaderBytes = DirectXShaderCompiler.CompileFromFile("stroke_raster.hlsl", "VS", "vs_5_0");
         var pixelShaderBytes = DirectXShaderCompiler.CompileFromFile("stroke_raster.hlsl", "PS", "ps_5_0");
 
+        using (_device.Lock())
         unsafe
         {
             fixed (byte* vsPtr = vertexShaderBytes)
@@ -62,6 +70,8 @@ public sealed class DxStrokeRasterPass : IDisposable
         var instances = DxStrokeInstanceBuilder.Build(
             paths,
             opacityScale,
+            _instances,
+            _sortScratch,
             request.Quality.PreserveLayerOrdering);
         buildWatch.Stop();
         diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}");
@@ -71,38 +81,113 @@ public sealed class DxStrokeRasterPass : IDisposable
             return;
         }
 
-        unsafe
+        using (_device.Lock())
         {
-            using var upload = CreateStructuredBuffer(instances);
-            var uploadWatch = Stopwatch.StartNew();
-            using var srv = CreateStructuredBufferSrv(upload, instances.Count);
+            unsafe
+            {
+                var uploadWatch = Stopwatch.StartNew();
+                var bufferRecreated = EnsureInstanceBufferCapacity(instances.Count);
+                UploadInstances(instances);
+                var uploadedBytes = instances.Count * DxStrokeInstance.SizeInBytes;
 
-            var constants = stackalloc float[8];
-            constants[0] = request.Width;
-            constants[1] = request.Height;
-            constants[2] = 1f / Math.Max(1, request.Width);
-            constants[3] = 1f / Math.Max(1, request.Height);
-            constants[4] = MathF.Max(0.25f, request.Quality.GpuStrokeCoverageSoftness);
-            _device.Context.UpdateSubresource(_frameConstants, 0, null, (IntPtr)constants, 0, 0);
-            uploadWatch.Stop();
-            diagnostics.AddTiming("GpuStrokeUpload", uploadWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}");
+                var constants = stackalloc float[8];
+                constants[0] = request.Width;
+                constants[1] = request.Height;
+                constants[2] = NumericMath.InverseAtLeast(request.Width);
+                constants[3] = NumericMath.InverseAtLeast(request.Height);
+                constants[4] = NumericMath.AtLeast(request.Quality.GpuStrokeCoverageSoftness, 0.25f);
+                _device.Context.UpdateSubresource(_frameConstants, 0, null, (IntPtr)constants, 0, 0);
+                uploadWatch.Stop();
+                diagnostics.AddTiming("GpuStrokeUpload", uploadWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, bytes={uploadedBytes}, recreated={(bufferRecreated ? 1 : 0)}");
+            }
 
-            var drawWatch = Stopwatch.StartNew();
-            _device.Context.OMSetRenderTargets(target.RenderTargetView);
-            _device.Context.RSSetViewport(0, 0, request.Width, request.Height);
-            _device.Context.IASetPrimitiveTopology(Vortice.Direct3D.PrimitiveTopology.TriangleList);
-            _device.Context.IASetInputLayout(null);
-            _device.Context.VSSetShader(_vertexShader);
-            _device.Context.PSSetShader(_pixelShader);
-            _device.Context.VSSetConstantBuffer(0, _frameConstants);
-            _device.Context.VSSetShaderResource(0, srv);
-            _device.Context.OMSetBlendState(_states.PremultipliedAlphaBlend);
-            _device.Context.RSSetState(_states.NoCullRasterizer);
-            _device.Context.OMSetDepthStencilState(_states.DepthDisabled);
-            _device.Context.DrawInstanced(6, (uint)instances.Count, 0, 0);
-            _device.Context.VSSetShaderResource(0, null!);
-            drawWatch.Stop();
-            diagnostics.AddTiming("GpuStrokeDraw", drawWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}");
+            using (new DirectXGpuTimer(_device, request.Budget.EnableGpuTiming).Measure(
+                       (milliseconds, mode) => diagnostics.AddTiming(
+                           "GpuStrokeDraw",
+                           milliseconds,
+                           $"instances={instances.Count}, mode={mode}")))
+            {
+                _device.Context.OMSetRenderTargets(target.RenderTargetView);
+                _device.Context.RSSetViewport(0, 0, request.Width, request.Height);
+                _device.Context.IASetPrimitiveTopology(Vortice.Direct3D.PrimitiveTopology.TriangleList);
+                _device.Context.IASetInputLayout(null);
+                _device.Context.VSSetShader(_vertexShader);
+                _device.Context.PSSetShader(_pixelShader);
+                _device.Context.VSSetConstantBuffer(0, _frameConstants);
+                _device.Context.VSSetShaderResource(0, _instanceBufferSrv);
+                _device.Context.OMSetBlendState(_states.PremultipliedAlphaBlend);
+                _device.Context.RSSetState(_states.NoCullRasterizer);
+                _device.Context.OMSetDepthStencilState(_states.DepthDisabled);
+                _device.Context.DrawInstanced(6, (uint)instances.Count, 0, 0);
+                _device.Context.VSSetShaderResource(0, null!);
+            }
+        }
+    }
+
+    public void Execute(
+        DirectXTextureResource target,
+        NprRenderRequest request,
+        IReadOnlyList<StrokeSegment2D> segments,
+        float opacityScale,
+        NprRenderDiagnostics diagnostics,
+        CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var buildWatch = Stopwatch.StartNew();
+        var instances = DxStrokeInstanceBuilder.Build(
+            segments,
+            opacityScale,
+            _instances);
+        buildWatch.Stop();
+        diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}");
+
+        if (instances.Count == 0 || target.RenderTargetView is null)
+        {
+            return;
+        }
+
+        using (_device.Lock())
+        {
+            unsafe
+            {
+                var uploadWatch = Stopwatch.StartNew();
+                var bufferRecreated = EnsureInstanceBufferCapacity(instances.Count);
+                UploadInstances(instances);
+                var uploadedBytes = instances.Count * DxStrokeInstance.SizeInBytes;
+
+                var constants = stackalloc float[8];
+                constants[0] = request.Width;
+                constants[1] = request.Height;
+                constants[2] = NumericMath.InverseAtLeast(request.Width);
+                constants[3] = NumericMath.InverseAtLeast(request.Height);
+                constants[4] = NumericMath.AtLeast(request.Quality.GpuStrokeCoverageSoftness, 0.25f);
+                _device.Context.UpdateSubresource(_frameConstants, 0, null, (IntPtr)constants, 0, 0);
+                uploadWatch.Stop();
+                diagnostics.AddTiming("GpuStrokeUpload", uploadWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, bytes={uploadedBytes}, recreated={(bufferRecreated ? 1 : 0)}");
+            }
+
+            using (new DirectXGpuTimer(_device, request.Budget.EnableGpuTiming).Measure(
+                       (milliseconds, mode) => diagnostics.AddTiming(
+                           "GpuStrokeDraw",
+                           milliseconds,
+                           $"instances={instances.Count}, mode={mode}")))
+            {
+                _device.Context.OMSetRenderTargets(target.RenderTargetView);
+                _device.Context.RSSetViewport(0, 0, request.Width, request.Height);
+                _device.Context.IASetPrimitiveTopology(Vortice.Direct3D.PrimitiveTopology.TriangleList);
+                _device.Context.IASetInputLayout(null);
+                _device.Context.VSSetShader(_vertexShader);
+                _device.Context.PSSetShader(_pixelShader);
+                _device.Context.VSSetConstantBuffer(0, _frameConstants);
+                _device.Context.VSSetShaderResource(0, _instanceBufferSrv);
+                _device.Context.OMSetBlendState(_states.PremultipliedAlphaBlend);
+                _device.Context.RSSetState(_states.NoCullRasterizer);
+                _device.Context.OMSetDepthStencilState(_states.DepthDisabled);
+                _device.Context.DrawInstanced(6, (uint)instances.Count, 0, 0);
+                _device.Context.VSSetShaderResource(0, null!);
+            }
         }
     }
 
@@ -114,29 +199,63 @@ public sealed class DxStrokeRasterPass : IDisposable
         }
 
         _disposed = true;
+        _instanceBufferSrv?.Dispose();
+        _instanceBuffer?.Dispose();
         _frameConstants.Dispose();
         _pixelShader.Dispose();
         _vertexShader.Dispose();
         _states.Dispose();
     }
 
-    private unsafe ID3D11Buffer CreateStructuredBuffer(List<DxStrokeInstance> instances)
+    private bool EnsureInstanceBufferCapacity(int instanceCount)
     {
+        if (_instanceBuffer is not null && instanceCount <= _instanceCapacity)
+        {
+            return false;
+        }
+
+        _instanceBufferSrv?.Dispose();
+        _instanceBuffer?.Dispose();
+
+        _instanceCapacity = NextCapacity(instanceCount);
         var desc = new BufferDescription
         {
-            ByteWidth = (uint)(instances.Count * DxStrokeInstance.SizeInBytes),
+            ByteWidth = (uint)(_instanceCapacity * DxStrokeInstance.SizeInBytes),
             BindFlags = BindFlags.ShaderResource,
-            Usage = ResourceUsage.Default,
-            CPUAccessFlags = CpuAccessFlags.None,
+            Usage = ResourceUsage.Dynamic,
+            CPUAccessFlags = CpuAccessFlags.Write,
             MiscFlags = ResourceOptionFlags.BufferStructured,
             StructureByteStride = DxStrokeInstance.SizeInBytes
         };
 
-        var array = CollectionsMarshal.AsSpan(instances);
-        fixed (DxStrokeInstance* ptr = array)
+        _instanceBuffer = _device.Device.CreateBuffer(desc);
+        _instanceBufferSrv = CreateStructuredBufferSrv(_instanceBuffer, _instanceCapacity);
+        return true;
+    }
+
+    private unsafe void UploadInstances(List<DxStrokeInstance> instances)
+    {
+        if (_instanceBuffer is null)
         {
-            var data = new SubresourceData((IntPtr)ptr, 0, 0);
-            return _device.Device.CreateBuffer(desc, data);
+            throw new InvalidOperationException("Stroke instance buffer is not initialized.");
+        }
+
+        var mapped = _device.Context.Map(_instanceBuffer, 0, MapMode.WriteDiscard, MapFlags.None);
+        try
+        {
+            var span = CollectionsMarshal.AsSpan(instances);
+            fixed (DxStrokeInstance* source = span)
+            {
+                Buffer.MemoryCopy(
+                    source,
+                    mapped.DataPointer.ToPointer(),
+                    (long)_instanceCapacity * DxStrokeInstance.SizeInBytes,
+                    (long)instances.Count * DxStrokeInstance.SizeInBytes);
+            }
+        }
+        finally
+        {
+            _device.Context.Unmap(_instanceBuffer, 0);
         }
     }
 
@@ -150,5 +269,16 @@ public sealed class DxStrokeRasterPass : IDisposable
             BufferExtendedShaderResourceViewFlags.None);
 
         return _device.Device.CreateShaderResourceView(buffer, desc);
+    }
+
+    private static int NextCapacity(int required)
+    {
+        var capacity = 4;
+        while (capacity < required)
+        {
+            capacity <<= 1;
+        }
+
+        return capacity;
     }
 }

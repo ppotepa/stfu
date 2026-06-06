@@ -2,6 +2,7 @@ using STFU.Abstractions.Loading;
 using STFU.Animation.Clips;
 using STFU.Animation.Skeleton;
 using STFU.Assets;
+using STFU.Common.Math;
 using STFU.Import;
 using STFU.Logging;
 
@@ -73,7 +74,7 @@ public sealed class FbxAssetLoader : IAssetLoader<string>
 
             var skeletons = LoadSkeletons(scene.DangerousGetHandle(), info);
             var animations = LoadAnimations(scene.DangerousGetHandle(), info);
-            var meshes = new List<ImportedMesh>(Math.Max(info.MeshCount, 0));
+            var meshes = new List<ImportedMesh>(NumericMath.AtLeast(info.MeshCount, 0));
             for (var i = 0; i < info.MeshCount; i++)
             {
                 var bakeStatus = FbxNative.BakeMeshAtTime(
@@ -195,7 +196,7 @@ public sealed class FbxAssetLoader : IAssetLoader<string>
                 continue;
             }
 
-            var duration = Math.Max(0, animation.TimeEnd - animation.TimeBegin);
+            var duration = NumericMath.AtLeast(animation.TimeEnd - animation.TimeBegin, 0d);
             animations.Add(new AnimationClip(animation.GetName(i), duration, 0, []));
         }
 

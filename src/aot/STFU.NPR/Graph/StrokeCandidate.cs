@@ -1,4 +1,5 @@
 using System.Numerics;
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Strokes;
 
@@ -22,19 +23,5 @@ public sealed record StrokeCandidate(
     HatchLayerKind? HatchLayerKind = null,
     EntityId EntityId = default)
 {
-    public float ScreenLength => MeasureLength(Points);
-
-    private static float MeasureLength(IReadOnlyList<Point2D> points)
-    {
-        var length = 0f;
-
-        for (var index = 1; index < points.Count; index++)
-        {
-            var dx = points[index].X - points[index - 1].X;
-            var dy = points[index].Y - points[index - 1].Y;
-            length += MathF.Sqrt(dx * dx + dy * dy);
-        }
-
-        return length;
-    }
+    public float ScreenLength => PathMath.PathLength(Points, static point => point.X, static point => point.Y);
 }

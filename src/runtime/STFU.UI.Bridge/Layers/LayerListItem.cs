@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.UI.Bridge.Binding;
 
 namespace STFU.UI.Bridge.Layers;
@@ -96,48 +97,48 @@ public sealed class LayerListItem : BindableObject
     public float Opacity
     {
         get => _opacity;
-        set => SetProperty(ref _opacity, Math.Clamp(value, 0f, 1f));
+        set => SetProperty(ref _opacity, NumericMath.Clamp01(value));
     }
 
     public float Density
     {
         get => _density;
-        set => SetProperty(ref _density, Math.Max(0f, value));
+        set => SetProperty(ref _density, NumericMath.AtLeast(value, 0f));
     }
 
     public float BaseThickness
     {
         get => _baseThickness;
-        set => SetProperty(ref _baseThickness, Math.Max(0.1f, value));
+        set => SetProperty(ref _baseThickness, NumericMath.AtLeast(value, 0.1f));
     }
 
     public float ThicknessVariation
     {
         get => _thicknessVariation;
-        set => SetProperty(ref _thicknessVariation, Math.Clamp(value, 0f, 1f));
+        set => SetProperty(ref _thicknessVariation, NumericMath.Clamp01(value));
     }
 
     public float EndpointJitter
     {
         get => _endpointJitter;
-        set => SetProperty(ref _endpointJitter, Math.Max(0f, value));
+        set => SetProperty(ref _endpointJitter, NumericMath.AtLeast(value, 0f));
     }
 
     public float Overshoot
     {
         get => _overshoot;
-        set => SetProperty(ref _overshoot, Math.Max(0f, value));
+        set => SetProperty(ref _overshoot, NumericMath.AtLeast(value, 0f));
     }
 
     public float FillCoverage
     {
         get => _fillCoverage;
-        set => SetProperty(ref _fillCoverage, Math.Clamp(value, 0f, 1f));
+        set => SetProperty(ref _fillCoverage, NumericMath.Clamp01(value));
     }
 
     public float ShadeThreshold
     {
         get => _shadeThreshold;
-        set => SetProperty(ref _shadeThreshold, Math.Clamp(value, 0f, 1f));
+        set => SetProperty(ref _shadeThreshold, NumericMath.Clamp01(value));
     }
 }

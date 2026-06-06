@@ -1,0 +1,192 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="STFU.UI.SettingsWindow"
+        Width="820"
+        Height="620"
+        MinWidth="760"
+        MinHeight="560"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        Title="Settings"
+        Background="{DynamicResource StfuBgBrush}">
+  <Border Padding="22">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="20">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+          <TextBlock Grid.Column="0"
+                     Text="Settings"
+                     FontSize="24"
+                     FontWeight="SemiBold"
+                     VerticalAlignment="Center" />
+          <Button Grid.Column="1"
+                  Content="Apply"
+                  MinWidth="88"
+                  Click="OnApplyClicked" />
+          <Button Grid.Column="2"
+                  Content="Close"
+                  MinWidth="88"
+                  Click="OnCloseClicked" />
+        </Grid>
+
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="16">
+          <Border Grid.Row="0"
+                  Grid.Column="0"
+                  Padding="14"
+                  Background="{DynamicResource StfuSurfaceBrush}"
+                  BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                  BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Backend" FontWeight="SemiBold" />
+              <ComboBox x:Name="BackendCombo"
+                        SelectionChanged="OnBackendSelectionChanged">
+                <ComboBoxItem Content="Auto" />
+                <ComboBoxItem Content="Full CPU" />
+                <ComboBoxItem Content="CPU + GPU" />
+              </ComboBox>
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="0"
+                  Grid.Column="1"
+                  Padding="14"
+                  Background="{DynamicResource StfuSurfaceBrush}"
+                  BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                  BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Presentation" FontWeight="SemiBold" />
+              <ComboBox x:Name="PresentationCombo"
+                        SelectionChanged="OnPresentationSelectionChanged">
+                <ComboBoxItem Content="Auto" />
+                <ComboBoxItem Content="Direct GPU" />
+                <ComboBoxItem Content="GPU Readback" />
+              </ComboBox>
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="1"
+                  Grid.Column="0"
+                  Padding="14"
+                  Background="{DynamicResource StfuSurfaceBrush}"
+                  BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                  BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Graphics API" FontWeight="SemiBold" />
+              <UniformGrid Columns="2">
+                <RadioButton x:Name="ApiAutoButton"
+                             GroupName="RendererApi"
+                             Content="Auto"
+                             Click="OnApiChecked" />
+                <RadioButton x:Name="ApiDirectX11Button"
+                             GroupName="RendererApi"
+                             Content="DirectX 11"
+                             Click="OnApiChecked" />
+                <RadioButton Content="Vulkan"
+                             IsEnabled="False" />
+                <RadioButton Content="OpenGL"
+                             IsEnabled="False" />
+                <RadioButton Content="Direct3D 12"
+                             IsEnabled="False" />
+              </UniformGrid>
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="1"
+                  Grid.Column="1"
+                  Padding="14"
+                  Background="{DynamicResource StfuSurfaceBrush}"
+                  BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                  BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Diagnostics" FontWeight="SemiBold" />
+              <CheckBox x:Name="ShowHudCheckBox"
+                        Content="Show renderer HUD"
+                        IsChecked="{Binding ShowRendererHud}" />
+              <CheckBox x:Name="GpuTimingsCheckBox"
+                        Content="Enable GPU timings"
+                        IsChecked="{Binding EnableGpuTimings}" />
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="2"
+                  Grid.Column="0"
+                  Padding="14"
+                  Background="{DynamicResource StfuSurfaceBrush}"
+                  BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                  BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Parallelism" FontWeight="SemiBold" />
+              <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                <TextBlock Grid.Column="0"
+                           Grid.Row="0"
+                           Text="Worker budget"
+                           VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1"
+                          Grid.Row="0"
+                          x:Name="WorkerBudgetCombo"
+                          SelectionChanged="OnWorkerBudgetSelectionChanged">
+                  <ComboBoxItem Content="Performance" />
+                  <ComboBoxItem Content="Balanced" />
+                  <ComboBoxItem Content="Max Performance" />
+                  <ComboBoxItem Content="Background Safe" />
+                  <ComboBoxItem Content="Single Thread Deterministic" />
+                  <ComboBoxItem Content="Benchmark" />
+                </ComboBox>
+                <TextBlock Grid.Column="0"
+                           Grid.Row="1"
+                           Text="Max workers"
+                           VerticalAlignment="Center" />
+                <NumericUpDown Grid.Column="1"
+                               Grid.Row="1"
+                               Value="{Binding MaxRenderWorkers, Mode=TwoWay}"
+                               Minimum="0"
+                               Maximum="{Binding ProcessorCount}"
+                               Increment="1"
+                               FormatString="0" />
+                <TextBlock Grid.Column="0"
+                           Grid.Row="2"
+                           Text="Tile parallelism"
+                           VerticalAlignment="Center" />
+                <CheckBox Grid.Column="1"
+                          Grid.Row="2"
+                          IsChecked="{Binding EnableTileParallelism}"
+                          VerticalAlignment="Center" />
+                <TextBlock Grid.Column="0"
+                           Grid.Row="3"
+                           Text="Resolved"
+                           Foreground="{DynamicResource StfuMutedBrush}"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Grid.Row="3"
+                           Text="{Binding ParallelismSummary}"
+                           Foreground="{DynamicResource StfuMutedBrush}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="2"
+                  Grid.Column="1"
+                  Padding="14"
+                  Background="{DynamicResource StfuSurfaceBrush}"
+                  BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                  BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Runtime Info" FontWeight="SemiBold" />
+              <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Backend" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding EffectiveBackend}" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="API" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding EffectiveApi}" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Presentation" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EffectivePresentation}" />
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Adapter" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding AdapterName}" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Status" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+              </Grid>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </StackPanel>
+    </ScrollViewer>
+  </Border>
+</Window>

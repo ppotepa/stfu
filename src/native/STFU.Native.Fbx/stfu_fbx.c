@@ -70,6 +70,80 @@ static ufbx_node *stfu_first_mesh_node(const ufbx_mesh *mesh)
     return mesh->instances.data[0];
 }
 
+static int stfu_get_source_scene_at_time(
+    stfu_fbx_scene *scene,
+    int animation_index,
+    float time_seconds,
+    ufbx_scene **out_source_scene)
+{
+    if (!scene || !scene->scene || !out_source_scene) {
+        return 1;
+    }
+
+    ufbx_scene *source_scene = scene->scene;
+
+    if (animation_index >= 0 && (size_t)animation_index < source_scene->anim_stacks.count) {
+        if (!scene->evaluated_scene ||
+            scene->cached_animation_index != animation_index ||
+            scene->cached_time_seconds != time_seconds) {
+            if (scene->evaluated_scene) {
+                ufbx_free_scene(scene->evaluated_scene);
+                scene->evaluated_scene = NULL;
+            }
+
+            ufbx_anim *anim = source_scene->anim_stacks.data[animation_index]->anim;
+            ufbx_evaluate_opts eval_opts;
+            memset(&eval_opts, 0, sizeof(eval_opts));
+            eval_opts.evaluate_skinning = true;
+            eval_opts.evaluate_caches = true;
+
+            ufbx_error eval_error;
+            scene->evaluated_scene = ufbx_evaluate_scene(source_scene, anim, (double)time_seconds, &eval_opts, &eval_error);
+            if (!scene->evaluated_scene) {
+                return 2;
+            }
+
+            scene->cached_animation_index = animation_index;
+            scene->cached_time_seconds = time_seconds;
+        }
+
+        source_scene = scene->evaluated_scene;
+    }
+
+    *out_source_scene = source_scene;
+    return 0;
+}
+
+static void stfu_fill_vertices(const ufbx_mesh *mesh, stfu_fbx_vertex *vertices)
+{
+    const ufbx_vertex_vec3 *positions = stfu_choose_positions(mesh);
+    const ufbx_vertex_vec3 *normals = stfu_choose_normals(mesh);
+    ufbx_node *node = stfu_first_mesh_node(mesh);
+    ufbx_matrix normal_matrix = node ? ufbx_matrix_for_normals(&node->geometry_to_world) : ufbx_identity_matrix;
+
+    for (size_t i = 0; i < mesh->num_indices; i++) {
+        ufbx_vec3 position = ufbx_get_vertex_vec3(positions, i);
+        ufbx_vec3 normal = normals->values.count > 0 && normals->indices.count > i
+            ? ufbx_get_vertex_vec3(normals, i)
+            : ufbx_zero_vec3;
+
+        if (node) {
+            position = ufbx_transform_position(&node->geometry_to_world, position);
+            normal = ufbx_transform_direction(&normal_matrix, normal);
+        }
+
+        vertices[i].x = (float)position.x;
+        vertices[i].y = (float)position.y;
+        vertices[i].z = (float)position.z;
+        vertices[i].normal_x = (float)normal.x;
+        vertices[i].normal_y = (float)normal.y;
+        vertices[i].normal_z = (float)normal.z;
+        vertices[i].logical_vertex_index = mesh->vertex_indices.count > i
+            ? (int)mesh->vertex_indices.data[i]
+            : (int)i;
+    }
+}
+
 static ufbx_node *stfu_first_bone_node(const ufbx_bone *bone)
 {
     if (!bone || bone->instances.count == 0) {
@@ -229,34 +303,10 @@ int stfu_fbx_bake_mesh_at_time(
 
     memset(out_mesh, 0, sizeof(*out_mesh));
 
-    ufbx_scene *source_scene = scene->scene;
-
-    if (animation_index >= 0 && (size_t)animation_index < source_scene->anim_stacks.count) {
-        if (!scene->evaluated_scene ||
-            scene->cached_animation_index != animation_index ||
-            scene->cached_time_seconds != time_seconds) {
-            if (scene->evaluated_scene) {
-                ufbx_free_scene(scene->evaluated_scene);
-                scene->evaluated_scene = NULL;
-            }
-
-            ufbx_anim *anim = source_scene->anim_stacks.data[animation_index]->anim;
-            ufbx_evaluate_opts eval_opts;
-            memset(&eval_opts, 0, sizeof(eval_opts));
-            eval_opts.evaluate_skinning = true;
-            eval_opts.evaluate_caches = true;
-
-            ufbx_error eval_error;
-            scene->evaluated_scene = ufbx_evaluate_scene(source_scene, anim, (double)time_seconds, &eval_opts, &eval_error);
-            if (!scene->evaluated_scene) {
-                return 2;
-            }
-
-            scene->cached_animation_index = animation_index;
-            scene->cached_time_seconds = time_seconds;
-        }
-
-        source_scene = scene->evaluated_scene;
+    ufbx_scene *source_scene = NULL;
+    int source_status = stfu_get_source_scene_at_time(scene, animation_index, time_seconds, &source_scene);
+    if (source_status != 0) {
+        return source_status;
     }
 
     if (mesh_index < 0 || (size_t)mesh_index >= source_scene->meshes.count) {
@@ -282,29 +332,7 @@ int stfu_fbx_bake_mesh_at_time(
         return 6;
     }
 
-    const ufbx_vertex_vec3 *positions = stfu_choose_positions(mesh);
-    const ufbx_vertex_vec3 *normals = stfu_choose_normals(mesh);
-    ufbx_node *node = stfu_first_mesh_node(mesh);
-    ufbx_matrix normal_matrix = node ? ufbx_matrix_for_normals(&node->geometry_to_world) : ufbx_identity_matrix;
-
-    for (size_t i = 0; i < mesh->num_indices; i++) {
-        ufbx_vec3 position = ufbx_get_vertex_vec3(positions, i);
-        ufbx_vec3 normal = normals->values.count > 0 && normals->indices.count > i
-            ? ufbx_get_vertex_vec3(normals, i)
-            : ufbx_zero_vec3;
-
-        if (node) {
-            position = ufbx_transform_position(&node->geometry_to_world, position);
-            normal = ufbx_transform_direction(&normal_matrix, normal);
-        }
-
-        out_mesh->vertices[i].x = (float)position.x;
-        out_mesh->vertices[i].y = (float)position.y;
-        out_mesh->vertices[i].z = (float)position.z;
-        out_mesh->vertices[i].normal_x = (float)normal.x;
-        out_mesh->vertices[i].normal_y = (float)normal.y;
-        out_mesh->vertices[i].normal_z = (float)normal.z;
-    }
+    stfu_fill_vertices(mesh, out_mesh->vertices);
 
     uint32_t *tri_indices = (uint32_t*)malloc(mesh->max_face_triangles * 3u * sizeof(uint32_t));
     if (!tri_indices) {
@@ -337,6 +365,54 @@ int stfu_fbx_bake_mesh_at_time(
 
     free(tri_indices);
 
+    return 0;
+}
+
+int stfu_fbx_bake_vertices_at_time_into(
+    stfu_fbx_scene *scene,
+    int mesh_index,
+    int animation_index,
+    float time_seconds,
+    stfu_fbx_vertex *vertex_dst,
+    int vertex_capacity,
+    int *out_vertex_count)
+{
+    if (out_vertex_count) {
+        *out_vertex_count = 0;
+    }
+
+    if (!scene || !scene->scene || !vertex_dst || vertex_capacity < 0) {
+        return 1;
+    }
+
+    ufbx_scene *source_scene = NULL;
+    int source_status = stfu_get_source_scene_at_time(scene, animation_index, time_seconds, &source_scene);
+    if (source_status != 0) {
+        return source_status;
+    }
+
+    if (mesh_index < 0 || (size_t)mesh_index >= source_scene->meshes.count) {
+        return 3;
+    }
+
+    const ufbx_mesh *mesh = source_scene->meshes.data[mesh_index];
+    if (!mesh || mesh->num_indices == 0) {
+        return 4;
+    }
+
+    if (mesh->num_indices > (size_t)INT32_MAX) {
+        return 5;
+    }
+
+    if (out_vertex_count) {
+        *out_vertex_count = (int)mesh->num_indices;
+    }
+
+    if (vertex_capacity < (int)mesh->num_indices) {
+        return 6;
+    }
+
+    stfu_fill_vertices(mesh, vertex_dst);
     return 0;
 }
 

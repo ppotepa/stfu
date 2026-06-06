@@ -9,6 +9,7 @@ namespace STFU.Assets;
 public sealed class AssetRegistry
 {
     private readonly Dictionary<MeshHandle, MeshData> _meshes = new();
+    private readonly Dictionary<MeshHandle, MeshAssetVersion> _meshVersions = new();
     private readonly Dictionary<SkinnedMeshHandle, SkinnedMeshData> _skinnedMeshes = new();
     private readonly Dictionary<SkeletonHandle, SkeletonData> _skeletons = new();
     private readonly Dictionary<AnimationClipHandle, AnimationClip> _animationClips = new();
@@ -21,7 +22,7 @@ public sealed class AssetRegistry
     public int MeshCount => _meshes.Count;
 
     public IEnumerable<AssetMeshEntry> MeshEntries => _meshesByPath
-        .Select(entry => new AssetMeshEntry(entry.Key, entry.Value, _meshes[entry.Value]));
+        .Select(entry => new AssetMeshEntry(entry.Key, entry.Value, _meshes[entry.Value], _meshVersions[entry.Value]));
 
     public int SkinnedMeshCount => _skinnedMeshes.Count;
 
@@ -33,6 +34,7 @@ public sealed class AssetRegistry
     {
         var handle = new MeshHandle(++_nextMeshId);
         _meshes[handle] = mesh;
+        _meshVersions[handle] = new MeshAssetVersion(1, 1);
         _meshesByPath[path] = handle;
         return handle;
     }
@@ -45,6 +47,34 @@ public sealed class AssetRegistry
         }
 
         _meshes[handle] = mesh;
+        var version = _meshVersions.GetValueOrDefault(handle);
+        _meshVersions[handle] = new MeshAssetVersion(
+            version.GeometryVersion + 1,
+            version.TopologyVersion + 1);
+        return true;
+    }
+
+    public bool UpdateMeshVertices(MeshHandle handle, ReadOnlySpan<MeshVertex> vertices)
+    {
+        if (!_meshes.TryGetValue(handle, out var mesh) ||
+            mesh.Vertices.Count != vertices.Length)
+        {
+            return false;
+        }
+
+        if (mesh.Vertices is MeshVertex[] target)
+        {
+            vertices.CopyTo(target);
+        }
+        else
+        {
+            _meshes[handle] = mesh with { Vertices = vertices.ToArray() };
+        }
+
+        var version = _meshVersions.GetValueOrDefault(handle);
+        _meshVersions[handle] = new MeshAssetVersion(
+            version.GeometryVersion + 1,
+            version.TopologyVersion);
         return true;
     }
 
@@ -74,6 +104,11 @@ public sealed class AssetRegistry
         return _meshes.TryGetValue(handle, out mesh!);
     }
 
+    public bool TryGetMeshVersion(MeshHandle handle, out MeshAssetVersion version)
+    {
+        return _meshVersions.TryGetValue(handle, out version);
+    }
+
     public bool TryGetSkinnedMesh(SkinnedMeshHandle handle, out SkinnedMeshData mesh)
     {
         return _skinnedMeshes.TryGetValue(handle, out mesh!);
@@ -98,4 +133,9 @@ public sealed class AssetRegistry
 public sealed record AssetMeshEntry(
     string Path,
     MeshHandle Handle,
-    MeshData Mesh);
+    MeshData Mesh,
+    MeshAssetVersion Version);
+
+public readonly record struct MeshAssetVersion(
+    int GeometryVersion,
+    int TopologyVersion);

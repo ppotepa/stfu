@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.Viewport.Snapshots;
 using STFU.NPR.Debug;
 using STFU.NPR.Rendering;
@@ -24,8 +25,8 @@ public sealed class ViewportState
 
     public void Resize(int width, int height)
     {
-        Width = Math.Max(1, width);
-        Height = Math.Max(1, height);
+        Width = NumericMath.AtLeast(width, 1);
+        Height = NumericMath.AtLeast(height, 1);
     }
 
     public void SetRenderMode(ViewportRenderMode renderMode)

@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\aot\STFU.Animation\STFU.Animation.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Assets\STFU.Assets.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Common\STFU.Common.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
     <ProjectReference Include="..\STFU.Import\STFU.Import.csproj" />
     <ProjectReference Include="..\STFU.Logging\STFU.Logging.csproj" />

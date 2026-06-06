@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\aot\STFU.Assets\STFU.Assets.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Common\STFU.Common.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Engine\STFU.Engine.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Mesh.IO\STFU.Mesh.IO.csproj" />

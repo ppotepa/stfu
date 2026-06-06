@@ -13,4 +13,6 @@ public sealed record NprLayerFrame(
     NprLayerBlendMode BlendMode,
     IReadOnlyList<NprToneSurface2D> Tones,
     IReadOnlyList<StrokePath2D> Shading,
-    IReadOnlyList<StrokePath2D> Strokes);
+    IReadOnlyList<StrokePath2D> Strokes,
+    IReadOnlyList<StrokeSegment2D>? ShadingSegments = null,
+    IReadOnlyList<StrokeSegment2D>? StrokeSegments = null);

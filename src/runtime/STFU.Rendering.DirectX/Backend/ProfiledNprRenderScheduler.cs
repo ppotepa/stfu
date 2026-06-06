@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using STFU.Logging;
-using STFU.Rendering.Abstractions.Diagnostics;
 using STFU.Rendering.Abstractions.Execution;
 using STFU.Rendering.Abstractions.Requests;
 
@@ -8,182 +6,102 @@ namespace STFU.Rendering.DirectX.Backend;
 
 public class ProfiledNprRenderScheduler : INprRenderScheduler
 {
-    private readonly DirectXRenderWorker _worker;
-    private readonly object _gate = new();
-    private readonly AutoResetEvent _signal = new(false);
-    private readonly Thread _thread;
-    private readonly CancellationTokenSource _disposeCts = new();
-    private CancellationTokenSource? _currentRenderCts;
-    private NprRenderRequest? _latestRequest;
-    private bool _disposed;
+    private readonly LatestNprRenderScheduler _scheduler;
 
     public ProfiledNprRenderScheduler(DirectXRenderWorker worker)
     {
-        _worker = worker;
-        _thread = new Thread(WorkerLoop)
-        {
-            IsBackground = true,
-            Name = "STFU Profiled NPR Render Worker"
-        };
-        _thread.Start();
+        ArgumentNullException.ThrowIfNull(worker);
+
+        _scheduler = new LatestNprRenderScheduler(
+            "STFU Profiled NPR Render Worker",
+            worker.RenderAsync,
+            LogSchedulerNotification);
+        _scheduler.RenderCompleted += OnRenderCompleted;
     }
 
     public event Action<NprRenderResult>? RenderCompleted;
 
-    public long LatestRequestedRevision { get; private set; }
+    public long LatestRequestedRevision => _scheduler.LatestRequestedRevision;
 
-    public long LatestCompletedRevision { get; private set; }
+    public long LatestCompletedRevision => _scheduler.LatestCompletedRevision;
 
     public ValueTask EnqueueAsync(
         NprRenderRequest request,
         CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _scheduler.EnqueueAsync(request, cancellationToken);
+    }
 
-        lock (_gate)
+    private void OnRenderCompleted(NprRenderResult result)
+    {
+        RenderCompleted?.Invoke(result);
+    }
+
+    private static void LogSchedulerNotification(NprRenderSchedulerNotification notification)
+    {
+        switch (notification.Kind)
         {
-            if (request.Revision <= LatestRequestedRevision && request.Budget.AllowDroppingOldFrames)
-            {
+            case NprRenderSchedulerNotificationKind.RequestDroppedBeforeEnqueue:
                 StfuLog.Write(
                     StfuLogDomain.Viewport,
                     "request.dropped_before_enqueue",
-                    $"revision={request.Revision}",
+                    $"revision={notification.Revision}",
                     StfuLogLevel.Debug,
-                    new Dictionary<string, object?>
-                    {
-                        ["revision"] = request.Revision,
-                        ["latestRequested"] = LatestRequestedRevision
-                    });
-                return ValueTask.CompletedTask;
-            }
-
-            LatestRequestedRevision = request.Revision;
-            _latestRequest = request;
-            _currentRenderCts?.Cancel();
-        }
-
-        _signal.Set();
-        return ValueTask.CompletedTask;
-    }
-
-    private void WorkerLoop()
-    {
-        while (!_disposeCts.IsCancellationRequested)
-        {
-            _signal.WaitOne(16);
-            if (_disposeCts.IsCancellationRequested)
-            {
+                    CommonProperties(notification));
                 break;
-            }
-
-            NprRenderRequest? request;
-            CancellationTokenSource cts;
-            lock (_gate)
-            {
-                request = _latestRequest;
-                _latestRequest = null;
-                _currentRenderCts?.Dispose();
-                _currentRenderCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token);
-                cts = _currentRenderCts;
-            }
-
-            if (request is null)
-            {
-                continue;
-            }
-
-            try
-            {
-                var result = _worker.RenderAsync(request, cts.Token).AsTask().GetAwaiter().GetResult();
-
-                if (request.Budget.AllowDroppingOldFrames && result.Revision < LatestRequestedRevision)
-                {
-                    result.Dispose();
-                    StfuLog.Write(
-                        StfuLogDomain.Viewport,
-                        "result.dropped",
-                        $"revision={result.Revision}",
-                        StfuLogLevel.Debug,
-                        new Dictionary<string, object?>
-                        {
-                            ["revision"] = result.Revision,
-                            ["latestRequested"] = LatestRequestedRevision
-                        });
-                    PublishDropped(request, NprRenderStatus.Dropped, null);
-                    continue;
-                }
-
-                LatestCompletedRevision = result.Revision;
-                RenderCompleted?.Invoke(result);
-            }
-            catch (OperationCanceledException)
-            {
-                PublishDropped(request, NprRenderStatus.Cancelled, null);
-            }
-            catch (Exception ex)
-            {
-                PublishDropped(request, NprRenderStatus.Failed, ex);
-            }
+            case NprRenderSchedulerNotificationKind.ResultDroppedAfterRender:
+                StfuLog.Write(
+                    StfuLogDomain.Viewport,
+                    "result.dropped",
+                    $"revision={notification.Revision}",
+                    StfuLogLevel.Debug,
+                    CommonProperties(notification));
+                break;
+            case NprRenderSchedulerNotificationKind.RenderCancelled:
+                StfuLog.Write(
+                    StfuLogDomain.Viewport,
+                    "render.cancelled",
+                    $"revision={notification.Revision}",
+                    StfuLogLevel.Debug,
+                    CommonProperties(notification));
+                break;
+            case NprRenderSchedulerNotificationKind.RenderFailed:
+                StfuLog.Write(
+                    StfuLogDomain.Errors,
+                    "render.failed",
+                    notification.Exception?.Message ?? $"revision={notification.Revision}",
+                    StfuLogLevel.Error,
+                    CommonProperties(notification),
+                    notification.Exception);
+                break;
+            case NprRenderSchedulerNotificationKind.StopTimeout:
+                StfuLog.Write(
+                    StfuLogDomain.Viewport,
+                    "scheduler.stop_timeout",
+                    $"{notification.SchedulerName} worker did not stop within timeout.",
+                    StfuLogLevel.Warning,
+                    CommonProperties(notification));
+                break;
         }
     }
 
-    private void PublishDropped(NprRenderRequest request, NprRenderStatus status, Exception? exception)
+    private static Dictionary<string, object?> CommonProperties(NprRenderSchedulerNotification notification)
     {
-        var diagnostics = new NprRenderDiagnostics
+        return new Dictionary<string, object?>
         {
-            Width = request.Width,
-            Height = request.Height,
-            Notes = exception?.Message
+            ["scheduler"] = notification.SchedulerName,
+            ["revision"] = notification.Revision,
+            ["latestRequested"] = notification.LatestRequestedRevision,
+            ["profile"] = notification.ExecutionProfile,
+            ["width"] = notification.Width,
+            ["height"] = notification.Height,
+            ["status"] = notification.Status
         };
-
-        StfuLog.Write(
-            status == NprRenderStatus.Failed ? StfuLogDomain.Errors : StfuLogDomain.Viewport,
-            $"render.{status.ToString().ToLowerInvariant()}",
-            exception?.Message ?? $"revision={request.Revision}",
-            status == NprRenderStatus.Failed ? StfuLogLevel.Error : StfuLogLevel.Debug,
-            new Dictionary<string, object?>
-            {
-                ["revision"] = request.Revision,
-                ["profile"] = request.ExecutionProfile,
-                ["width"] = request.Width,
-                ["height"] = request.Height
-            },
-            exception);
-
-        RenderCompleted?.Invoke(new NprRenderResult
-        {
-            Revision = request.Revision,
-            Status = status,
-            ExecutionProfile = request.ExecutionProfile,
-            OutputKind = NprRenderOutputKind.None,
-            Exception = exception,
-            Diagnostics = diagnostics
-        });
     }
 
     public void Dispose()
     {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        _disposeCts.Cancel();
-        _signal.Set();
-        if (!_thread.Join(TimeSpan.FromSeconds(1)))
-        {
-            Debug.WriteLine("ProfiledNprRenderScheduler worker did not stop within timeout.");
-            StfuLog.Write(
-                StfuLogDomain.Viewport,
-                "scheduler.stop_timeout",
-                "ProfiledNprRenderScheduler worker did not stop within timeout.",
-                StfuLogLevel.Warning);
-        }
-
-        _currentRenderCts?.Dispose();
-        _disposeCts.Dispose();
-        _signal.Dispose();
+        _scheduler.RenderCompleted -= OnRenderCompleted;
+        _scheduler.Dispose();
     }
 }

@@ -1,4 +1,5 @@
 using System.Numerics;
+using STFU.Common.Math;
 
 namespace STFU.Camera;
 
@@ -19,18 +20,17 @@ public sealed class CameraRig
 
     public void SetCamera(CameraState camera)
     {
-        _target = camera.Target;
-        _fieldOfViewDegrees = Clamp(camera.FieldOfViewDegrees, MinFovDegrees, MaxFovDegrees);
-
-        var offset = camera.Position - camera.Target;
-        _distance = MathF.Max(0.001f, offset.Length());
-
-        if (_distance > 0.001f)
-        {
-            var direction = Vector3.Normalize(offset);
-            _pitchRadians = MathF.Asin(Clamp(direction.Y, -1f, 1f));
-            _yawRadians = MathF.Atan2(direction.X, direction.Z);
-        }
+        var orbit = CameraMath.CreateOrbitState(
+            camera.Position,
+            camera.Target,
+            camera.FieldOfViewDegrees,
+            MinFovDegrees,
+            MaxFovDegrees);
+        _target = orbit.Target;
+        _fieldOfViewDegrees = orbit.FieldOfViewDegrees;
+        _distance = orbit.Distance;
+        _pitchRadians = orbit.PitchRadians;
+        _yawRadians = orbit.YawRadians;
 
         Camera = camera;
     }
@@ -38,26 +38,13 @@ public sealed class CameraRig
     public void Orbit(float deltaYawRadians, float deltaPitchRadians)
     {
         _yawRadians += deltaYawRadians;
-        _pitchRadians = Clamp(_pitchRadians + deltaPitchRadians, MinPitchRadians, MaxPitchRadians);
+        _pitchRadians = NumericMath.Clamp(_pitchRadians + deltaPitchRadians, MinPitchRadians, MaxPitchRadians);
         UpdateCamera();
     }
 
     public void Pan(float deltaRight, float deltaUp)
     {
-        var forward = Vector3.Normalize(Camera.Target - Camera.Position);
-        var right = Vector3.Cross(forward, Vector3.UnitY);
-
-        if (right.LengthSquared() < 0.0001f)
-        {
-            right = Vector3.UnitX;
-        }
-        else
-        {
-            right = Vector3.Normalize(right);
-        }
-
-        var up = Vector3.Normalize(Vector3.Cross(right, forward));
-        var offset = right * deltaRight + up * deltaUp;
+        var offset = CameraMath.CreatePanOffset(Camera.Position, Camera.Target, deltaRight, deltaUp);
 
         _target += offset;
         Camera = new CameraState(Camera.Position + offset, Camera.Target + offset, _fieldOfViewDegrees);
@@ -65,20 +52,14 @@ public sealed class CameraRig
 
     public void AdjustFieldOfView(float deltaDegrees)
     {
-        _fieldOfViewDegrees = Clamp(_fieldOfViewDegrees + deltaDegrees, MinFovDegrees, MaxFovDegrees);
+        _fieldOfViewDegrees = NumericMath.Clamp(_fieldOfViewDegrees + deltaDegrees, MinFovDegrees, MaxFovDegrees);
         UpdateCamera();
     }
 
     private void UpdateCamera()
     {
-        var cosPitch = MathF.Cos(_pitchRadians);
-        var offset = new Vector3(
-            MathF.Sin(_yawRadians) * cosPitch,
-            MathF.Sin(_pitchRadians),
-            MathF.Cos(_yawRadians) * cosPitch) * _distance;
+        var offset = CameraMath.CreateOrbitOffset(_yawRadians, _pitchRadians, _distance);
 
         Camera = new CameraState(_target + offset, _target, _fieldOfViewDegrees);
     }
-
-    private static float Clamp(float value, float min, float max) => MathF.Min(max, MathF.Max(min, value));
 }

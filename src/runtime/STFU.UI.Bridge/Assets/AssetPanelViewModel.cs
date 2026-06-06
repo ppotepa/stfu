@@ -17,6 +17,7 @@ using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Scene;
 using STFU.UI.Bridge.Session;
 using STFU.Viewport;
+using STFU.Viewport.Commands;
 
 namespace STFU.UI.Bridge.Assets;
 
@@ -33,11 +34,15 @@ public sealed class AssetPanelViewModel : BindableObject
     private bool _centerPivot = true;
     private bool _loadAnimations = true;
     private FbxBakedAnimationSampler? _fbxAnimation;
+    private FbxAnimationPrebakeCache? _fbxAnimationCache;
+    private MeshData? _animatedMesh;
+    private MeshVertex[]? _animatedVertices;
     private MeshHandle _animatedMeshHandle;
     private int _animatedClipIndex;
     private double _animatedTimeSeconds;
     private double _animatedDurationSeconds;
     private long _lastAnimationTick = Stopwatch.GetTimestamp();
+    private bool _syncingSelection;
 
     public AssetPanelViewModel(UiEngineSession session, ScenePanelViewModel scene)
     {
@@ -115,10 +120,18 @@ public sealed class AssetPanelViewModel : BindableObject
                 item.IsSelected = ReferenceEquals(item, value);
             }
 
+            if (!_syncingSelection && value is not null)
+            {
+                _syncingSelection = true;
+                SelectedAsset = null;
+                _syncingSelection = false;
+            }
+
             OnPropertyChanged(nameof(SelectedAssetName));
             OnPropertyChanged(nameof(SelectedAssetPath));
             OnPropertyChanged(nameof(SelectedAssetFormat));
             OnPropertyChanged(nameof(SelectedAssetStatus));
+            OnPropertyChanged(nameof(SelectedAssetMetadata));
         }
     }
 
@@ -130,6 +143,13 @@ public sealed class AssetPanelViewModel : BindableObject
             if (!SetProperty(ref _selectedAsset, value))
             {
                 return;
+            }
+
+            if (!_syncingSelection && value is not null)
+            {
+                _syncingSelection = true;
+                SelectedRecent = null;
+                _syncingSelection = false;
             }
 
             OnPropertyChanged(nameof(LoaderStatus));
@@ -265,17 +285,13 @@ public sealed class AssetPanelViewModel : BindableObject
             return;
         }
 
-        deltaSeconds = Math.Min(deltaSeconds, 0.1);
+        deltaSeconds = NumericMath.AtMost(deltaSeconds, 0.1d);
         _lastAnimationTick = now;
         _animatedTimeSeconds = (_animatedTimeSeconds + deltaSeconds) % _animatedDurationSeconds;
 
         try
         {
-            var mesh = _fbxAnimation.BakeCombinedMesh(_animatedClipIndex, _animatedTimeSeconds);
-            if (_session.Assets.ReplaceMesh(_animatedMeshHandle, mesh))
-            {
-                _session.Analysis.Invalidate(_animatedMeshHandle);
-            }
+            BakeOrApplyAnimation(_animatedTimeSeconds);
         }
         catch (Exception exception)
         {
@@ -287,6 +303,36 @@ public sealed class AssetPanelViewModel : BindableObject
                 exception.Message,
                 StfuLogLevel.Warning,
                 exception: exception);
+        }
+    }
+
+    public bool BakeAnimationAtTime(double timeSeconds)
+    {
+        if (_fbxAnimation is null || _animatedMeshHandle.Value == 0 || _animatedDurationSeconds <= 0)
+        {
+            return false;
+        }
+
+        _animatedTimeSeconds = AnimationSamplingMath.PositiveModulo(timeSeconds, _animatedDurationSeconds);
+        _lastAnimationTick = Stopwatch.GetTimestamp();
+
+        try
+        {
+            BakeOrApplyAnimation(_animatedTimeSeconds);
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            StopFbxAnimation();
+            _session.Commands.Record($"FBX animation stopped: {exception.Message}");
+            StfuLog.Write(
+                StfuLogDomain.Assets,
+                "fbx.animation.stop",
+                exception.Message,
+                StfuLogLevel.Warning,
+                exception: exception);
+            return false;
         }
     }
 
@@ -311,6 +357,7 @@ public sealed class AssetPanelViewModel : BindableObject
             $"LOAD -> AssignMeshToEntityCommand({entity.IdLabel}, MeshHandle({handle.Value}))");
         ApplyImportTransform(entity.Id, handle);
         _scene.RefreshFromEngine(entity.Id);
+        RequestFreshFrame();
         _session.Workspace.Viewport.RenderMode = ViewportRenderMode.Mesh;
     }
 
@@ -321,7 +368,20 @@ public sealed class AssetPanelViewModel : BindableObject
             return;
         }
 
-        LoadMesh(SelectedAsset.Path, "ReloadMeshCommand");
+        var handle = LoadMesh(SelectedAsset.Path, "ReloadMeshCommand");
+        if (handle.Value == 0)
+        {
+            return;
+        }
+
+        if (_scene.SelectedEntity is not null)
+        {
+            _session.Commands.Execute(
+                new AssignMeshToEntityCommand(_scene.SelectedEntity.Id, handle),
+                $"RELOAD -> AssignMeshToEntityCommand({_scene.SelectedEntity.IdLabel}, MeshHandle({handle.Value}))");
+            _scene.RefreshFromEngine(_scene.SelectedEntity.Id);
+            RequestFreshFrame();
+        }
     }
 
     private void AssignSelectedMesh()
@@ -336,6 +396,7 @@ public sealed class AssetPanelViewModel : BindableObject
             new AssignMeshToEntityCommand(_scene.SelectedEntity.Id, handle),
             $"AssignMeshToEntityCommand({_scene.SelectedEntity.IdLabel}, MeshHandle({handle.Value}))");
         _scene.RefreshFromEngine(_scene.SelectedEntity.Id);
+        RequestFreshFrame();
     }
 
     private MeshHandle LoadMesh(string path, string commandName)
@@ -446,7 +507,7 @@ public sealed class AssetPanelViewModel : BindableObject
 
         if (LoadAnimations && sampler.Animations.Count > 0)
         {
-            StartFbxAnimation(sampler, handle, sampler.Animations[0]);
+            StartFbxAnimation(sampler, handle, sampler.Animations[0], mesh);
         }
         else
         {
@@ -459,14 +520,42 @@ public sealed class AssetPanelViewModel : BindableObject
     private void StartFbxAnimation(
         FbxBakedAnimationSampler sampler,
         MeshHandle handle,
-        AnimationClip clip)
+        AnimationClip clip,
+        MeshData mesh)
     {
         _fbxAnimation = sampler;
+        _animatedMesh = mesh;
+        _animatedVertices = mesh.Vertices as MeshVertex[];
         _animatedMeshHandle = handle;
         _animatedClipIndex = 0;
         _animatedTimeSeconds = 0;
-        _animatedDurationSeconds = Math.Max(0.001, clip.DurationSeconds);
+        _animatedDurationSeconds = NumericMath.AtLeast(clip.DurationSeconds, 0.001d);
         _lastAnimationTick = Stopwatch.GetTimestamp();
+
+        if (_animatedVertices is not null)
+        {
+            try
+            {
+                _fbxAnimationCache = FbxAnimationPrebakeCache.Start(
+                    sampler.SourcePath,
+                    _animatedClipIndex,
+                    _animatedDurationSeconds,
+                    _animatedVertices.Length);
+                _fbxAnimationCache.Seed(0, _animatedVertices);
+            }
+            catch (Exception exception)
+            {
+                _fbxAnimationCache?.Dispose();
+                _fbxAnimationCache = null;
+                StfuLog.Write(
+                    StfuLogDomain.Assets,
+                    "fbx.animation.cache.disabled",
+                    exception.Message,
+                    StfuLogLevel.Warning,
+                    exception: exception);
+            }
+        }
+
         _session.Commands.Record($"FBX animation playing: {clip.Name} ({_animatedDurationSeconds:0.00}s)");
         StfuLog.Write(
             StfuLogDomain.Assets,
@@ -479,10 +568,66 @@ public sealed class AssetPanelViewModel : BindableObject
             });
     }
 
+    public bool WaitForAnimationCache(TimeSpan timeout)
+    {
+        return _fbxAnimationCache?.WaitForWarmCache(timeout) ?? true;
+    }
+
+    private void BakeOrApplyAnimation(double timeSeconds)
+    {
+        if (TryApplyCachedAnimation(timeSeconds))
+        {
+            return;
+        }
+
+        var mesh = _fbxAnimation!.BakeCombinedMesh(_animatedClipIndex, timeSeconds);
+        _animatedMesh = mesh;
+        _animatedVertices = mesh.Vertices as MeshVertex[];
+        if (_animatedVertices is not null)
+        {
+            _fbxAnimationCache?.Seed(timeSeconds, _animatedVertices);
+        }
+
+        ReplaceAnimatedMesh(mesh);
+    }
+
+    private bool TryApplyCachedAnimation(double timeSeconds)
+    {
+        if (_fbxAnimationCache is null ||
+            _animatedMesh is null ||
+            _animatedVertices is null ||
+            !_fbxAnimationCache.TryApply(timeSeconds, _animatedVertices, out _))
+        {
+            return false;
+        }
+
+        ReplaceAnimatedMesh(_animatedMesh);
+        return true;
+    }
+
+    private void ReplaceAnimatedMesh(MeshData mesh)
+    {
+        if (mesh.Vertices is MeshVertex[] vertices &&
+            _session.Assets.UpdateMeshVertices(_animatedMeshHandle, vertices))
+        {
+            _session.Analysis.InvalidateGeometry(_animatedMeshHandle);
+            return;
+        }
+
+        if (_session.Assets.ReplaceMesh(_animatedMeshHandle, mesh))
+        {
+            _session.Analysis.InvalidateTopology(_animatedMeshHandle);
+        }
+    }
+
     private void StopFbxAnimation()
     {
+        _fbxAnimationCache?.Dispose();
+        _fbxAnimationCache = null;
         _fbxAnimation?.Dispose();
         _fbxAnimation = null;
+        _animatedMesh = null;
+        _animatedVertices = null;
         _animatedMeshHandle = default;
         _animatedClipIndex = 0;
         _animatedTimeSeconds = 0;
@@ -524,7 +669,7 @@ public sealed class AssetPanelViewModel : BindableObject
 
         var center = (min + max) * 0.5f;
         var size = max - min;
-        var maxDimension = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
+        var maxDimension = Geometry3D.MaxComponent(size);
         var scale = NormalizeSize && maxDimension > 1e-6f ? 1.8f / maxDimension : 1f;
         var positionOffset = CenterPivot ? -center * scale : Vector3.Zero;
 
@@ -558,7 +703,11 @@ public sealed class AssetPanelViewModel : BindableObject
         var existing = Recents.FirstOrDefault(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
         {
-            SelectedRecent = existing;
+            if (SelectedAsset is null)
+            {
+                SelectedRecent = existing;
+            }
+
             return;
         }
 
@@ -568,7 +717,16 @@ public sealed class AssetPanelViewModel : BindableObject
             SelectedSource?.DisplayName ?? "HARD DRIVE",
             GetFormat(path));
         Recents.Insert(0, item);
-        SelectedRecent = item;
+        if (SelectedAsset is null)
+        {
+            SelectedRecent = item;
+        }
+    }
+
+    private void RequestFreshFrame()
+    {
+        _session.FrameHistory.Reset();
+        _session.Commands.Execute(new RequestRenderCommand(), log: false);
     }
 
     private static AssetListItem CreateAssetItem(AssetMeshEntry entry)

@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
+using STFU.Common.Math;
 using STFU.NPR.Composition;
+using STFU.Strokes;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Session;
 
@@ -11,6 +13,10 @@ public sealed class LayerStackViewModel : BindableObject
 {
     private readonly UiEngineSession _session;
     private readonly Dictionary<string, HashSet<string>> _layerIntents = new(StringComparer.OrdinalIgnoreCase);
+    private StrokeFrame? _intentCountFrame;
+    private readonly Dictionary<string, int> _intentCounts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _intentLayerCounts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _intentUnlayeredCounts = new(StringComparer.OrdinalIgnoreCase);
     private LayerListItem? _selectedLayer;
     private string _newLayerType = "Strokes";
     private int _nextLayerId = 1;
@@ -197,7 +203,7 @@ public sealed class LayerStackViewModel : BindableObject
             ? new HashSet<string>(sourceIntents, StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         _layerIntents[clone.Id] = intents;
-        Layers.Insert(Math.Max(0, sourceIndex) + 1, clone);
+        Layers.Insert(NumericMath.AtLeast(sourceIndex, 0) + 1, clone);
         SelectedLayer = clone;
         _session.Commands.Record($"DuplicateNprLayerCommand(\"{source.Id}\") -> \"{clone.Id}\"");
         RaiseLayerStats();
@@ -261,12 +267,14 @@ public sealed class LayerStackViewModel : BindableObject
         var enabled = SelectedLayer is not null && _layerIntents.TryGetValue(SelectedLayer.Id, out var intents)
             ? intents
             : [];
+        var routedLayerIdsByIntent = BuildRoutedLayerIdsByIntent();
+        RebuildIntentCountsIfNeeded();
 
         foreach (var intent in Intents)
         {
             intent.PropertyChanged -= OnIntentChanged;
             intent.Enabled = enabled.Contains(intent.Name);
-            intent.Count = CountIntent(intent.Name);
+            intent.Count = CountIntent(intent.Name, routedLayerIdsByIntent);
             intent.PropertyChanged += OnIntentChanged;
         }
 
@@ -323,7 +331,7 @@ public sealed class LayerStackViewModel : BindableObject
 
     private static IEnumerable<LayerPreviewItem> BuildPreviewMarks(LayerListItem layer, bool composite)
     {
-        var opacity = composite ? Math.Clamp(layer.Opacity * 0.78, 0.05, 1.0) : layer.Opacity;
+        var opacity = composite ? NumericMath.Clamp(layer.Opacity * 0.78d, 0.05d, 1.0d) : layer.Opacity;
         var color = layer.Type switch
         {
             "Fill" => "#A6ADA2",
@@ -334,21 +342,21 @@ public sealed class LayerStackViewModel : BindableObject
 
         if (layer.Type is "Fill" or "Tones")
         {
-            yield return new LayerPreviewItem(layer.Type, 10, 12, 120, 48, opacity * Math.Max(0.1, layer.FillCoverage), color, 0);
+            yield return new LayerPreviewItem(layer.Type, 10, 12, 120, 48, opacity * NumericMath.AtLeast((double)layer.FillCoverage, 0.1d), color, 0);
             yield break;
         }
 
         if (layer.Type == "Shading")
         {
-            yield return new LayerPreviewItem(layer.Type, 12, 18, 118, Math.Max(2, layer.BaseThickness * 1.2), opacity * layer.Density, color, -8);
-            yield return new LayerPreviewItem(layer.Type, 18, 38, 106, Math.Max(2, layer.BaseThickness), opacity * layer.Density * 0.8, color, -8);
-            yield return new LayerPreviewItem(layer.Type, 24, 58, 92, Math.Max(2, layer.BaseThickness * 0.8), opacity * layer.Density * 0.6, color, -8);
+            yield return new LayerPreviewItem(layer.Type, 12, 18, 118, NumericMath.AtLeast(layer.BaseThickness * 1.2d, 2d), opacity * layer.Density, color, -8);
+            yield return new LayerPreviewItem(layer.Type, 18, 38, 106, NumericMath.AtLeast((double)layer.BaseThickness, 2d), opacity * layer.Density * 0.8d, color, -8);
+            yield return new LayerPreviewItem(layer.Type, 24, 58, 92, NumericMath.AtLeast(layer.BaseThickness * 0.8d, 2d), opacity * layer.Density * 0.6d, color, -8);
             yield break;
         }
 
-        yield return new LayerPreviewItem(layer.Type, 12, 20, 112, Math.Max(2, layer.BaseThickness * 2.1), opacity, color, -5);
-        yield return new LayerPreviewItem(layer.Type, 20, 42, 84, Math.Max(2, layer.BaseThickness * 1.45), opacity * 0.82, color, 4);
-        yield return new LayerPreviewItem(layer.Type, 50, 30, 62, Math.Max(2, layer.BaseThickness * 1.05), opacity * 0.7, color, -18);
+        yield return new LayerPreviewItem(layer.Type, 12, 20, 112, NumericMath.AtLeast(layer.BaseThickness * 2.1d, 2d), opacity, color, -5);
+        yield return new LayerPreviewItem(layer.Type, 20, 42, 84, NumericMath.AtLeast(layer.BaseThickness * 1.45d, 2d), opacity * 0.82d, color, 4);
+        yield return new LayerPreviewItem(layer.Type, 50, 30, 62, NumericMath.AtLeast(layer.BaseThickness * 1.05d, 2d), opacity * 0.7d, color, -18);
     }
 
     private void RaiseLayerStats()
@@ -376,17 +384,97 @@ public sealed class LayerStackViewModel : BindableObject
         }
     }
 
-    private int CountIntent(string intent)
+    private Dictionary<string, HashSet<string>> BuildRoutedLayerIdsByIntent()
     {
-        var layerIds = _layerIntents
-            .Where(entry => entry.Value.Contains(intent))
-            .Select(entry => entry.Key)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var routedLayerIdsByIntent = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
-        return _session.Strokes.CurrentFrame.Paths.Count(path =>
-            path.Metadata?.Intent is { } pathIntent &&
-            string.Equals(pathIntent, intent, StringComparison.OrdinalIgnoreCase) &&
-            (path.Metadata?.Layer is not { } layer || layerIds.Count == 0 || layerIds.Contains(layer)));
+        foreach (var (layerId, intents) in _layerIntents)
+        {
+            foreach (var intent in intents)
+            {
+                if (!routedLayerIdsByIntent.TryGetValue(intent, out var layerIds))
+                {
+                    layerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    routedLayerIdsByIntent[intent] = layerIds;
+                }
+
+                layerIds.Add(layerId);
+            }
+        }
+
+        return routedLayerIdsByIntent;
+    }
+
+    private void RebuildIntentCountsIfNeeded()
+    {
+        var frame = _session.Strokes.CurrentFrame;
+        if (ReferenceEquals(_intentCountFrame, frame))
+        {
+            return;
+        }
+
+        _intentCounts.Clear();
+        _intentLayerCounts.Clear();
+        _intentUnlayeredCounts.Clear();
+
+        if (frame.Segments is { } segments)
+        {
+            foreach (var segment in segments)
+            {
+                AccumulateIntentCount(segment.Metadata);
+            }
+        }
+        else
+        {
+            foreach (var path in frame.Paths)
+            {
+                AccumulateIntentCount(path.Metadata);
+            }
+        }
+
+        _intentCountFrame = frame;
+    }
+
+    private void AccumulateIntentCount(StrokeMetadata? metadata)
+    {
+        if (metadata is not { Intent: { } intent } value)
+        {
+            return;
+        }
+
+        _intentCounts[intent] = _intentCounts.TryGetValue(intent, out var count) ? count + 1 : 1;
+
+        if (value.Layer is { } layer)
+        {
+            var key = intent + "\u001f" + layer;
+            _intentLayerCounts[key] = _intentLayerCounts.TryGetValue(key, out var layerCount) ? layerCount + 1 : 1;
+        }
+        else
+        {
+            _intentUnlayeredCounts[intent] = _intentUnlayeredCounts.TryGetValue(intent, out var unlayeredCount)
+                ? unlayeredCount + 1
+                : 1;
+        }
+    }
+
+    private int CountIntent(string intentName, Dictionary<string, HashSet<string>> routedLayerIdsByIntent)
+    {
+        RebuildIntentCountsIfNeeded();
+        if (!routedLayerIdsByIntent.TryGetValue(intentName, out var layerIds) || layerIds.Count == 0)
+        {
+            return _intentCounts.TryGetValue(intentName, out var count) ? count : 0;
+        }
+
+        var total = _intentUnlayeredCounts.TryGetValue(intentName, out var unlayeredCount) ? unlayeredCount : 0;
+        foreach (var layerId in layerIds)
+        {
+            if (_intentLayerCounts.TryGetValue(intentName + "\u001f" + layerId, out var count))
+            {
+                total += count;
+            }
+        }
+
+        return total;
     }
 
     private static string InferLayerType(NprLayerStyle layer)
@@ -408,15 +496,15 @@ public sealed class LayerStackViewModel : BindableObject
     {
         if (layer.Hatching.Enabled)
         {
-            return Math.Max(0f, layer.Hatching.DensityScale * role.HatchScale);
+            return NumericMath.AtLeast(layer.Hatching.DensityScale * role.HatchScale, 0f);
         }
 
         if (layer.MainFill.Enabled)
         {
-            return Math.Max(0f, layer.MainFill.ShadeInfluence * role.ToneScale);
+            return NumericMath.AtLeast(layer.MainFill.ShadeInfluence * role.ToneScale, 0f);
         }
 
-        return Math.Max(0f, role.DetailScale);
+        return NumericMath.AtLeast(role.DetailScale, 0f);
     }
 
     private float InferBaseThickness(NprLayerStyle layer, NprRoleStyle role)
@@ -424,8 +512,10 @@ public sealed class LayerStackViewModel : BindableObject
         var lineWidth = _session.ActivePreset.ActiveSettings.DefaultDrawing.LineWidth > 0f
             ? _session.ActivePreset.ActiveSettings.DefaultDrawing.LineWidth
             : _session.ActivePreset.ActiveSettings.StrokeStyle.BaseThickness;
-        var channelScale = MathF.Max(layer.Contour.ThicknessScale, MathF.Max(layer.Crease.ThicknessScale, layer.Accent.ThicknessScale));
-        return Math.Max(0.2f, lineWidth * role.StrokeScale * Math.Max(0.2f, channelScale));
+        var channelScale = NumericMath.AtLeast(
+            layer.Contour.ThicknessScale,
+            NumericMath.AtLeast(layer.Crease.ThicknessScale, layer.Accent.ThicknessScale));
+        return NumericMath.AtLeast(lineWidth * role.StrokeScale * NumericMath.AtLeast(channelScale, 0.2f), 0.2f);
     }
 
     private static IEnumerable<string> InferLayerIntents(NprLayerStyle layer)

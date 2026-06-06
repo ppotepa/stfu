@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -31,8 +30,16 @@ public sealed partial class ViewportStage : UserControl
         if (_directXPresenter?.IsAvailable == true)
         {
             var hostGrid = new Grid();
-            var directXHost = new DirectXViewportHost(_directXPresenter);
-            directXHost.Bind(IsVisibleProperty, new Binding("Renderer.UseDirectViewportHost"));
+            var directXHost = new DirectXViewportHost(_directXPresenter, session, () => _viewport?.PumpDirectFrame());
+            var renderer = session.Workspace.Renderer;
+            directXHost.IsVisible = renderer.UseDirectViewportHost;
+            renderer.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName is nameof(renderer.UseDirectViewportHost) or nameof(renderer.PresentationPreference))
+                {
+                    directXHost.IsVisible = renderer.UseDirectViewportHost;
+                }
+            };
             hostGrid.Children.Add(directXHost);
             hostGrid.Children.Add(_viewport);
             GetViewportHost().Content = hostGrid;
@@ -52,14 +59,14 @@ public sealed partial class ViewportStage : UserControl
         _viewport?.HandleKeyDown(sender, e);
     }
 
-    private async void OnRendererOptionsClicked(object? sender, RoutedEventArgs e)
+    private async void OnSettingsClicked(object? sender, RoutedEventArgs e)
     {
         if (_session is null)
         {
             return;
         }
 
-        var window = new RendererOptionsWindow(_session.Workspace.Renderer);
+        var window = new SettingsWindow(_session.Workspace.Renderer);
         var owner = TopLevel.GetTopLevel(this) as Window;
         if (owner is null)
         {

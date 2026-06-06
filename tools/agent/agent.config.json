@@ -10,15 +10,74 @@
     "**/*.Designer.cs",
     "**/Generated/**"
   ],
-  "excludePatterns": [
+  "alwaysExcludePatterns": [
     "**/bin/**",
     "**/obj/**",
     "**/.git/**",
     "**/.vs/**",
-    "**/third_party/**",
-    "**/assets/**",
-    "**/concat.txt",
-    "**/concat.zip"
+    ".agents/**",
+    ".logs/**",
+    "artifacts/**",
+    "logs/**",
+    "test-results/**",
+    "TestResults/**",
+    "tools/parity/test-results/**",
+    "release/**",
+    "concat.txt",
+    "concat.zip",
+    "**/*.trx",
+    "**/*.coverage",
+    "**/*.coveragexml"
+  ],
+  "defaultConcatProfile": "source",
+  "concatProfiles": {
+    "source": {
+      "include": [
+        "src/**",
+        "STFU.sln",
+        "STFU.slnx",
+        "*.sln",
+        "*.slnx",
+        "*.csproj",
+        "Directory.Build.*",
+        "Directory.Packages.props",
+        "global.json",
+        "NuGet.config",
+        ".gitignore",
+        "README.md",
+        "docs/*BRIEF*.md",
+        "docs/AGENT_CONTEXT.md"
+      ],
+      "exclude": [
+        "docs/NPR_SUPPLEMENT_IMPL.md"
+      ]
+    }
+  },
+  "includeScopes": {
+    "tools": [ "tools/**" ],
+    "maquettes": [ "maquettes/**" ],
+    "third_party": [ "third_party/**" ],
+    "third-party": [ "third_party/**" ],
+    "vendor": [ "third_party/**" ],
+    "assets": [ "assets/**" ],
+    "docs": [ "docs/**" ],
+    "root": [
+      "*.sln",
+      "*.slnx",
+      "*.csproj",
+      "Directory.Build.*",
+      "Directory.Packages.props",
+      "global.json",
+      "NuGet.config",
+      ".gitignore",
+      "README.md"
+    ]
+  },
+  "excludePatterns": [
+    "**/bin/**",
+    "**/obj/**",
+    "**/.git/**",
+    "**/.vs/**"
   ],
   "scopes": {
     "all": {

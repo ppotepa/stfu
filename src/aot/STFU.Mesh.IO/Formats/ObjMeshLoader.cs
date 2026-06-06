@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using STFU.Abstractions.Loading;
+using STFU.Common.Math;
 using STFU.Mesh;
 using STFU.Mesh.Loading;
 
@@ -45,7 +46,7 @@ public sealed class ObjMeshLoader : IMeshLoader<string>
             {
                 if (TryParseVector3(line, out var normal))
                 {
-                    normals.Add(NormalizeOrDefault(normal, Vector3.Zero));
+                    normals.Add(Geometry3D.NormalizeOrDefault(normal, Vector3.Zero));
                 }
 
                 continue;
@@ -184,7 +185,13 @@ public sealed class ObjMeshLoader : IMeshLoader<string>
         IList<Vector3> generatedNormalSums,
         MeshTriangle triangle)
     {
-        var faceNormal = CalculateTriangleNormal(vertices, triangle);
+        var faceNormal = Geometry3D.TriangleNormal(
+            triangle,
+            static item => item.A,
+            static item => item.B,
+            static item => item.C,
+            index => vertices[index].Position,
+            Vector3.UnitY);
         AddIfGenerated(triangle.A, faceNormal);
         AddIfGenerated(triangle.B, faceNormal);
         AddIfGenerated(triangle.C, faceNormal);
@@ -209,22 +216,9 @@ public sealed class ObjMeshLoader : IMeshLoader<string>
 
             vertices[index] = vertices[index] with
             {
-                Normal = NormalizeOrDefault(generatedNormalSums[index], Vector3.UnitY)
+                Normal = Geometry3D.NormalizeOrDefault(generatedNormalSums[index], Vector3.UnitY)
             };
         }
-    }
-
-    private static Vector3 CalculateTriangleNormal(IReadOnlyList<MeshVertex> vertices, MeshTriangle triangle)
-    {
-        var a = vertices[triangle.A].Position;
-        var b = vertices[triangle.B].Position;
-        var c = vertices[triangle.C].Position;
-        return NormalizeOrDefault(Vector3.Cross(b - a, c - a), Vector3.UnitY);
-    }
-
-    private static Vector3 NormalizeOrDefault(Vector3 value, Vector3 fallback)
-    {
-        return value.LengthSquared() <= 0.0001f ? fallback : Vector3.Normalize(value);
     }
 
     private static float ParseFloat(string value)

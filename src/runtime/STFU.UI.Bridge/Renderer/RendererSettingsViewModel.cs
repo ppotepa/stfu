@@ -1,4 +1,6 @@
+using STFU.Common.Math;
 using STFU.Logging;
+using STFU.Parallelism;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Session;
 
@@ -18,6 +20,9 @@ public sealed class RendererSettingsViewModel : BindableObject
     private string _statusMessage = string.Empty;
     private bool _showRendererHud;
     private bool _enableGpuTimings;
+    private WorkerBudgetMode _workerBudgetMode;
+    private int _maxRenderWorkers;
+    private bool _enableTileParallelism;
     private bool _suspendPersistence;
 
     public RendererSettingsViewModel(
@@ -34,6 +39,9 @@ public sealed class RendererSettingsViewModel : BindableObject
         _presentationPreference = snapshot.Presentation;
         _showRendererHud = snapshot.ShowRendererHud;
         _enableGpuTimings = snapshot.EnableGpuTimings;
+        _workerBudgetMode = snapshot.WorkerBudgetMode;
+        _maxRenderWorkers = NormalizeMaxRenderWorkers(snapshot.MaxRenderWorkers);
+        _enableTileParallelism = snapshot.EnableTileParallelism;
         _suspendPersistence = false;
 
         UpdateRuntimeStatus(
@@ -117,6 +125,64 @@ public sealed class RendererSettingsViewModel : BindableObject
             PersistIfNeeded();
         }
     }
+
+    public WorkerBudgetMode WorkerBudgetMode
+    {
+        get => _workerBudgetMode;
+        set
+        {
+            if (!SetProperty(ref _workerBudgetMode, value))
+            {
+                return;
+            }
+
+            LogPreferenceChanged("workerBudgetMode", value);
+            OnPropertyChanged(nameof(ResolvedRenderWorkerCount));
+            OnPropertyChanged(nameof(ParallelismSummary));
+            PersistIfNeeded();
+        }
+    }
+
+    public int MaxRenderWorkers
+    {
+        get => _maxRenderWorkers;
+        set
+        {
+            var normalized = NormalizeMaxRenderWorkers(value);
+            if (!SetProperty(ref _maxRenderWorkers, normalized))
+            {
+                return;
+            }
+
+            LogPreferenceChanged("maxRenderWorkers", normalized);
+            OnPropertyChanged(nameof(ResolvedRenderWorkerCount));
+            OnPropertyChanged(nameof(ParallelismSummary));
+            PersistIfNeeded();
+        }
+    }
+
+    public bool EnableTileParallelism
+    {
+        get => _enableTileParallelism;
+        set
+        {
+            if (!SetProperty(ref _enableTileParallelism, value))
+            {
+                return;
+            }
+
+            LogPreferenceChanged("enableTileParallelism", value);
+            PersistIfNeeded();
+        }
+    }
+
+    public int ProcessorCount => WorkerBudget.LogicalProcessorCount;
+
+    public int ResolvedRenderWorkerCount => WorkerBudget.Resolve(new WorkerBudgetRequest(
+        Mode: WorkerBudgetMode,
+        ExplicitWorkerCount: MaxRenderWorkers));
+
+    public string ParallelismSummary => $"{ResolvedRenderWorkerCount}/{ProcessorCount} workers";
 
     public bool IsGpuAvailable => _session.HasGpuRenderer;
 
@@ -236,11 +302,19 @@ public sealed class RendererSettingsViewModel : BindableObject
         }
 
         _store.Save(new RendererSettingsSnapshot(
-            BackendPreference,
-            ApiPreference,
-            PresentationPreference,
-            ShowRendererHud,
-            EnableGpuTimings));
+            Backend: BackendPreference,
+            Api: ApiPreference,
+            Presentation: PresentationPreference,
+            ShowRendererHud: ShowRendererHud,
+            EnableGpuTimings: EnableGpuTimings,
+            WorkerBudgetMode: WorkerBudgetMode,
+            MaxRenderWorkers: MaxRenderWorkers,
+            EnableTileParallelism: EnableTileParallelism));
+    }
+
+    private static int NormalizeMaxRenderWorkers(int value)
+    {
+        return NumericMath.Clamp(value, 0, WorkerBudget.LogicalProcessorCount);
     }
 
     private static void LogPreferenceChanged(string name, object value)

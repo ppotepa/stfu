@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.NPR.Composition;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Session;
@@ -79,7 +80,7 @@ public sealed class DefaultDrawingViewModel : BindableObject
     public float MinSegPx
     {
         get => Drawing.MinSegPx;
-        set => SetDrawingFloat(nameof(MinSegPx), (current, next) => current.MinSegPx = next, Drawing.MinSegPx, Math.Max(0f, value));
+        set => SetDrawingFloat(nameof(MinSegPx), (current, next) => current.MinSegPx = next, Drawing.MinSegPx, NumericMath.AtLeast(value, 0f));
     }
 
     public int MeshStride
@@ -87,7 +88,7 @@ public sealed class DefaultDrawingViewModel : BindableObject
         get => Drawing.MeshStride;
         set
         {
-            var next = Math.Max(1, value);
+            var next = NumericMath.AtLeast(value, 1);
             if (Drawing.MeshStride == next)
             {
                 return;
@@ -101,37 +102,37 @@ public sealed class DefaultDrawingViewModel : BindableObject
     public float DepthScale
     {
         get => Drawing.DepthScale;
-        set => SetDrawingFloat(nameof(DepthScale), (current, next) => current.DepthScale = next, Drawing.DepthScale, Math.Max(0.05f, value));
+        set => SetDrawingFloat(nameof(DepthScale), (current, next) => current.DepthScale = next, Drawing.DepthScale, NumericMath.AtLeast(value, 0.05f));
     }
 
     public float PathSimplify
     {
         get => Drawing.PathSimplify;
-        set => SetDrawingFloat(nameof(PathSimplify), (current, next) => current.PathSimplify = next, Drawing.PathSimplify, Math.Max(0f, value));
+        set => SetDrawingFloat(nameof(PathSimplify), (current, next) => current.PathSimplify = next, Drawing.PathSimplify, NumericMath.AtLeast(value, 0f));
     }
 
     public float DrawProgress
     {
         get => Drawing.DrawProgress;
-        set => SetDrawingFloat(nameof(DrawProgress), (current, next) => current.DrawProgress = next, Drawing.DrawProgress, Math.Clamp(value, 0f, 1f));
+        set => SetDrawingFloat(nameof(DrawProgress), (current, next) => current.DrawProgress = next, Drawing.DrawProgress, NumericMath.Clamp01(value));
     }
 
     public float LineWidth
     {
         get => Drawing.LineWidth;
-        set => SetDrawingFloat(nameof(LineWidth), (current, next) => current.LineWidth = next, Drawing.LineWidth, Math.Max(0.1f, value));
+        set => SetDrawingFloat(nameof(LineWidth), (current, next) => current.LineWidth = next, Drawing.LineWidth, NumericMath.AtLeast(value, 0.1f));
     }
 
     public float Jitter
     {
         get => Drawing.Jitter;
-        set => SetDrawingFloat(nameof(Jitter), (current, next) => current.Jitter = next, Drawing.Jitter, Math.Max(0f, value));
+        set => SetDrawingFloat(nameof(Jitter), (current, next) => current.Jitter = next, Drawing.Jitter, NumericMath.AtLeast(value, 0f));
     }
 
     public float Pressure
     {
         get => Drawing.Pressure;
-        set => SetDrawingFloat(nameof(Pressure), (current, next) => current.Pressure = next, Drawing.Pressure, Math.Clamp(value, 0f, 1f));
+        set => SetDrawingFloat(nameof(Pressure), (current, next) => current.Pressure = next, Drawing.Pressure, NumericMath.Clamp01(value));
     }
 
     public void RefreshFromEngine()
@@ -176,7 +177,7 @@ public sealed class DefaultDrawingViewModel : BindableObject
         float oldValue,
         float newValue)
     {
-        if (Math.Abs(oldValue - newValue) < 0.0001f)
+        if (NumericMath.Abs(oldValue - newValue) < 0.0001f)
         {
             return;
         }

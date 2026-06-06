@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using STFU.Common.Math;
 
 namespace STFU.Strokes.Export;
 
@@ -16,8 +17,8 @@ public sealed class RasterStrokeExporter : IStrokeExporter<RasterExportOptions>
             return new ExportResult(false, "Output stream is not writable.", 0, []);
         }
 
-        var width = Math.Max(1, options.Width);
-        var height = Math.Max(1, options.Height);
+        var width = NumericMath.AtLeast(options.Width, 1);
+        var height = NumericMath.AtLeast(options.Height, 1);
         var pixels = new StrokeColor[width * height];
         Array.Fill(pixels, options.BackgroundColor);
 
@@ -38,7 +39,7 @@ public sealed class RasterStrokeExporter : IStrokeExporter<RasterExportOptions>
                     path.Points[index],
                     path.Points[index + 1],
                     path.Style.Color,
-                    MathF.Max(1f, path.Style.Thickness * options.Scale));
+                    NumericMath.AtLeast(path.Style.Thickness * options.Scale, 1f));
             }
 
             pathCount++;
@@ -93,15 +94,15 @@ public sealed class RasterStrokeExporter : IStrokeExporter<RasterExportOptions>
     {
         var dx = end.X - start.X;
         var dy = end.Y - start.Y;
-        var length = MathF.Max(1f, MathF.Sqrt((dx * dx) + (dy * dy)));
-        var steps = Math.Max(1, (int)MathF.Ceiling(length));
-        var radius = Math.Max(0, (int)MathF.Round(thickness * 0.5f));
+        var length = NumericMath.AtLeast(Geometry2D.SegmentLength(start.X, start.Y, end.X, end.Y), 1f);
+        var steps = NumericMath.AtLeast((int)NumericMath.Ceiling(length), 1);
+        var radius = NumericMath.AtLeast((int)NumericMath.Round(thickness * 0.5f), 0);
 
         for (var step = 0; step <= steps; step++)
         {
             var t = step / (float)steps;
-            var x = (int)MathF.Round(start.X + (dx * t));
-            var y = (int)MathF.Round(start.Y + (dy * t));
+            var x = (int)NumericMath.Round(start.X + (dx * t));
+            var y = (int)NumericMath.Round(start.Y + (dy * t));
 
             for (var offsetY = -radius; offsetY <= radius; offsetY++)
             {

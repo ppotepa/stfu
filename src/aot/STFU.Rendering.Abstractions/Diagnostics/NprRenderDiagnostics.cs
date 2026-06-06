@@ -1,3 +1,5 @@
+using STFU.Parallelism;
+
 namespace STFU.Rendering.Abstractions.Diagnostics;
 
 public sealed class NprRenderDiagnostics
@@ -19,6 +21,10 @@ public sealed class NprRenderDiagnostics
     public int ToneSurfaceCount { get; set; }
 
     public int WorkerCount { get; set; }
+
+    public WorkerBudgetMode WorkerBudgetMode { get; set; } = WorkerBudgetMode.Performance;
+
+    public int ProcessorCount { get; set; }
 
     public long AllocatedBytes { get; set; }
 

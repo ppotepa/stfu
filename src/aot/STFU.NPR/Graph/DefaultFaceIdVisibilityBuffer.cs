@@ -1,18 +1,21 @@
+using STFU.Common.Math;
+
 namespace STFU.NPR.Graph;
 
 public sealed class DefaultFaceIdVisibilityBuffer
 {
     public DefaultFaceIdVisibilityBuffer(int width, int height, int faceCount)
     {
-        Width = Math.Max(8, width);
-        Height = Math.Max(8, height);
+        Width = RasterMath.AtLeastPixels(width, 8);
+        Height = RasterMath.AtLeastPixels(height, 8);
         var pixelCount = Width * Height;
 
         Depth = new float[pixelCount];
         FaceId = new int[pixelCount];
-        FaceVisible = new bool[Math.Max(0, faceCount)];
+        FaceVisible = new bool[NumericMath.AtLeast(faceCount, 0)];
 
         Clear();
+        Array.Fill(FaceVisible, false);
     }
 
     public int Width { get; }
@@ -31,23 +34,16 @@ public sealed class DefaultFaceIdVisibilityBuffer
     {
         Array.Fill(Depth, float.PositiveInfinity);
         Array.Fill(FaceId, -1);
-        Array.Fill(FaceVisible, false);
     }
 
     public int ToBufferX(float screenX, int viewportWidth)
     {
-        return Math.Clamp(
-            (int)MathF.Floor((screenX / Math.Max(1, viewportWidth)) * Width),
-            0,
-            Width - 1);
+        return RasterMath.ToBufferCoordinate(screenX, viewportWidth, Width);
     }
 
     public int ToBufferY(float screenY, int viewportHeight)
     {
-        return Math.Clamp(
-            (int)MathF.Floor((screenY / Math.Max(1, viewportHeight)) * Height),
-            0,
-            Height - 1);
+        return RasterMath.ToBufferCoordinate(screenY, viewportHeight, Height);
     }
 
     public bool SampleOwnedFaceAtScreen(
@@ -59,6 +55,15 @@ public sealed class DefaultFaceIdVisibilityBuffer
     {
         var cx = ToBufferX(screenX, viewportWidth);
         var cy = ToBufferY(screenY, viewportHeight);
+        return SampleOwnedFaceAtBuffer(cx, cy, allowedFaces);
+    }
+
+    public bool SampleOwnedFaceAtBuffer(int cx, int cy, IReadOnlySet<int> allowedFaces)
+    {
+        if (allowedFaces.Count == 0)
+        {
+            return false;
+        }
 
         for (var dy = -1; dy <= 1; dy++)
         {
@@ -97,6 +102,11 @@ public sealed class DefaultFaceIdVisibilityBuffer
     {
         var cx = ToBufferX(screenX, viewportWidth);
         var cy = ToBufferY(screenY, viewportHeight);
+        return SampleOwnedFaceAtBuffer(cx, cy, firstAllowedFace, secondAllowedFace);
+    }
+
+    public bool SampleOwnedFaceAtBuffer(int cx, int cy, int firstAllowedFace, int secondAllowedFace)
+    {
 
         for (var dy = -1; dy <= 1; dy++)
         {
@@ -115,7 +125,8 @@ public sealed class DefaultFaceIdVisibilityBuffer
                 }
 
                 var faceId = FaceId[yy * Width + xx];
-                if (faceId == firstAllowedFace || faceId == secondAllowedFace)
+                if ((firstAllowedFace >= 0 && faceId == firstAllowedFace) ||
+                    (secondAllowedFace >= 0 && faceId == secondAllowedFace))
                 {
                     return true;
                 }
@@ -124,23 +135,27 @@ public sealed class DefaultFaceIdVisibilityBuffer
 
         return false;
     }
-
-    public void MarkVisibleFaces()
+    public void MarkVisibleFaces(bool clear = true)
     {
-        Array.Fill(FaceVisible, false);
-
-        for (var i = 0; i < FaceId.Length; i++)
+        if (clear)
         {
-            var face = FaceId[i];
-            if ((uint)face < (uint)FaceVisible.Length)
+            Array.Fill(FaceVisible, false);
+        }
+
+        var faceId = FaceId;
+        var faceVisible = FaceVisible;
+        for (var i = 0; i < faceId.Length; i++)
+        {
+            var face = faceId[i];
+            if ((uint)face < (uint)faceVisible.Length)
             {
-                FaceVisible[face] = true;
+                faceVisible[face] = true;
             }
         }
     }
 
     public static float EdgeFunction(float ax, float ay, float bx, float by, float px, float py)
     {
-        return (px - ax) * (by - ay) - (py - ay) * (bx - ax);
+        return RasterMath.EdgeFunction(ax, ay, bx, by, px, py);
     }
 }

@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.NPR.Rendering;
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.Abstractions.Surfaces;
@@ -13,9 +14,11 @@ public sealed class CpuLayerCompositor
         PixelSurface target,
         NprLayerFrame layer,
         NprQualityProfile quality,
-        NprFrameBudget budget)
+        NprFrameBudget budget,
+        CpuRasterWorkspace workspace,
+        CancellationToken cancellationToken = default)
     {
-        var layerOpacity = Math.Clamp(layer.Opacity, 0f, 1f);
+        var layerOpacity = NumericMath.Clamp01(layer.Opacity);
         if (layerOpacity <= 0f || !layer.Visible)
         {
             return;
@@ -25,11 +28,26 @@ public sealed class CpuLayerCompositor
         {
             foreach (var tone in layer.Tones)
             {
-                _toneRasterizer.DrawToneSurface(target, tone, layerOpacity, budget);
+                _toneRasterizer.DrawToneSurface(target, tone, layerOpacity, budget, workspace, cancellationToken);
             }
         }
 
-        _strokeRasterizer.DrawPaths(target, layer.Shading, layerOpacity, quality, budget, preservePathOrder: true);
-        _strokeRasterizer.DrawPaths(target, layer.Strokes, layerOpacity, quality, budget, preservePathOrder: true);
+        if (layer.ShadingSegments is { Count: > 0 } shadingSegments)
+        {
+            _strokeRasterizer.DrawStrokeSegments(target, shadingSegments, layerOpacity, quality, budget, workspace, cancellationToken);
+        }
+        else
+        {
+            _strokeRasterizer.DrawPaths(target, layer.Shading, layerOpacity, quality, budget, workspace, cancellationToken, preservePathOrder: true);
+        }
+
+        if (layer.StrokeSegments is { Count: > 0 } strokeSegments)
+        {
+            _strokeRasterizer.DrawStrokeSegments(target, strokeSegments, layerOpacity, quality, budget, workspace, cancellationToken);
+        }
+        else
+        {
+            _strokeRasterizer.DrawPaths(target, layer.Strokes, layerOpacity, quality, budget, workspace, cancellationToken, preservePathOrder: true);
+        }
     }
 }

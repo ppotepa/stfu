@@ -1,4 +1,6 @@
+using STFU.Common.Math;
 using STFU.NPR.Graph;
+using STFU.Parallelism;
 using STFU.Strokes;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
@@ -9,41 +11,22 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
     private readonly List<DefaultLineFragment> _silhouette = [];
     private readonly List<DefaultLineFragment> _feature = [];
     private readonly List<DefaultLineFragment> _boundary = [];
-    private readonly Dictionary<EndpointKey, EndpointBucket> _adjacency = new();
-    private EndpointKey[] _startKeys = [];
-    private EndpointKey[] _endKeys = [];
-    private bool[] _visited = [];
+    private readonly PathBuildScratch _silhouetteScratch = new();
+    private readonly PathBuildScratch _featureScratch = new();
+    private readonly PathBuildScratch _boundaryScratch = new();
 
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
         context.Graph.DefaultPaths.Clear();
-        context.Graph.DefaultPaths.EnsureCapacity(context.Graph.DefaultFragments.Count);
-
-        var silhouetteCount = 0;
-        var featureCount = 0;
-        var boundaryCount = 0;
-        foreach (var fragment in context.Graph.DefaultFragments)
-        {
-            switch (fragment.Type)
-            {
-                case DefaultLineKind.Silhouette:
-                    silhouetteCount++;
-                    break;
-                case DefaultLineKind.Feature:
-                    featureCount++;
-                    break;
-                default:
-                    boundaryCount++;
-                    break;
-            }
-        }
+        var inputFragmentCount = context.Graph.DefaultFragments.Count;
+        context.Graph.DefaultPaths.EnsureCapacity(inputFragmentCount);
 
         _silhouette.Clear();
         _feature.Clear();
         _boundary.Clear();
-        _silhouette.EnsureCapacity(silhouetteCount);
-        _feature.EnsureCapacity(featureCount);
-        _boundary.EnsureCapacity(boundaryCount);
+        _silhouette.EnsureCapacity(inputFragmentCount);
+        _feature.EnsureCapacity(inputFragmentCount);
+        _boundary.EnsureCapacity(inputFragmentCount);
 
         foreach (var fragment in context.Graph.DefaultFragments)
         {
@@ -61,69 +44,118 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
             }
         }
 
-        AppendPaths(context.Graph.DefaultPaths, _silhouette, DefaultLineKind.Silhouette);
-        AppendPaths(context.Graph.DefaultPaths, _feature, DefaultLineKind.Feature);
-        AppendPaths(context.Graph.DefaultPaths, _boundary, DefaultLineKind.Boundary);
-    }
+        List<DefaultProjectedPath>? silhouettePaths = null;
+        List<DefaultProjectedPath>? featurePaths = null;
+        List<DefaultProjectedPath>? boundaryPaths = null;
+        var parallel = context.WorkerCount > 1 && context.Graph.DefaultFragments.Count >= 512;
 
-    private void AppendPaths(
-        List<DefaultProjectedPath> output,
-        IReadOnlyList<DefaultLineFragment> fragments,
-        DefaultLineKind lineKind)
-    {
-        if (fragments.Count == 0)
+        if (parallel)
         {
-            return;
+            DeterministicParallel.ForRanges(
+                0,
+                3,
+                NumericMath.AtMost(3, context.WorkerCount),
+                context.CancellationToken,
+                (start, end, _, cancellationToken) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    for (var i = start; i < end; i++)
+                    {
+                        switch (i)
+                        {
+                            case 0:
+                                silhouettePaths = BuildPaths(_silhouette, DefaultLineKind.Silhouette, _silhouetteScratch);
+                                break;
+                            case 1:
+                                featurePaths = BuildPaths(_feature, DefaultLineKind.Feature, _featureScratch);
+                                break;
+                            default:
+                                boundaryPaths = BuildPaths(_boundary, DefaultLineKind.Boundary, _boundaryScratch);
+                                break;
+                        }
+                    }
+                },
+                minItemsPerRange: 1);
+        }
+        else
+        {
+            silhouettePaths = BuildPaths(_silhouette, DefaultLineKind.Silhouette, _silhouetteScratch);
+            featurePaths = BuildPaths(_feature, DefaultLineKind.Feature, _featureScratch);
+            boundaryPaths = BuildPaths(_boundary, DefaultLineKind.Boundary, _boundaryScratch);
         }
 
-        Build(output, fragments, lineKind);
+        AppendRange(context.Graph.DefaultPaths, silhouettePaths);
+        AppendRange(context.Graph.DefaultPaths, featurePaths);
+        AppendRange(context.Graph.DefaultPaths, boundaryPaths);
+
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.inputFragments", inputFragmentCount);
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.silhouetteFragments", _silhouette.Count);
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.featureFragments", _feature.Count);
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.boundaryFragments", _boundary.Count);
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.pathsOutput", context.Graph.DefaultPaths.Count);
     }
 
-    private void Build(
-        List<DefaultProjectedPath> output,
-        IReadOnlyList<DefaultLineFragment> fragments,
-        DefaultLineKind lineKind)
+    private static void AppendRange(List<DefaultProjectedPath> output, List<DefaultProjectedPath>? paths)
     {
-        EnsureScratchCapacity(fragments.Count);
-        Array.Clear(_visited, 0, fragments.Count);
-        _adjacency.Clear();
-        _adjacency.EnsureCapacity(fragments.Count * 2);
+        if (paths is { Count: > 0 })
+        {
+            output.AddRange(paths);
+        }
+    }
+
+    private static List<DefaultProjectedPath> BuildPaths(
+        IReadOnlyList<DefaultLineFragment> fragments,
+        DefaultLineKind lineKind,
+        PathBuildScratch scratch)
+    {
+        var output = new List<DefaultProjectedPath>(NumericMath.AtLeast(fragments.Count, 4));
+        if (fragments.Count == 0)
+        {
+            return output;
+        }
+
+        scratch.Reset(fragments.Count);
+        var adjacency = scratch.Adjacency;
+        var startKeys = scratch.StartKeys;
+        var endKeys = scratch.EndKeys;
+        var visited = scratch.Visited;
+        var walkPoints = scratch.WalkPoints;
 
         for (var i = 0; i < fragments.Count; i++)
         {
-            _startKeys[i] = PointKey(fragments[i].P0);
-            _endKeys[i] = PointKey(fragments[i].P1);
-            Add(_adjacency, _startKeys[i], new EndpointRef(i, 0));
-            Add(_adjacency, _endKeys[i], new EndpointRef(i, 1));
+            startKeys[i] = PointKey(fragments[i].P0);
+            endKeys[i] = PointKey(fragments[i].P1);
+            Add(adjacency, startKeys[i], new EndpointRef(i, 0));
+            Add(adjacency, endKeys[i], new EndpointRef(i, 1));
         }
 
         var pathIndex = 0;
 
-        List<Point2D> Walk(int fragmentIndex, int end)
+        Point2D[] Walk(int fragmentIndex, int end)
         {
-            var points = new List<Point2D>(8);
+            walkPoints.Clear();
             var currentFragment = fragmentIndex;
             var currentEnd = end;
             var guard = 0;
 
-            while (currentFragment >= 0 && !_visited[currentFragment] && guard++ < 20000)
+            while (currentFragment >= 0 && !visited[currentFragment] && guard++ < 20000)
             {
-                _visited[currentFragment] = true;
+                visited[currentFragment] = true;
                 var fragment = fragments[currentFragment];
                 var first = currentEnd == 0 ? fragment.P0 : fragment.P1;
                 var second = currentEnd == 0 ? fragment.P1 : fragment.P0;
 
-                if (points.Count == 0)
+                if (walkPoints.Count == 0)
                 {
-                    points.Add(first);
+                    walkPoints.Add(first);
                 }
 
-                points.Add(second);
+                walkPoints.Add(second);
 
                 if (!TryGetNextEndpoint(
-                    _adjacency,
-                    currentEnd == 0 ? _endKeys[currentFragment] : _startKeys[currentFragment],
-                    _visited,
+                    adjacency,
+                    currentEnd == 0 ? endKeys[currentFragment] : startKeys[currentFragment],
+                    visited,
                     out var next))
                 {
                     break;
@@ -133,10 +165,10 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
                 currentEnd = next.End;
             }
 
-            return points;
+            return walkPoints.ToArray();
         }
 
-        foreach (var pair in _adjacency)
+        foreach (var pair in adjacency)
         {
             if (pair.Value.Count == 2)
             {
@@ -145,7 +177,7 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
 
             foreach (var endpoint in pair.Value)
             {
-                if (_visited[endpoint.FragmentIndex])
+                if (visited[endpoint.FragmentIndex])
                 {
                     continue;
                 }
@@ -156,39 +188,23 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
 
         for (var i = 0; i < fragments.Count; i++)
         {
-            if (!_visited[i])
+            if (!visited[i])
             {
                 AddPath(output, lineKind, Walk(i, 0), pathIndex++);
             }
         }
+
+        return output;
     }
 
-    private void EnsureScratchCapacity(int count)
-    {
-        if (_startKeys.Length < count)
-        {
-            _startKeys = new EndpointKey[count];
-        }
-
-        if (_endKeys.Length < count)
-        {
-            _endKeys = new EndpointKey[count];
-        }
-
-        if (_visited.Length < count)
-        {
-            _visited = new bool[count];
-        }
-    }
-
-    private static void AddPath(List<DefaultProjectedPath> paths, DefaultLineKind lineKind, List<Point2D> points, int pathIndex)
+    private static void AddPath(List<DefaultProjectedPath> paths, DefaultLineKind lineKind, IReadOnlyList<Point2D> points, int pathIndex)
     {
         if (points.Count <= 1)
         {
             return;
         }
 
-        var length = DefaultPathMath.PathLength(points);
+        var length = DefaultPointPathAdapter.PathLength(points);
         unchecked
         {
             var stableId = ((int)lineKind * 73856093) ^ (pathIndex * 19349663);
@@ -265,23 +281,14 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
             Count++;
         }
 
-        public readonly Enumerator GetEnumerator()
+        public readonly Enumerator GetEnumerator() => new(this);
+
+        public struct Enumerator(EndpointBucket bucket)
         {
-            return new Enumerator(this);
-        }
+            private readonly EndpointBucket _bucket = bucket;
+            private int _index = -1;
 
-        public struct Enumerator
-        {
-            private readonly EndpointBucket _bucket;
-            private int _index;
-
-            public Enumerator(EndpointBucket bucket)
-            {
-                _bucket = bucket;
-                _index = -1;
-            }
-
-            public readonly EndpointRef Current => _bucket[_index];
+            public EndpointRef Current => _bucket[_index];
 
             public bool MoveNext()
             {
@@ -291,19 +298,45 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         }
     }
 
-    private static EndpointKey PointKey(Point2D point)
-    {
-        return new EndpointKey(
-            JavaScriptRound(point.X / Quantization),
-            JavaScriptRound(point.Y / Quantization));
-    }
-
-    private static int JavaScriptRound(float value)
-    {
-        return (int)MathF.Floor(value + 0.5f);
-    }
+    private readonly record struct EndpointRef(int FragmentIndex, int End);
 
     private readonly record struct EndpointKey(int X, int Y);
 
-    private readonly record struct EndpointRef(int FragmentIndex, int End);
+    private sealed class PathBuildScratch
+    {
+        public EndpointKey[] StartKeys = [];
+        public EndpointKey[] EndKeys = [];
+        public bool[] Visited = [];
+        public readonly Dictionary<EndpointKey, EndpointBucket> Adjacency = new();
+        public readonly List<Point2D> WalkPoints = new(32);
+
+        public void Reset(int fragmentCount)
+        {
+            if (StartKeys.Length < fragmentCount)
+            {
+                StartKeys = new EndpointKey[fragmentCount];
+            }
+
+            if (EndKeys.Length < fragmentCount)
+            {
+                EndKeys = new EndpointKey[fragmentCount];
+            }
+
+            if (Visited.Length < fragmentCount)
+            {
+                Visited = new bool[fragmentCount];
+            }
+
+            Array.Clear(Visited, 0, fragmentCount);
+            Adjacency.Clear();
+            WalkPoints.Clear();
+            Adjacency.EnsureCapacity(fragmentCount * 2);
+        }
+    }
+
+    private static EndpointKey PointKey(Point2D point)
+    {
+        var key = Geometry2D.QuantizePoint(point.X, point.Y, Quantization);
+        return new EndpointKey(key.X, key.Y);
+    }
 }

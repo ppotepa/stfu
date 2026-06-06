@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Strokes;
 using STFU.NPR.Temporal;
@@ -34,7 +35,7 @@ public sealed class StyledStroke
         Density = density;
         HatchLayerKind = hatchLayerKind;
         EntityId = entityId;
-        ScreenLength = MeasureLength(Points);
+        ScreenLength = PathMath.PathLength(Points, static point => point.X, static point => point.Y);
     }
 
     public int StableId { get; }
@@ -73,17 +74,4 @@ public sealed class StyledStroke
 
     public TemporalStrokeState TemporalState { get; set; } = TemporalStrokeState.FadingIn;
 
-    private static float MeasureLength(IReadOnlyList<Point2D> points)
-    {
-        var length = 0f;
-
-        for (var index = 1; index < points.Count; index++)
-        {
-            var dx = points[index].X - points[index - 1].X;
-            var dy = points[index].Y - points[index - 1].Y;
-            length += MathF.Sqrt(dx * dx + dy * dy);
-        }
-
-        return length;
-    }
 }

@@ -1,39 +1,124 @@
 using System.Numerics;
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Mesh;
+using STFU.NPR.Settings;
 
 namespace STFU.NPR.Analysis;
 
 public sealed class MeshAnalysisCacheStore
 {
-    private readonly Dictionary<MeshHandle, MeshAnalysisCache> _caches = new();
+    private readonly Dictionary<MeshHandle, CacheEntry> _caches = new();
+    private readonly Dictionary<WireframeTopologyKey, WireframeTopologyEntry> _wireframeTopologies = new();
+    private readonly Dictionary<DefaultNprTopologyCacheKey, DefaultNprTopologyEntry> _defaultNprTopologies = new();
 
     public int Count => _caches.Count;
 
     public MeshAnalysisCache GetOrCreate(MeshHandle handle, MeshData mesh)
     {
-        if (_caches.TryGetValue(handle, out var cache))
+        if (_caches.TryGetValue(handle, out var entry) &&
+            ReferenceEquals(entry.Mesh, mesh))
         {
-            return cache;
+            return entry.Cache;
         }
 
-        cache = new MeshAnalysisCache(
+        var cache = new MeshAnalysisCache(
             BuildTopology(mesh),
             CalculateBounds(mesh),
             BuildCurvature(mesh));
 
-        _caches[handle] = cache;
+        _caches[handle] = new CacheEntry(mesh, cache);
+        return cache;
+    }
+
+    public TopologyCache GetOrCreateWireframeTopology(
+        MeshHandle handle,
+        MeshData mesh,
+        MeshWireframeTopologyMode mode = MeshWireframeTopologyMode.Raw)
+    {
+        var signature = mode == MeshWireframeTopologyMode.Welded
+            ? CalculateWeldedTriangleSignature(mesh)
+            : CalculateTriangleSignature(mesh);
+        var key = new WireframeTopologyKey(handle, mode);
+        if (_wireframeTopologies.TryGetValue(key, out var entry) &&
+            entry.VertexCount == mesh.Vertices.Count &&
+            entry.TriangleCount == mesh.Triangles.Count &&
+            entry.Signature == signature)
+        {
+            return entry.Topology;
+        }
+
+        var topology = mode == MeshWireframeTopologyMode.Welded
+            ? BuildWeldedWireframeTopology(mesh)
+            : BuildWireframeTopology(mesh);
+        _wireframeTopologies[key] = new WireframeTopologyEntry(
+            mesh.Vertices.Count,
+            mesh.Triangles.Count,
+            signature,
+            topology);
+        return topology;
+    }
+
+    public DefaultNprTopologyCache GetOrCreateDefaultNprTopology(
+        MeshHandle handle,
+        MeshData mesh,
+        DefaultTopologyMode mode)
+    {
+        var signature = CalculateTriangleSignature(mesh);
+        var key = new DefaultNprTopologyCacheKey(handle, mode);
+        if (_defaultNprTopologies.TryGetValue(key, out var entry) &&
+            entry.VertexCount == mesh.Vertices.Count &&
+            entry.TriangleCount == mesh.Triangles.Count &&
+            entry.Signature == signature)
+        {
+            return entry.Cache;
+        }
+
+        var cache = mode == DefaultTopologyMode.SharedTopology
+            ? BuildDefaultSharedTopology(mesh, signature, mode)
+            : BuildDefaultPerTriangleTopology(mesh, signature, mode);
+        _defaultNprTopologies[key] = new DefaultNprTopologyEntry(
+            mesh.Vertices.Count,
+            mesh.Triangles.Count,
+            signature,
+            cache);
         return cache;
     }
 
     public bool TryGet(MeshHandle handle, out MeshAnalysisCache cache)
     {
-        return _caches.TryGetValue(handle, out cache!);
+        if (_caches.TryGetValue(handle, out var entry))
+        {
+            cache = entry.Cache;
+            return true;
+        }
+
+        cache = default!;
+        return false;
     }
 
     public void Invalidate(MeshHandle handle)
     {
+        InvalidateGeometry(handle);
+    }
+
+    public void InvalidateGeometry(MeshHandle handle)
+    {
         _caches.Remove(handle);
+    }
+
+    public void InvalidateTopology(MeshHandle handle)
+    {
+        _caches.Remove(handle);
+        foreach (var key in _wireframeTopologies.Keys.Where(key => key.Handle == handle).ToArray())
+        {
+            _wireframeTopologies.Remove(key);
+        }
+
+        foreach (var key in _defaultNprTopologies.Keys.Where(key => key.Handle == handle).ToArray())
+        {
+            _defaultNprTopologies.Remove(key);
+        }
     }
 
     private static TopologyCache BuildTopology(MeshData mesh)
@@ -51,39 +136,258 @@ public sealed class MeshAnalysisCacheStore
         var cachedEdges = new List<TopologyCacheEdge>(edges.Count);
         foreach (var edge in edges.Values)
         {
-            var normalAngleDegrees = CalculateNormalAngleDegrees(mesh, edge.FirstTriangleIndex, edge.SecondTriangleIndex);
+            var normalAngleDegrees = 0f;
+            if (edge.FirstTriangleIndex >= 0 &&
+                edge.SecondTriangleIndex >= 0 &&
+                edge.FirstTriangleIndex < mesh.Triangles.Count &&
+                edge.SecondTriangleIndex < mesh.Triangles.Count)
+            {
+                var first = Geometry3D.TriangleNormal(
+                    mesh.Triangles[edge.FirstTriangleIndex],
+                    static item => item.A,
+                    static item => item.B,
+                    static item => item.C,
+                    index => mesh.Vertices[index].Position,
+                    Vector3.UnitY);
+                var second = Geometry3D.TriangleNormal(
+                    mesh.Triangles[edge.SecondTriangleIndex],
+                    static item => item.A,
+                    static item => item.B,
+                    static item => item.C,
+                    index => mesh.Vertices[index].Position,
+                    Vector3.UnitY);
+                normalAngleDegrees = Geometry3D.NormalAngleDegrees(first, second);
+            }
+
             cachedEdges.Add(new TopologyCacheEdge(
-                StableEdgeId(edge.StartVertexIndex, edge.EndVertexIndex),
                 edge.StartVertexIndex,
                 edge.EndVertexIndex,
                 edge.FirstTriangleIndex,
                 edge.SecondTriangleIndex,
                 edge.SecondTriangleIndex < 0,
                 normalAngleDegrees,
-                ClassifySemantic(edge.SecondTriangleIndex < 0, normalAngleDegrees)));
+                ClassifySemantic(edge.SecondTriangleIndex < 0, normalAngleDegrees),
+                edge.FirstEncounterStartVertexIndex,
+                edge.FirstEncounterEndVertexIndex));
         }
 
         return new TopologyCache(cachedEdges);
     }
 
+    private static TopologyCache BuildWireframeTopology(MeshData mesh)
+    {
+        var edges = new Dictionary<long, PendingEdge>(mesh.Triangles.Count * 3);
+
+        for (var triangleIndex = 0; triangleIndex < mesh.Triangles.Count; triangleIndex++)
+        {
+            var triangle = mesh.Triangles[triangleIndex];
+            AddEdge(edges, triangle.A, triangle.B, triangleIndex);
+            AddEdge(edges, triangle.B, triangle.C, triangleIndex);
+            AddEdge(edges, triangle.C, triangle.A, triangleIndex);
+        }
+
+        var cachedEdges = new List<TopologyCacheEdge>(edges.Count);
+        foreach (var edge in edges.Values)
+        {
+            cachedEdges.Add(new TopologyCacheEdge(
+                edge.StartVertexIndex,
+                edge.EndVertexIndex,
+                edge.FirstTriangleIndex,
+                edge.SecondTriangleIndex,
+                edge.SecondTriangleIndex < 0,
+                edge.SecondTriangleIndex < 0 ? 180f : 0f,
+                edge.SecondTriangleIndex < 0 ? EdgeSemantic.Boundary : EdgeSemantic.Unknown,
+                edge.FirstEncounterStartVertexIndex,
+                edge.FirstEncounterEndVertexIndex));
+        }
+
+        return new TopologyCache(cachedEdges);
+    }
+
+    private static TopologyCache BuildWeldedWireframeTopology(MeshData mesh)
+    {
+        if (mesh.LogicalVertexIds is not null &&
+            mesh.LogicalVertexIds.Count >= mesh.Vertices.Count)
+        {
+            return BuildLogicalWireframeTopology(mesh);
+        }
+
+        var vertexCount = mesh.Vertices.Count;
+        var weldedIds = new int[vertexCount];
+        var representativeIndices = new List<int>(vertexCount);
+        var vertexMap = new Dictionary<QuantizedVector3Key, int>(vertexCount);
+
+        for (var vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+        {
+            var key = QuantizedVector3Key.From(mesh.Vertices[vertexIndex].Position);
+            if (!vertexMap.TryGetValue(key, out var weldedId))
+            {
+                weldedId = representativeIndices.Count;
+                vertexMap.Add(key, weldedId);
+                representativeIndices.Add(vertexIndex);
+            }
+
+            weldedIds[vertexIndex] = weldedId;
+        }
+
+        var edges = new Dictionary<long, PendingEdge>(mesh.Triangles.Count * 3);
+        for (var triangleIndex = 0; triangleIndex < mesh.Triangles.Count; triangleIndex++)
+        {
+            var triangle = mesh.Triangles[triangleIndex];
+            AddWeldedEdge(edges, weldedIds, representativeIndices, triangle.A, triangle.B, triangleIndex);
+            AddWeldedEdge(edges, weldedIds, representativeIndices, triangle.B, triangle.C, triangleIndex);
+            AddWeldedEdge(edges, weldedIds, representativeIndices, triangle.C, triangle.A, triangleIndex);
+        }
+
+        var cachedEdges = new List<TopologyCacheEdge>(edges.Count);
+        foreach (var edge in edges.Values)
+        {
+            cachedEdges.Add(new TopologyCacheEdge(
+                edge.StartVertexIndex,
+                edge.EndVertexIndex,
+                edge.FirstTriangleIndex,
+                edge.SecondTriangleIndex,
+                edge.SecondTriangleIndex < 0,
+                edge.SecondTriangleIndex < 0 ? 180f : 0f,
+                edge.SecondTriangleIndex < 0 ? EdgeSemantic.Boundary : EdgeSemantic.Unknown,
+                edge.FirstEncounterStartVertexIndex,
+                edge.FirstEncounterEndVertexIndex));
+        }
+
+        return new TopologyCache(cachedEdges);
+    }
+
+    private static TopologyCache BuildLogicalWireframeTopology(MeshData mesh)
+    {
+        var logicalIds = mesh.LogicalVertexIds!;
+        var representativeIndices = new Dictionary<int, int>(mesh.Vertices.Count);
+        for (var vertexIndex = 0; vertexIndex < mesh.Vertices.Count; vertexIndex++)
+        {
+            var logicalId = logicalIds[vertexIndex];
+            representativeIndices.TryAdd(logicalId, vertexIndex);
+        }
+
+        var edges = new Dictionary<long, PendingEdge>(mesh.Triangles.Count * 3);
+        for (var triangleIndex = 0; triangleIndex < mesh.Triangles.Count; triangleIndex++)
+        {
+            var triangle = mesh.Triangles[triangleIndex];
+            AddLogicalEdge(edges, logicalIds, representativeIndices, triangle.A, triangle.B, triangleIndex);
+            AddLogicalEdge(edges, logicalIds, representativeIndices, triangle.B, triangle.C, triangleIndex);
+            AddLogicalEdge(edges, logicalIds, representativeIndices, triangle.C, triangle.A, triangleIndex);
+        }
+
+        var cachedEdges = new List<TopologyCacheEdge>(edges.Count);
+        foreach (var edge in edges.Values)
+        {
+            cachedEdges.Add(new TopologyCacheEdge(
+                edge.StartVertexIndex,
+                edge.EndVertexIndex,
+                edge.FirstTriangleIndex,
+                edge.SecondTriangleIndex,
+                edge.SecondTriangleIndex < 0,
+                edge.SecondTriangleIndex < 0 ? 180f : 0f,
+                edge.SecondTriangleIndex < 0 ? EdgeSemantic.Boundary : EdgeSemantic.Unknown,
+                edge.FirstEncounterStartVertexIndex,
+                edge.FirstEncounterEndVertexIndex));
+        }
+
+        return new TopologyCache(cachedEdges);
+    }
+
+    private static DefaultNprTopologyCache BuildDefaultPerTriangleTopology(
+        MeshData mesh,
+        ulong signature,
+        DefaultTopologyMode mode)
+    {
+        var edges = new DefaultNprTopologyEdge[checked(mesh.Triangles.Count * 3)];
+        var cursor = 0;
+        for (var triangleIndex = 0; triangleIndex < mesh.Triangles.Count; triangleIndex++)
+        {
+            var triangle = mesh.Triangles[triangleIndex];
+            edges[cursor++] = CreateDefaultEdge(triangleIndex, 0, triangle.A, triangle.B, -1, true);
+            edges[cursor++] = CreateDefaultEdge(triangleIndex, 1, triangle.B, triangle.C, -1, true);
+            edges[cursor++] = CreateDefaultEdge(triangleIndex, 2, triangle.C, triangle.A, -1, true);
+        }
+
+        return new DefaultNprTopologyCache(edges, mesh.Triangles.Count, mesh.Vertices.Count, signature, mode);
+    }
+
+    private static DefaultNprTopologyCache BuildDefaultSharedTopology(
+        MeshData mesh,
+        ulong signature,
+        DefaultTopologyMode mode)
+    {
+        var pending = new Dictionary<long, PendingDefaultNprEdge>(NumericMath.AtLeast(mesh.Triangles.Count * 3, 4));
+        for (var triangleIndex = 0; triangleIndex < mesh.Triangles.Count; triangleIndex++)
+        {
+            var triangle = mesh.Triangles[triangleIndex];
+            AddDefaultEdge(pending, triangle.A, triangle.B, triangleIndex);
+            AddDefaultEdge(pending, triangle.B, triangle.C, triangleIndex);
+            AddDefaultEdge(pending, triangle.C, triangle.A, triangleIndex);
+        }
+
+        var edges = new DefaultNprTopologyEdge[pending.Count];
+        var cursor = 0;
+        foreach (var entry in pending.Values)
+        {
+            edges[cursor++] = new DefaultNprTopologyEdge(
+                entry.StableId,
+                entry.StartVertexIndex,
+                entry.EndVertexIndex,
+                entry.FirstTriangleIndex,
+                entry.SecondTriangleIndex,
+                entry.SecondTriangleIndex < 0,
+                entry.FirstEncounterStartVertexIndex,
+                entry.FirstEncounterEndVertexIndex,
+                entry.SecondEncounterStartVertexIndex,
+                entry.SecondEncounterEndVertexIndex);
+        }
+
+        return new DefaultNprTopologyCache(edges, mesh.Triangles.Count, mesh.Vertices.Count, signature, mode);
+    }
+
+    private static DefaultNprTopologyEdge CreateDefaultEdge(
+        int triangleIndex,
+        int edgeIndex,
+        int a,
+        int b,
+        int secondTriangleIndex,
+        bool isBoundary)
+    {
+        var stableId = unchecked((triangleIndex * 397) ^ (edgeIndex * 131) ^ a ^ (b * 17));
+        return new DefaultNprTopologyEdge(
+            stableId,
+            a,
+            b,
+            triangleIndex,
+            secondTriangleIndex,
+            isBoundary,
+            a,
+            b);
+    }
+
+    private sealed record CacheEntry(MeshData Mesh, MeshAnalysisCache Cache);
+
+    private readonly record struct WireframeTopologyKey(
+        MeshHandle Handle,
+        MeshWireframeTopologyMode Mode);
+
+    private readonly record struct WireframeTopologyEntry(
+        int VertexCount,
+        int TriangleCount,
+        ulong Signature,
+        TopologyCache Topology);
+
+    private sealed record DefaultNprTopologyEntry(
+        int VertexCount,
+        int TriangleCount,
+        ulong Signature,
+        DefaultNprTopologyCache Cache);
+
     private static MeshBounds CalculateBounds(MeshData mesh)
     {
-        if (mesh.Vertices.Count == 0)
-        {
-            return new MeshBounds(Vector3.Zero, Vector3.Zero);
-        }
-
-        var min = mesh.Vertices[0].Position;
-        var max = mesh.Vertices[0].Position;
-
-        for (var index = 1; index < mesh.Vertices.Count; index++)
-        {
-            var position = mesh.Vertices[index].Position;
-            min = Vector3.Min(min, position);
-            max = Vector3.Max(max, position);
-        }
-
-        return new MeshBounds(min, max);
+        var bounds = Geometry3D.Bounds(mesh.Vertices, static vertex => vertex.Position);
+        return new MeshBounds(bounds.Min, bounds.Max);
     }
 
     private static CurvatureCache BuildCurvature(MeshData mesh)
@@ -124,11 +428,10 @@ public sealed class MeshAnalysisCacheStore
             foreach (var neighborIndex in adjacent)
             {
                 var neighborNormal = SafeNormal(mesh.Vertices[neighborIndex].Normal);
-                var dot = Math.Clamp(System.Numerics.Vector3.Dot(vertexNormal, neighborNormal), -1f, 1f);
-                totalAngle += MathF.Acos(dot) / MathF.PI;
+                totalAngle += Geometry3D.NormalAngleDegrees(vertexNormal, neighborNormal) / 180f;
             }
 
-            vertexCurvature[vertexIndex] = Math.Clamp(totalAngle / adjacent.Count, 0f, 1f);
+            vertexCurvature[vertexIndex] = NumericMath.Clamp01(totalAngle / adjacent.Count);
         }
 
         var smoothedVertexCurvature = new float[mesh.Vertices.Count];
@@ -160,11 +463,11 @@ public sealed class MeshAnalysisCacheStore
                     continue;
                 }
 
-                var weight = 0.35f + MathF.Abs(vertexCurvature[neighborIndex] - vertexCurvature[vertexIndex]) * 0.65f;
+                var weight = 0.35f + NumericMath.Abs(vertexCurvature[neighborIndex] - vertexCurvature[vertexIndex]) * 0.65f;
                 flow += System.Numerics.Vector3.Normalize(tangentDelta) * weight;
             }
 
-            smoothedVertexCurvature[vertexIndex] = Math.Clamp(totalCurvature / (adjacent.Count + 1), 0f, 1f);
+            smoothedVertexCurvature[vertexIndex] = NumericMath.Clamp01(totalCurvature / (adjacent.Count + 1));
             vertexDirections[vertexIndex] = flow.LengthSquared() <= 0.0001f
                 ? System.Numerics.Vector3.Zero
                 : System.Numerics.Vector3.Normalize(flow);
@@ -211,7 +514,7 @@ public sealed class MeshAnalysisCacheStore
 
             vertexSignedCurvature[vertexIndex] = count == 0
                 ? 0f
-                : Math.Clamp(signed / count, -1f, 1f);
+                : NumericMath.Clamp(signed / count, -1f, 1f);
         }
 
         for (var vertexIndex = 0; vertexIndex < mesh.Vertices.Count; vertexIndex++)
@@ -229,7 +532,7 @@ public sealed class MeshAnalysisCacheStore
                 totalSigned += vertexSignedCurvature[neighborIndex];
             }
 
-            smoothedVertexSignedCurvature[vertexIndex] = Math.Clamp(totalSigned / (adjacent.Count + 1), -1f, 1f);
+            smoothedVertexSignedCurvature[vertexIndex] = NumericMath.Clamp(totalSigned / (adjacent.Count + 1), -1f, 1f);
         }
 
         var triangleCurvature = new float[mesh.Triangles.Count];
@@ -300,7 +603,12 @@ public sealed class MeshAnalysisCacheStore
                 ComputeCurvatureConfidence(smoothedVertexCurvature[vertexIndex], direction1));
         }
 
-        var meanEdgeLength = ComputeMeanEdgeLength(mesh);
+        var meanEdgeLength = Geometry3D.MeanTriangleEdgeLength(
+            mesh.Triangles,
+            static triangle => triangle.A,
+            static triangle => triangle.B,
+            static triangle => triangle.C,
+            index => mesh.Vertices[index].Position);
         var smoothingRadius = meanEdgeLength * 1.5f;
         var quality = ResolveCurvatureQuality(smoothedVertexCurvature, vertexDirections);
 
@@ -325,27 +633,7 @@ public sealed class MeshAnalysisCacheStore
     private static float ComputeCurvatureConfidence(float curvature, Vector3 direction)
     {
         var directionFactor = direction.LengthSquared() <= 0.0001f ? 0.2f : 1f;
-        return Math.Clamp(curvature * 0.8f + directionFactor * 0.2f, 0f, 1f);
-    }
-
-    private static float ComputeMeanEdgeLength(MeshData mesh)
-    {
-        if (mesh.Triangles.Count == 0)
-        {
-            return 0f;
-        }
-
-        var total = 0f;
-        var count = 0;
-        foreach (var triangle in mesh.Triangles)
-        {
-            total += Vector3.Distance(mesh.Vertices[triangle.A].Position, mesh.Vertices[triangle.B].Position);
-            total += Vector3.Distance(mesh.Vertices[triangle.B].Position, mesh.Vertices[triangle.C].Position);
-            total += Vector3.Distance(mesh.Vertices[triangle.C].Position, mesh.Vertices[triangle.A].Position);
-            count += 3;
-        }
-
-        return count == 0 ? 0f : total / count;
+        return NumericMath.Clamp01(curvature * 0.8f + directionFactor * 0.2f);
     }
 
     private static CurvatureQuality ResolveCurvatureQuality(IReadOnlyList<float> smoothedVertexCurvature, IReadOnlyList<Vector3> vertexDirections)
@@ -356,7 +644,7 @@ public sealed class MeshAnalysisCacheStore
         }
 
         var avgCurvature = smoothedVertexCurvature.Average();
-        var directionalFraction = vertexDirections.Count(direction => direction.LengthSquared() > 0.0001f) / (float)Math.Max(1, vertexDirections.Count);
+        var directionalFraction = vertexDirections.Count(direction => direction.LengthSquared() > 0.0001f) / (float)NumericMath.AtLeast(vertexDirections.Count, 1);
 
         if (avgCurvature >= 0.12f && directionalFraction >= 0.45f)
         {
@@ -369,29 +657,6 @@ public sealed class MeshAnalysisCacheStore
         }
 
         return CurvatureQuality.LowConfidence;
-    }
-
-    private static float CalculateNormalAngleDegrees(MeshData mesh, int firstTriangleIndex, int secondTriangleIndex)
-    {
-        if (firstTriangleIndex < 0 || secondTriangleIndex < 0 ||
-            firstTriangleIndex >= mesh.Triangles.Count || secondTriangleIndex >= mesh.Triangles.Count)
-        {
-            return 0f;
-        }
-
-        var first = CalculateTriangleNormal(mesh, mesh.Triangles[firstTriangleIndex]);
-        var second = CalculateTriangleNormal(mesh, mesh.Triangles[secondTriangleIndex]);
-        var dot = Math.Clamp(Vector3.Dot(first, second), -1f, 1f);
-        return MathF.Acos(dot) * (180f / MathF.PI);
-    }
-
-    private static Vector3 CalculateTriangleNormal(MeshData mesh, MeshTriangle triangle)
-    {
-        var a = mesh.Vertices[triangle.A].Position;
-        var b = mesh.Vertices[triangle.B].Position;
-        var c = mesh.Vertices[triangle.C].Position;
-        var cross = Vector3.Cross(b - a, c - a);
-        return cross.LengthSquared() <= 0.0001f ? Vector3.UnitY : Vector3.Normalize(cross);
     }
 
     private static EdgeSemantic ClassifySemantic(bool isBoundary, float normalAngleDegrees)
@@ -420,14 +685,12 @@ public sealed class MeshAnalysisCacheStore
 
     private static System.Numerics.Vector3 SafeNormal(System.Numerics.Vector3 normal)
     {
-        return normal.LengthSquared() <= 0.0001f
-            ? System.Numerics.Vector3.UnitY
-            : System.Numerics.Vector3.Normalize(normal);
+        return Geometry3D.NormalizeOrDefault(normal, System.Numerics.Vector3.UnitY);
     }
 
     private static void AddEdge(Dictionary<long, PendingEdge> edges, int a, int b, int triangleIndex)
     {
-        var key = CreateEdgeKey(a, b);
+        var key = MeshTopologyMath.CreateUndirectedEdgeKey(a, b);
 
         if (edges.TryGetValue(key, out var edge))
         {
@@ -439,21 +702,173 @@ public sealed class MeshAnalysisCacheStore
             return;
         }
 
-        edges[key] = new PendingEdge(Math.Min(a, b), Math.Max(a, b), triangleIndex, -1);
+        edges[key] = new PendingEdge(
+            MeshTopologyMath.UndirectedEdgeStart(a, b),
+            MeshTopologyMath.UndirectedEdgeEnd(a, b),
+            triangleIndex,
+            -1,
+            a,
+            b);
     }
 
-    private static long CreateEdgeKey(int a, int b)
+    private static void AddDefaultEdge(
+        Dictionary<long, PendingDefaultNprEdge> edges,
+        int a,
+        int b,
+        int triangleIndex)
     {
-        var min = Math.Min(a, b);
-        var max = Math.Max(a, b);
-        return ((long)min << 32) | (uint)max;
+        var min = MeshTopologyMath.UndirectedEdgeStart(a, b);
+        var max = MeshTopologyMath.UndirectedEdgeEnd(a, b);
+        var key = MeshTopologyMath.CreateUndirectedEdgeKey(a, b);
+
+        if (!edges.TryGetValue(key, out var edge))
+        {
+            edge = new PendingDefaultNprEdge(
+                unchecked((triangleIndex * 397) ^ (a * 17) ^ b),
+                min,
+                max,
+                triangleIndex,
+                -1,
+                a,
+                b,
+                -1,
+                -1);
+        }
+        else if (edge.SecondTriangleIndex < 0)
+        {
+            edge = edge with
+            {
+                SecondTriangleIndex = triangleIndex,
+                SecondEncounterStartVertexIndex = a,
+                SecondEncounterEndVertexIndex = b
+            };
+        }
+
+        edges[key] = edge;
     }
 
-    private static int StableEdgeId(int a, int b)
+    private static void AddWeldedEdge(
+        Dictionary<long, PendingEdge> edges,
+        int[] weldedIds,
+        List<int> representativeIndices,
+        int a,
+        int b,
+        int triangleIndex)
     {
+        if ((uint)a >= (uint)weldedIds.Length ||
+            (uint)b >= (uint)weldedIds.Length)
+        {
+            return;
+        }
+
+        var weldedA = weldedIds[a];
+        var weldedB = weldedIds[b];
+        if (weldedA == weldedB)
+        {
+            return;
+        }
+
+        var key = MeshTopologyMath.CreateUndirectedEdgeKey(weldedA, weldedB);
+        if (edges.TryGetValue(key, out var edge))
+        {
+            if (edge.SecondTriangleIndex < 0)
+            {
+                edges[key] = edge with { SecondTriangleIndex = triangleIndex };
+            }
+
+            return;
+        }
+
+        var start = representativeIndices[MeshTopologyMath.UndirectedEdgeStart(weldedA, weldedB)];
+        var end = representativeIndices[MeshTopologyMath.UndirectedEdgeEnd(weldedA, weldedB)];
+        edges[key] = new PendingEdge(start, end, triangleIndex, -1, a, b);
+    }
+
+    private static void AddLogicalEdge(
+        Dictionary<long, PendingEdge> edges,
+        IReadOnlyList<int> logicalIds,
+        Dictionary<int, int> representativeIndices,
+        int a,
+        int b,
+        int triangleIndex)
+    {
+        if ((uint)a >= (uint)logicalIds.Count ||
+            (uint)b >= (uint)logicalIds.Count)
+        {
+            return;
+        }
+
+        var logicalA = logicalIds[a];
+        var logicalB = logicalIds[b];
+        if (logicalA == logicalB)
+        {
+            return;
+        }
+
+        var key = MeshTopologyMath.CreateUndirectedEdgeKey(logicalA, logicalB);
+        if (edges.TryGetValue(key, out var edge))
+        {
+            if (edge.SecondTriangleIndex < 0)
+            {
+                edges[key] = edge with { SecondTriangleIndex = triangleIndex };
+            }
+
+            return;
+        }
+
+        var start = representativeIndices[MeshTopologyMath.UndirectedEdgeStart(logicalA, logicalB)];
+        var end = representativeIndices[MeshTopologyMath.UndirectedEdgeEnd(logicalA, logicalB)];
+        edges[key] = new PendingEdge(start, end, triangleIndex, -1, a, b);
+    }
+
+    private static ulong CalculateTriangleSignature(MeshData mesh)
+    {
+        const ulong offset = 14695981039346656037UL;
+        const ulong prime = 1099511628211UL;
+
         unchecked
         {
-            return Math.Min(a, b) * 83492791 ^ Math.Max(a, b) * 297121507;
+            var hash = offset;
+            hash = (hash ^ (uint)mesh.Vertices.Count) * prime;
+            hash = (hash ^ (uint)mesh.Triangles.Count) * prime;
+
+            foreach (var triangle in mesh.Triangles)
+            {
+                hash = (hash ^ (uint)triangle.A) * prime;
+                hash = (hash ^ (uint)triangle.B) * prime;
+                hash = (hash ^ (uint)triangle.C) * prime;
+            }
+
+            return hash;
+        }
+    }
+
+    private static ulong CalculateWeldedTriangleSignature(MeshData mesh)
+    {
+        const ulong prime = 1099511628211UL;
+
+        unchecked
+        {
+            var hash = CalculateTriangleSignature(mesh);
+            hash = (hash ^ (mesh.LogicalVertexIds is null ? 0u : 1u)) * prime;
+            if (mesh.LogicalVertexIds is null)
+            {
+                return hash;
+            }
+
+            foreach (var triangle in mesh.Triangles)
+            {
+                hash = (hash ^ ReadLogicalId(mesh.LogicalVertexIds, triangle.A)) * prime;
+                hash = (hash ^ ReadLogicalId(mesh.LogicalVertexIds, triangle.B)) * prime;
+                hash = (hash ^ ReadLogicalId(mesh.LogicalVertexIds, triangle.C)) * prime;
+            }
+
+            return hash;
+        }
+
+        static uint ReadLogicalId(IReadOnlyList<int> logicalIds, int index)
+        {
+            return (uint)((uint)index < (uint)logicalIds.Count ? logicalIds[index] : index);
         }
     }
 
@@ -461,5 +876,19 @@ public sealed class MeshAnalysisCacheStore
         int StartVertexIndex,
         int EndVertexIndex,
         int FirstTriangleIndex,
-        int SecondTriangleIndex);
+        int SecondTriangleIndex,
+        int FirstEncounterStartVertexIndex,
+        int FirstEncounterEndVertexIndex);
+
+    private readonly record struct PendingDefaultNprEdge(
+        int StableId,
+        int StartVertexIndex,
+        int EndVertexIndex,
+        int FirstTriangleIndex,
+        int SecondTriangleIndex,
+        int FirstEncounterStartVertexIndex,
+        int FirstEncounterEndVertexIndex,
+        int SecondEncounterStartVertexIndex,
+        int SecondEncounterEndVertexIndex);
+
 }

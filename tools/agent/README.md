@@ -45,6 +45,8 @@ Common flags:
 --refresh
 --cache warm
 --use-server
+--include <scope[,scope]|glob>
+--profile <name>|all
 ```
 
 Useful chains:
@@ -58,6 +60,9 @@ Useful chains:
 
 .\tools\agent\agent.ps1 diff --semantic --format json |
   .\tools\agent\agent.ps1 concat --from-stdin --budget-lines 300 --format markdown
+
+.\tools\agent\agent.ps1 diff --semantic --format json |
+  .\tools\agent\agent.ps1 concat --from-stdin --include tools --budget-lines 300 --format markdown
 
 .\tools\agent\agent.ps1 symbols --name NprLayerFrame --cache warm --format json
 
@@ -88,4 +93,7 @@ Design rules:
 - `search` is a fallback, not the semantic default
 - `.agents/cache/index.sqlite` is the warm cache; `.agents/cache/*.jsonl` are readable sidecars
 - `server start` launches a background `server-daemon` that preloads the workspace and warms cache; direct IPC is opt-in with `--use-server`
+- `concat` uses config-driven profiles and include scopes; default STFU profile is `source`
+- `alwaysExcludePatterns` in `agent.config.json` skips generated noise such as `artifacts/`, `logs/`, `test-results/`, `release/`, and old concat bundles
+- `includeScopes` in `agent.config.json` defines optional context such as `tools`, `maquettes`, `third_party`, and `assets`
 - STFU-specific workflows live in presets/config, not in core command logic

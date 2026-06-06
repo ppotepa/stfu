@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.Logging;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -27,8 +28,8 @@ public sealed class DirectXSwapChain : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        width = Math.Max(1, width);
-        height = Math.Max(1, height);
+        width = NumericMath.AtLeast(width, 1);
+        height = NumericMath.AtLeast(height, 1);
 
         if (_swapChain is null || _hwnd != hwnd)
         {

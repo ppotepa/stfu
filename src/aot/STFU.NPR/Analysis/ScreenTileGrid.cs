@@ -1,3 +1,5 @@
+using STFU.Common.Math;
+
 namespace STFU.NPR.Analysis;
 
 public sealed class ScreenTileGrid<T>
@@ -10,14 +12,12 @@ public sealed class ScreenTileGrid<T>
 
     public ScreenTileGrid(int tileSize)
     {
-        TileSize = Math.Max(1, tileSize);
+        TileSize = RasterMath.AtLeastPixels(tileSize, 1);
     }
 
     public (int X, int Y) GetTileKey(float x, float y)
     {
-        return (
-            (int)MathF.Floor(x / TileSize),
-            (int)MathF.Floor(y / TileSize));
+        return RasterMath.TileKey(x, y, TileSize);
     }
 
     public void Add(float x, float y, T item)

@@ -48,14 +48,14 @@ internal sealed class StfuLogWriter : IDisposable
 
     private StreamWriter GetWriter(DateTimeOffset timestamp, string domain)
     {
-        var hour = timestamp.ToLocalTime().ToString("HH", CultureInfo.InvariantCulture);
-        var key = $"{hour}.{domain}";
+        _ = timestamp;
+        var key = domain;
         if (_writers.TryGetValue(key, out var writer))
         {
             return writer;
         }
 
-        var path = Path.Combine(_session.RunDirectory, $"{hour}.{domain}.log");
+        var path = Path.Combine(_session.RunDirectory, $"{domain}.{_session.FileTimestamp}.log");
         var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
         writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         _writers[key] = writer;

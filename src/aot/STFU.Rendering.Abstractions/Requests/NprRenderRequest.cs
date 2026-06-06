@@ -37,4 +37,6 @@ public sealed record NprRenderRequest(
     NprRenderTheme Theme,
     bool ShowGrid,
     bool IncludeDebugFrame = true,
-    DebugOverlayKind DebugOverlay = DebugOverlayKind.None);
+    DebugOverlayKind DebugOverlay = DebugOverlayKind.None,
+    NprDiagnosticsOptions? DiagnosticsOptions = null,
+    NprRenderOptimizerMode OptimizerMode = NprRenderOptimizerMode.Auto);

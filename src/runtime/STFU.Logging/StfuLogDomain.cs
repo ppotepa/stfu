@@ -12,5 +12,6 @@ public static class StfuLogDomain
     public const string RenderGpu = "render.gpu";
     public const string DirectX = "directx";
     public const string Perf = "perf";
+    public const string Memory = "memory";
     public const string Errors = "errors";
 }

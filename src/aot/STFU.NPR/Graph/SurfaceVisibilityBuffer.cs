@@ -1,11 +1,13 @@
+using STFU.Common.Math;
+
 namespace STFU.NPR.Graph;
 
 public sealed class SurfaceVisibilityBuffer
 {
     public SurfaceVisibilityBuffer(int width, int height, int triangleCount)
     {
-        Width = Math.Max(1, width);
-        Height = Math.Max(1, height);
+        Width = RasterMath.AtLeastPixels(width, 1);
+        Height = RasterMath.AtLeastPixels(height, 1);
         var pixelCount = Width * Height;
         Depth = new float[pixelCount];
         TriangleIndex = new int[pixelCount];
@@ -14,7 +16,7 @@ public sealed class SurfaceVisibilityBuffer
         Tone = new float[pixelCount];
         TangentX = new float[pixelCount];
         TangentY = new float[pixelCount];
-        VisibleTriangles = new bool[Math.Max(0, triangleCount)];
+        VisibleTriangles = new bool[NumericMath.AtLeast(triangleCount, 0)];
         Clear();
     }
 

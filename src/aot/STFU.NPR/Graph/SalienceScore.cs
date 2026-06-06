@@ -1,3 +1,5 @@
+using STFU.Common.Math;
+
 namespace STFU.NPR.Graph;
 
 public readonly record struct SalienceScore(
@@ -14,14 +16,14 @@ public readonly record struct SalienceScore(
     {
         return score with
         {
-            Geometry = Math.Clamp(score.Geometry, 0f, 1f),
-            Visibility = Math.Clamp(score.Visibility, 0f, 1f),
-            Tone = Math.Clamp(score.Tone, 0f, 1f),
-            Material = Math.Clamp(score.Material, 0f, 1f),
-            Style = Math.Clamp(score.Style, 0f, 1f),
-            Focus = Math.Clamp(score.Focus, 0f, 1f),
-            ClutterPenalty = Math.Clamp(score.ClutterPenalty, 0f, 1f),
-            Final = Math.Clamp(score.Final, 0f, 1f)
+            Geometry = NumericMath.Clamp01(score.Geometry),
+            Visibility = NumericMath.Clamp01(score.Visibility),
+            Tone = NumericMath.Clamp01(score.Tone),
+            Material = NumericMath.Clamp01(score.Material),
+            Style = NumericMath.Clamp01(score.Style),
+            Focus = NumericMath.Clamp01(score.Focus),
+            ClutterPenalty = NumericMath.Clamp01(score.ClutterPenalty),
+            Final = NumericMath.Clamp01(score.Final)
         };
     }
 }

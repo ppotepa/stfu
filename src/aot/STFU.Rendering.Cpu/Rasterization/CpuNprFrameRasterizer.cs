@@ -10,28 +10,39 @@ public sealed class CpuNprFrameRasterizer
     private readonly CpuStrokeRasterizer _strokeRasterizer = new();
     private readonly CpuGridRasterizer _gridRasterizer = new();
     private readonly CpuLayerCompositor _layerCompositor = new();
+    private readonly List<NprLayerFrame> _visibleLayers = [];
 
     public void Rasterize(
         PixelSurface target,
         NprRenderRequest request,
         StrokeFrame strokeFrame,
-        NprFrame nprFrame)
+        NprFrame nprFrame,
+        CpuRasterWorkspace workspace,
+        CancellationToken cancellationToken = default)
     {
+        workspace.ResetForFrame();
         var paper = ResolvePaperColor(request, nprFrame);
         CpuPixelBlender.Clear(target, paper, 255);
 
         if (request.ShowGrid && request.Quality.RasterizeGrid)
         {
-            _gridRasterizer.DrawGrid(target, request.Theme, request.Quality, request.Budget);
+            _gridRasterizer.DrawGrid(target, request.Theme, request.Quality, request.Budget, workspace, cancellationToken);
         }
 
         if (nprFrame.Layers.Count > 0)
         {
-            foreach (var layer in nprFrame.Layers.Where(layer => layer.Visible).OrderBy(layer => layer.Order))
+            var layers = BuildVisibleLayerOrder(nprFrame.Layers);
+            for (var i = 0; i < layers.Count; i++)
             {
-                _layerCompositor.CompositeLayer(target, layer, request.Quality, request.Budget);
+                _layerCompositor.CompositeLayer(target, layers[i], request.Quality, request.Budget, workspace, cancellationToken);
             }
 
+            return;
+        }
+
+        if (strokeFrame.Segments is { Count: > 0 } strokeSegments)
+        {
+            _strokeRasterizer.DrawStrokeSegments(target, strokeSegments, 1f, request.Quality, request.Budget, workspace, cancellationToken);
             return;
         }
 
@@ -39,22 +50,25 @@ public sealed class CpuNprFrameRasterizer
             ? strokeFrame
             : nprFrame.LegacyStrokes;
 
-        _strokeRasterizer.DrawPaths(target, fallback.Paths, 1f, request.Quality, request.Budget);
+        _strokeRasterizer.DrawPaths(target, fallback.Paths, 1f, request.Quality, request.Budget, workspace, cancellationToken);
     }
 
     public void RasterizeMeshWireframe(
         PixelSurface target,
         NprRenderRequest request,
-        IReadOnlyList<CpuStrokeSegment> segments)
+        IReadOnlyList<CpuStrokeSegment> segments,
+        CpuRasterWorkspace workspace,
+        CancellationToken cancellationToken = default)
     {
+        workspace.ResetForFrame();
         CpuPixelBlender.Clear(target, request.Theme.PaperColor, 255);
 
         if (request.ShowGrid && request.Quality.RasterizeGrid)
         {
-            _gridRasterizer.DrawGrid(target, request.Theme, request.Quality, request.Budget);
+            _gridRasterizer.DrawGrid(target, request.Theme, request.Quality, request.Budget, workspace, cancellationToken);
         }
 
-        _strokeRasterizer.DrawSegments(target, segments, request.Quality, request.Budget);
+        _strokeRasterizer.DrawSegments(target, segments, request.Quality, request.Budget, workspace, cancellationToken);
     }
 
     private static StrokeColor ResolvePaperColor(NprRenderRequest request, NprFrame frame)
@@ -65,5 +79,20 @@ public sealed class CpuNprFrameRasterizer
         }
 
         return request.Theme.PaperColor;
+    }
+
+    private List<NprLayerFrame> BuildVisibleLayerOrder(IReadOnlyList<NprLayerFrame> layers)
+    {
+        _visibleLayers.Clear();
+        for (var i = 0; i < layers.Count; i++)
+        {
+            if (layers[i].Visible)
+            {
+                _visibleLayers.Add(layers[i]);
+            }
+        }
+
+        _visibleLayers.Sort(static (a, b) => a.Order.CompareTo(b.Order));
+        return _visibleLayers;
     }
 }

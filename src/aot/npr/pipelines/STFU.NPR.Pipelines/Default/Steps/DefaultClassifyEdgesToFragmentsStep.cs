@@ -1,11 +1,17 @@
 using System.Numerics;
+using STFU.Common.Math;
 using STFU.NPR.Graph;
+using STFU.Parallelism;
 using STFU.Strokes;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
 
 public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INprStep
 {
+    private readonly List<EdgePartitionBuffer> _partitionBuffers = [];
+    private int _lastFragmentCount;
+    private int _lastDebugCurveCount;
+
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
         var drawing = context.Settings.DefaultDrawing;
@@ -19,51 +25,212 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         context.Graph.VisibilitySegments.Clear();
         context.Graph.Curves.Clear();
         context.Graph.FeatureLines.Clear();
-        context.Graph.DefaultFragments.EnsureCapacity(context.Graph.TopologyEdges.Count);
-        context.Graph.VisibilitySegments.EnsureCapacity(context.Graph.TopologyEdges.Count);
-        if (context.IncludeDebugFrame)
+
+        var featureThreshold = NumericMath.DegreesToRadians(drawing.FeatureAngleDegrees);
+        var edgeCount = context.Graph.TopologyEdges.Count;
+        var parallel = context.WorkerCount > 1 && edgeCount >= 512;
+        var counters = new EdgeRangeCounters
         {
-            context.Graph.Curves.EnsureCapacity(context.Graph.TopologyEdges.Count);
-            context.Graph.FeatureLines.EnsureCapacity(context.Graph.TopologyEdges.Count);
+            SourceEdges = edgeCount,
+            RangeCount = parallel ? DeterministicParallel.GetRangeCount(edgeCount, context.WorkerCount) : 1
+        };
+
+        if (!parallel)
+        {
+            var estimatedFragmentCapacity = EstimateFragmentCapacity(context);
+            var estimatedDebugCurveCapacity = context.IncludeDebugFrame
+                ? EstimateDebugCurveCapacity(estimatedFragmentCapacity)
+                : 0;
+            var includeVisibilityOutputs = context.IncludeDebugFrame;
+
+            context.Graph.DefaultFragments.EnsureCapacity(estimatedFragmentCapacity);
+            if (includeVisibilityOutputs)
+            {
+                context.Graph.VisibilitySegments.EnsureCapacity(estimatedFragmentCapacity);
+                context.Graph.Curves.EnsureCapacity(estimatedDebugCurveCapacity);
+                context.Graph.FeatureLines.EnsureCapacity(estimatedDebugCurveCapacity);
+            }
+
+            ProcessRange(
+                context,
+                buffer,
+                0,
+                edgeCount,
+                featureThreshold,
+                context.Graph.DefaultFragments,
+                includeVisibilityOutputs ? context.Graph.VisibilitySegments : null,
+                context.IncludeDebugFrame ? context.Graph.Curves : null,
+                ref counters);
+        }
+        else
+        {
+            var rangeCount = DeterministicParallel.GetRangeCount(edgeCount, context.WorkerCount);
+            var partitionSize = (edgeCount + rangeCount - 1) / rangeCount;
+            var includeVisibilityOutputs = context.IncludeDebugFrame;
+            var partitions = RentPartitionBuffers(rangeCount, context.IncludeDebugFrame, partitionSize);
+
+            DeterministicParallel.ForRanges(
+                0,
+                edgeCount,
+                context.WorkerCount,
+                context.CancellationToken,
+                (start, end, partitionIndex, cancellationToken) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var partition = partitions[partitionIndex];
+                    partition.Reset(context.IncludeDebugFrame, partition.GetSuggestedCapacity(end - start));
+                    partition.Counters = new EdgeRangeCounters();
+                    ProcessRange(
+                        context,
+                        buffer,
+                        start,
+                        end,
+                        featureThreshold,
+                        partition.Fragments,
+                        includeVisibilityOutputs ? partition.VisibilitySegments : null,
+                        partition.Curves,
+                        ref partition.Counters);
+                });
+
+            var totalFragmentCount = 0;
+            var totalCurveCount = 0;
+            var totalVisibilityCount = 0;
+            for (var partitionIndex = 0; partitionIndex < partitions.Length; partitionIndex++)
+            {
+                var partition = partitions[partitionIndex];
+                totalFragmentCount += partition.Fragments.Count;
+                totalVisibilityCount += partition.VisibilitySegments.Count;
+                totalCurveCount += partition.Curves?.Count ?? 0;
+                counters.Add(partition.Counters);
+            }
+
+            context.Graph.DefaultFragments.EnsureCapacity(totalFragmentCount);
+            if (includeVisibilityOutputs)
+            {
+                context.Graph.VisibilitySegments.EnsureCapacity(totalVisibilityCount);
+                context.Graph.Curves.EnsureCapacity(totalCurveCount);
+                context.Graph.FeatureLines.EnsureCapacity(totalCurveCount);
+            }
+
+            for (var partitionIndex = 0; partitionIndex < partitions.Length; partitionIndex++)
+            {
+                var partition = partitions[partitionIndex];
+                context.Graph.DefaultFragments.AddRange(partition.Fragments);
+                if (includeVisibilityOutputs)
+                {
+                    context.Graph.VisibilitySegments.AddRange(partition.VisibilitySegments);
+                }
+
+                if (partition.Curves is { } curves)
+                {
+                    for (var i = 0; i < curves.Count; i++)
+                    {
+                        context.Graph.AddCurve(curves[i]);
+                    }
+                }
+            }
         }
 
-        var visibleFaces = ComputeVisibleFaces(context, buffer);
-        var featureThreshold = DegreesToRadians(drawing.FeatureAngleDegrees);
-        var strideCounter = 0;
-
-        foreach (var edge in context.Graph.TopologyEdges)
+        _lastFragmentCount = context.Graph.DefaultFragments.Count;
+        if (context.IncludeDebugFrame)
         {
-            strideCounter++;
+            _lastDebugCurveCount = context.Graph.Curves.Count;
+        }
+
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.sourceEdges", counters.SourceEdges);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.rangeCount", counters.RangeCount);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.edgesAfterStride", counters.EdgesAfterStride);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.edgesClassified", counters.EdgesClassified);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.visibilitySamples", counters.VisibilitySamples);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.fragmentsEmitted", counters.FragmentsEmitted);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.debugCurvesEmitted", counters.DebugCurvesEmitted);
+    }
+
+    private int EstimateFragmentCapacity(STFU.NPR.Pipeline.NprContext context)
+    {
+        return NumericMath.AtLeast(context.Graph.TopologyEdges.Count, _lastFragmentCount);
+    }
+
+    private int EstimateDebugCurveCapacity(int estimatedFragmentCapacity)
+    {
+        return NumericMath.AtLeast(estimatedFragmentCapacity, _lastDebugCurveCount);
+    }
+
+    private EdgePartitionBuffer[] RentPartitionBuffers(int workerCount, bool includeDebugFrame, int partitionSize)
+    {
+        while (_partitionBuffers.Count < workerCount)
+        {
+            _partitionBuffers.Add(new EdgePartitionBuffer());
+        }
+
+        var result = new EdgePartitionBuffer[workerCount];
+        for (var i = 0; i < workerCount; i++)
+        {
+            var buffer = _partitionBuffers[i];
+            buffer.Reset(includeDebugFrame, buffer.GetSuggestedCapacity(partitionSize));
+            result[i] = buffer;
+        }
+
+        return result;
+    }
+
+    private static void ProcessRange(
+        STFU.NPR.Pipeline.NprContext context,
+        DefaultFaceIdVisibilityBuffer buffer,
+        int startEdgeIndex,
+        int endEdgeIndex,
+        float featureThreshold,
+        List<DefaultLineFragment> fragments,
+        List<VisibilitySegment>? visibilitySegments,
+        List<FeatureCurve>? curves,
+        ref EdgeRangeCounters counters)
+    {
+        var drawing = context.Settings.DefaultDrawing;
+        var graph = context.Graph;
+        var edges = graph.TopologyEdges;
+        var vertices = graph.Vertices;
+        var triangles = graph.Triangles;
+        var faceVisible = buffer.FaceVisible;
+        var occlusionCulling = drawing.OcclusionCulling;
+        for (var edgeIndex = startEdgeIndex; edgeIndex < endEdgeIndex; edgeIndex++)
+        {
+            var edge = edges[edgeIndex];
+            var strideCounter = edgeIndex + 1;
             if (drawing.MeshStride > 1 && strideCounter % drawing.MeshStride != 0)
             {
                 continue;
             }
 
-            var vis0 = IsFaceVisible(visibleFaces, edge.FirstTriangleIndex);
-            var vis1 = IsFaceVisible(visibleFaces, edge.SecondTriangleIndex);
-            var front0 = IsFrontFacing(context, edge.FirstTriangleIndex);
-            var front1 = IsFrontFacing(context, edge.SecondTriangleIndex);
+            counters.EdgesAfterStride++;
+            var vis0 = IsFaceVisibleFast(triangles, faceVisible, edge.FirstTriangleIndex, occlusionCulling);
+            var vis1 = IsFaceVisibleFast(triangles, faceVisible, edge.SecondTriangleIndex, occlusionCulling);
+            var front0 = IsFrontFacing(triangles, edge.FirstTriangleIndex);
+            var front1 = IsFrontFacing(triangles, edge.SecondTriangleIndex);
 
             if (!TryClassifyEdge(edge, drawing, vis0, vis1, front0, front1, featureThreshold, out var lineKind, out var curveKind, out var intent))
             {
                 continue;
             }
 
-            var start = context.Graph.Vertices[edge.StartVertexIndex];
-            var end = context.Graph.Vertices[edge.EndVertexIndex];
+            counters.EdgesClassified++;
+            var start = vertices[edge.StartVertexIndex];
+            var end = vertices[edge.EndVertexIndex];
 
             if (drawing.CullOutside && NdcOutsideSameSide(start.Ndc, end.Ndc))
             {
                 continue;
             }
 
-            var length = DefaultPathMath.SegmentLength(start.Position, end.Position);
+            var length = DefaultPointPathAdapter.SegmentLength(start.Position, end.Position);
             if (drawing.MinSegPx > 0f && length < drawing.MinSegPx)
             {
                 continue;
             }
 
             AppendVisibleFragmentsForEdge(
+                fragments,
+                visibilitySegments,
+                curves,
                 context,
                 buffer,
                 edge,
@@ -72,20 +239,9 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
                 intent,
                 start,
                 end,
-                length);
+                length,
+                ref counters);
         }
-    }
-
-    private static bool[] ComputeVisibleFaces(STFU.NPR.Pipeline.NprContext context, DefaultFaceIdVisibilityBuffer buffer)
-    {
-        var visible = new bool[context.Graph.Triangles.Count];
-        for (var i = 0; i < context.Graph.Triangles.Count; i++)
-        {
-            var triangle = context.Graph.Triangles[i];
-            visible[i] = (!context.Settings.DefaultDrawing.OcclusionCulling || buffer.FaceVisible[i]) && triangle.IsFrontFacing;
-        }
-
-        return visible;
     }
 
     private static bool TryClassifyEdge(
@@ -127,7 +283,7 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
 
         if (drawing.ShowFeature && vis0 && vis1)
         {
-            var angle = DegreesToRadians(edge.NormalAngleDegrees);
+            var angle = NumericMath.DegreesToRadians(edge.NormalAngleDegrees);
             if (angle >= featureThresholdRadians)
             {
                 lineKind = DefaultLineKind.Feature;
@@ -141,6 +297,9 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
     }
 
     private static void AppendVisibleFragmentsForEdge(
+        List<DefaultLineFragment> fragments,
+        List<VisibilitySegment>? visibilitySegments,
+        List<FeatureCurve>? curves,
         STFU.NPR.Pipeline.NprContext context,
         DefaultFaceIdVisibilityBuffer buffer,
         TopologyEdge edge,
@@ -149,10 +308,11 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         NprStrokeIntent intent,
         ProjectedVertex start,
         ProjectedVertex end,
-        float length)
+        float length,
+        ref EdgeRangeCounters counters)
     {
         var drawing = context.Settings.DefaultDrawing;
-        var minSegmentLength = Math.Max(0.5f, drawing.MinSegPx);
+        var minSegmentLength = NumericMath.AtLeast(drawing.MinSegPx, 0.5f);
         if (length < minSegmentLength)
         {
             return;
@@ -160,7 +320,10 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
 
         if (!drawing.OcclusionCulling)
         {
-            AppendFragment(
+            if (AppendFragment(
+                fragments,
+                visibilitySegments,
+                curves,
                 context,
                 edge,
                 lineKind,
@@ -170,7 +333,15 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
                 end.Position,
                 0f,
                 1f,
-                0);
+                0))
+            {
+                counters.FragmentsEmitted++;
+                if (curves is not null)
+                {
+                    counters.DebugCurvesEmitted++;
+                }
+            }
+
             return;
         }
 
@@ -181,7 +352,82 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
             return;
         }
 
-        var samples = Math.Min(96, Math.Max(7, (int)MathF.Ceiling(length / 4f)));
+        var scaleX = buffer.Width / (float)NumericMath.AtLeast(context.Width, 1);
+        var scaleY = buffer.Height / (float)NumericMath.AtLeast(context.Height, 1);
+        var maxX = buffer.Width - 1;
+        var maxY = buffer.Height - 1;
+        var startVisible = TrySampleEdgeVisibility(
+            buffer,
+            start,
+            end,
+            firstAllowedFace,
+            secondAllowedFace,
+            scaleX,
+            scaleY,
+            maxX,
+            maxY,
+            0f,
+            out _);
+        counters.VisibilitySamples++;
+        var midVisible = TrySampleEdgeVisibility(
+            buffer,
+            start,
+            end,
+            firstAllowedFace,
+            secondAllowedFace,
+            scaleX,
+            scaleY,
+            maxX,
+            maxY,
+            0.5f,
+            out _);
+        counters.VisibilitySamples++;
+        var endVisible = TrySampleEdgeVisibility(
+            buffer,
+            start,
+            end,
+            firstAllowedFace,
+            secondAllowedFace,
+            scaleX,
+            scaleY,
+            maxX,
+            maxY,
+            1f,
+            out _);
+        counters.VisibilitySamples++;
+        if (startVisible && midVisible && endVisible)
+        {
+            if (AppendFragment(
+                fragments,
+                visibilitySegments,
+                curves,
+                context,
+                edge,
+                lineKind,
+                curveKind,
+                intent,
+                start.Position,
+                end.Position,
+                0f,
+                1f,
+                0))
+            {
+                counters.FragmentsEmitted++;
+                if (curves is not null)
+                {
+                    counters.DebugCurvesEmitted++;
+                }
+            }
+
+            return;
+        }
+
+        if (length <= minSegmentLength * 2f && !startVisible && !midVisible && !endVisible)
+        {
+            return;
+        }
+
+        var samples = NumericMath.AtMost(96, NumericMath.AtLeast((int)NumericMath.Ceiling(length / 4f), 3));
         var runStart = default(Point2D);
         var previousPoint = default(Point2D);
         var runStartT = 0f;
@@ -194,16 +440,19 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         for (var i = 0; i <= samples; i++)
         {
             var t = i / (float)samples;
-            var point = Lerp(start.Position, end.Position, t);
-            var ndc = Vector3.Lerp(start.Ndc, end.Ndc, t);
-            var inClip = !(ndc.X < -1f || ndc.X > 1f || ndc.Y < -1f || ndc.Y > 1f || ndc.Z < -1f || ndc.Z > 1f);
-            var visible = inClip && buffer.SampleOwnedFaceAtScreen(
-                point.X,
-                point.Y,
-                context.Width,
-                context.Height,
+            var visible = TrySampleEdgeVisibility(
+                buffer,
+                start,
+                end,
                 firstAllowedFace,
-                secondAllowedFace);
+                secondAllowedFace,
+                scaleX,
+                scaleY,
+                maxX,
+                maxY,
+                t,
+                out var point);
+            counters.VisibilitySamples++;
 
             if (visible && !previousVisible)
             {
@@ -214,9 +463,12 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
 
             if (!visible && previousVisible && hasRunStart && hasPreviousPoint)
             {
-                if (DefaultPathMath.SegmentLength(runStart, previousPoint) >= minSegmentLength)
+                if (DefaultPointPathAdapter.SegmentLength(runStart, previousPoint) >= minSegmentLength)
                 {
-                    AppendFragment(
+                    if (AppendFragment(
+                        fragments,
+                        visibilitySegments,
+                        curves,
                         context,
                         edge,
                         lineKind,
@@ -226,7 +478,14 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
                         previousPoint,
                         runStartT,
                         previousT,
-                        fragmentIndex++);
+                        fragmentIndex++))
+                    {
+                        counters.FragmentsEmitted++;
+                        if (curves is not null)
+                        {
+                            counters.DebugCurvesEmitted++;
+                        }
+                    }
                 }
 
                 hasRunStart = false;
@@ -239,9 +498,12 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         }
 
         if (previousVisible && hasRunStart && hasPreviousPoint &&
-            DefaultPathMath.SegmentLength(runStart, previousPoint) >= minSegmentLength)
+            DefaultPointPathAdapter.SegmentLength(runStart, previousPoint) >= minSegmentLength)
         {
-            AppendFragment(
+            if (AppendFragment(
+                fragments,
+                visibilitySegments,
+                curves,
                 context,
                 edge,
                 lineKind,
@@ -251,129 +513,205 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
                 previousPoint,
                 runStartT,
                 previousT,
-                fragmentIndex);
+                fragmentIndex))
+            {
+                counters.FragmentsEmitted++;
+                if (curves is not null)
+                {
+                    counters.DebugCurvesEmitted++;
+                }
+            }
         }
     }
 
-    private static void AppendFragment(
+    private static bool TrySampleEdgeVisibility(
+        DefaultFaceIdVisibilityBuffer buffer,
+        ProjectedVertex start,
+        ProjectedVertex end,
+        int firstAllowedFace,
+        int secondAllowedFace,
+        float scaleX,
+        float scaleY,
+        int maxX,
+        int maxY,
+        float t,
+        out Point2D point)
+    {
+        var interpolated = Geometry2D.LerpPoint(
+            start.Position.X,
+            start.Position.Y,
+            end.Position.X,
+            end.Position.Y,
+            t);
+        point = new Point2D(interpolated.X, interpolated.Y);
+        var ndc = Vector3.Lerp(start.Ndc, end.Ndc, t);
+        var inClip = !(ndc.X < -1f || ndc.X > 1f || ndc.Y < -1f || ndc.Y > 1f || ndc.Z < -1f || ndc.Z > 1f);
+        if (!inClip)
+        {
+            return false;
+        }
+
+        var cx = NumericMath.Clamp((int)NumericMath.Floor(point.X * scaleX), 0, maxX);
+        var cy = NumericMath.Clamp((int)NumericMath.Floor(point.Y * scaleY), 0, maxY);
+        return buffer.SampleOwnedFaceAtBuffer(
+            cx,
+            cy,
+            firstAllowedFace,
+            secondAllowedFace);
+    }
+
+    private static bool AppendFragment(
+        List<DefaultLineFragment> fragments,
+        List<VisibilitySegment>? visibilitySegments,
+        List<FeatureCurve>? curves,
         STFU.NPR.Pipeline.NprContext context,
         TopologyEdge edge,
         DefaultLineKind lineKind,
         FeatureCurveKind curveKind,
         NprStrokeIntent intent,
-        Point2D start,
-        Point2D end,
-        float startT,
-        float endT,
+        Point2D p0,
+        Point2D p1,
+        float t0,
+        float t1,
         int fragmentIndex)
     {
-        var fragment = CreateFragment(context, edge, lineKind, start, end, startT, endT, fragmentIndex);
-        context.Graph.DefaultFragments.Add(fragment);
+        if (DefaultPointPathAdapter.SegmentLength(p0, p1) <= 0.5f)
+        {
+            return false;
+        }
+
+        var a = context.Graph.Vertices[edge.StartVertexIndex];
+        var b = context.Graph.Vertices[edge.EndVertexIndex];
+        var depth = (a.Depth + b.Depth) * 0.5f;
+        var stableId = HashMath.StableTriple(edge.StableId, fragmentIndex, (int)lineKind);
+        fragments.Add(new DefaultLineFragment(
+            stableId,
+            lineKind,
+            p0,
+            p1,
+            edge.StableId,
+            edge.FirstTriangleIndex,
+            edge.SecondTriangleIndex,
+            t0,
+            t1,
+            depth));
 
         var importance = lineKind == DefaultLineKind.Silhouette ? 1f : 0.7f;
-        var entityId = context.Graph.Triangles[Math.Max(0, edge.FirstTriangleIndex)].EntityId;
-        var visibility = new VisibilitySegment(
-            fragment.StableId,
-            fragment.EdgeStableId,
+        var entityId = context.Graph.Triangles[NumericMath.AtLeast(edge.FirstTriangleIndex, 0)].EntityId;
+
+        visibilitySegments?.Add(new VisibilitySegment(
+            stableId,
+            edge.StableId,
             curveKind,
             intent,
             VisibilityState.Visible,
-            fragment.StartT,
-            fragment.EndT,
-            fragment.P0,
-            fragment.P1,
-            fragment.Depth,
+            t0,
+            t1,
+            p0,
+            p1,
+            depth,
             0f,
             importance,
-            1f,
-            null,
-            entityId);
-        context.Graph.VisibilitySegments.Add(visibility);
+            1f));
 
-        if (context.IncludeDebugFrame)
+        if (curves is not null)
         {
-            var source = new FeatureCurveSource(
-                edge.StartVertexIndex,
-                edge.EndVertexIndex,
-                edge.FirstTriangleIndex,
-                edge.SecondTriangleIndex);
             var flags = lineKind == DefaultLineKind.Silhouette ? FeatureCurveFlags.ViewDependent : FeatureCurveFlags.None;
-            var curve = FeatureCurve.FromLine(
-                fragment.StableId,
+            curves.Add(FeatureCurve.FromLine(
+                stableId,
                 curveKind,
                 intent,
-                new FeaturePoint(fragment.P0, fragment.Depth),
-                new FeaturePoint(fragment.P1, fragment.Depth),
-                source,
+                new FeaturePoint(p0, depth),
+                new FeaturePoint(p1, depth),
+                new FeatureCurveSource(edge.StartVertexIndex, edge.EndVertexIndex, edge.FirstTriangleIndex, edge.SecondTriangleIndex),
                 0f,
                 importance,
                 1f,
                 flags,
-                entityId: entityId);
-
-            context.Graph.AddCurve(curve);
+                entityId: entityId));
         }
+
+        return true;
     }
 
-    private static DefaultLineFragment CreateFragment(
-        STFU.NPR.Pipeline.NprContext context,
-        TopologyEdge edge,
-        DefaultLineKind lineKind,
-        Point2D start,
-        Point2D end,
-        float startT,
-        float endT,
-        int fragmentIndex)
+    private static bool IsFaceVisibleFast(List<ProjectedTriangle> triangles, bool[] faceVisible, int triangleIndex, bool occlusionCulling)
     {
-        var a = context.Graph.Vertices[edge.StartVertexIndex];
-        var b = context.Graph.Vertices[edge.EndVertexIndex];
-        var depth = (a.Depth + b.Depth) * 0.5f;
-
-        unchecked
-        {
-            var stableId = edge.StableId * 397 ^ fragmentIndex * 17 ^ (int)lineKind;
-            return new DefaultLineFragment(
-                stableId,
-                lineKind,
-                start,
-                end,
-                edge.StableId,
-                edge.FirstTriangleIndex,
-                edge.SecondTriangleIndex,
-                startT,
-                endT,
-                depth);
-        }
+        return triangleIndex >= 0 &&
+               triangleIndex < triangles.Count &&
+               (!occlusionCulling || faceVisible[triangleIndex]) &&
+               triangles[triangleIndex].IsFrontFacing;
     }
 
-    private static bool IsFaceVisible(bool[] visibleFaces, int index)
+    private static bool IsFrontFacing(List<ProjectedTriangle> triangles, int triangleIndex)
     {
-        return (uint)index < (uint)visibleFaces.Length && visibleFaces[index];
-    }
-
-    private static bool IsFrontFacing(STFU.NPR.Pipeline.NprContext context, int triangleIndex)
-    {
-        return (uint)triangleIndex < (uint)context.Graph.Triangles.Count &&
-            context.Graph.Triangles[triangleIndex].IsFrontFacing;
+        return triangleIndex >= 0 &&
+               triangleIndex < triangles.Count &&
+               triangles[triangleIndex].IsFrontFacing;
     }
 
     private static bool NdcOutsideSameSide(Vector3 a, Vector3 b)
     {
-        if (a.X < -1f && b.X < -1f) return true;
-        if (a.X > 1f && b.X > 1f) return true;
-        if (a.Y < -1f && b.Y < -1f) return true;
-        if (a.Y > 1f && b.Y > 1f) return true;
-        return false;
+        return (a.X < -1f && b.X < -1f) ||
+               (a.X > 1f && b.X > 1f) ||
+               (a.Y < -1f && b.Y < -1f) ||
+               (a.Y > 1f && b.Y > 1f);
     }
 
-    private static Point2D Lerp(Point2D a, Point2D b, float t)
+    private sealed class EdgePartitionBuffer
     {
-        return new Point2D(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+        private int _lastFragmentCount;
+        private int _lastCurveCount;
+
+        public EdgeRangeCounters Counters;
+
+        public List<DefaultLineFragment> Fragments { get; } = [];
+        public List<VisibilitySegment> VisibilitySegments { get; } = [];
+        public List<FeatureCurve>? Curves { get; private set; }
+
+        public int GetSuggestedCapacity(int partitionSize)
+        {
+            return NumericMath.AtLeast(partitionSize, _lastFragmentCount);
+        }
+
+        public void Reset(bool includeDebugFrame, int suggestedCapacity)
+        {
+            _lastFragmentCount = Fragments.Count;
+            _lastCurveCount = Curves?.Count ?? 0;
+            Fragments.Clear();
+            VisibilitySegments.Clear();
+            Fragments.EnsureCapacity(suggestedCapacity);
+            VisibilitySegments.EnsureCapacity(suggestedCapacity);
+
+            if (includeDebugFrame)
+            {
+                Curves ??= [];
+                Curves.Clear();
+                Curves.EnsureCapacity(NumericMath.AtLeast(suggestedCapacity, _lastCurveCount));
+            }
+            else
+            {
+                Curves = null;
+            }
+        }
     }
 
-    private static float DegreesToRadians(float degrees)
+    private struct EdgeRangeCounters
     {
-        return degrees * MathF.PI / 180f;
-    }
+        public long SourceEdges;
+        public long RangeCount;
+        public long EdgesAfterStride;
+        public long EdgesClassified;
+        public long VisibilitySamples;
+        public long FragmentsEmitted;
+        public long DebugCurvesEmitted;
 
+        public void Add(EdgeRangeCounters other)
+        {
+            EdgesAfterStride += other.EdgesAfterStride;
+            EdgesClassified += other.EdgesClassified;
+            VisibilitySamples += other.VisibilitySamples;
+            FragmentsEmitted += other.FragmentsEmitted;
+            DebugCurvesEmitted += other.DebugCurvesEmitted;
+        }
+    }
 }

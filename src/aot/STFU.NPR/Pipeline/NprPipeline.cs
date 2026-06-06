@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.Strokes;
 using System.Diagnostics;
 
@@ -11,24 +12,47 @@ internal static class NprPipelineRunner
         context.Frame = StrokeFrame.Empty;
         context.NprFrame = STFU.NPR.Rendering.NprFrame.Empty;
         context.StepTraces.Clear();
+        context.RangeTraces.Clear();
+        context.Counters.Clear();
+
+        if (!context.EnablePassTimings)
+        {
+            for (var i = 0; i < steps.Count; i++)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                steps[i].Execute(context);
+            }
+
+            if (!ReferenceEquals(context.DebugFrame, STFU.NPR.Debug.NprDebugFrame.Empty))
+            {
+                context.DebugFrame = context.DebugFrame with { StepTraces = [] };
+            }
+
+            return context.Frame;
+        }
 
         foreach (var step in steps)
         {
-            var inputCount = CountItems(context);
-            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            context.CancellationToken.ThrowIfCancellationRequested();
+            var inputMetrics = CaptureMetrics(context);
+            var allocatedBefore = context.EnableStepAllocationTracking
+                ? GC.GetAllocatedBytesForCurrentThread()
+                : 0;
             var stopwatch = Stopwatch.StartNew();
             step.Execute(context);
             stopwatch.Stop();
-            var allocatedBytes = Math.Max(0, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+            var allocatedBytes = context.EnableStepAllocationTracking
+                ? NumericMath.AtLeast(GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, 0)
+                : 0;
 
-            var outputCount = CountItems(context);
+            var outputMetrics = CaptureMetrics(context);
             context.StepTraces.Add(new STFU.NPR.Debug.NprStepTrace(
                 step.GetType().Name,
                 stopwatch.Elapsed.TotalMilliseconds,
-                inputCount,
-                outputCount,
-                Math.Max(0, inputCount - outputCount),
-                BuildNotes(context, step),
+                inputMetrics.TotalCount,
+                outputMetrics.TotalCount,
+                NumericMath.AtLeast(inputMetrics.TotalCount - outputMetrics.TotalCount, 0),
+                context.EnableDetailedStepNotes ? BuildNotes(context, step, outputMetrics) : string.Empty,
                 allocatedBytes));
         }
 
@@ -40,9 +64,26 @@ internal static class NprPipelineRunner
         return context.Frame;
     }
 
-    private static int CountItems(NprContext context)
+    private static StepMetrics CaptureMetrics(NprContext context)
     {
-        return context.Graph.Meshes.Count +
+        var visibleSegments = 0;
+        var hiddenSegments = 0;
+
+        for (var i = 0; i < context.Graph.VisibilitySegments.Count; i++)
+        {
+            switch (context.Graph.VisibilitySegments[i].State)
+            {
+                case STFU.NPR.Graph.VisibilityState.Visible:
+                    visibleSegments++;
+                    break;
+                case STFU.NPR.Graph.VisibilityState.Hidden:
+                    hiddenSegments++;
+                    break;
+            }
+        }
+
+        return new StepMetrics(
+            context.Graph.Meshes.Count +
             context.Graph.Vertices.Count +
             context.Graph.Triangles.Count +
             context.Graph.TopologyEdges.Count +
@@ -54,25 +95,50 @@ internal static class NprPipelineRunner
             context.Graph.Candidates.Count +
             context.Graph.StyledStrokes.Count +
             context.Graph.ToneSurfaces.Count +
-            context.Frame.Paths.Count;
+            context.Frame.Paths.Count,
+            context.Graph.Vertices.Count,
+            context.Graph.Triangles.Count,
+            context.Graph.Curves.Count,
+            context.Graph.FeatureLines.Count,
+            visibleSegments,
+            hiddenSegments,
+            context.Graph.Candidates.Count,
+            context.Graph.StyledStrokes.Count);
     }
 
-    private static string BuildNotes(NprContext context, INprStep step)
+    private static string BuildNotes(NprContext context, INprStep step, StepMetrics metrics)
     {
-        return step switch
+        var stepName = step.GetType().Name;
+        var baseNotes = step switch
         {
-            _ when step.GetType().Name.Contains("Project", StringComparison.Ordinal) =>
-                $"vertices={context.Graph.Vertices.Count}, triangles={context.Graph.Triangles.Count}",
-            _ when step.GetType().Name.Contains("Feature", StringComparison.Ordinal) =>
-                $"curves={context.Graph.Curves.Count}, lines={context.Graph.FeatureLines.Count}",
-            _ when step.GetType().Name.Contains("Visibility", StringComparison.Ordinal) ||
-                step.GetType().Name.Contains("Occlusion", StringComparison.Ordinal) =>
-                $"visible={context.Graph.VisibilitySegments.Count(segment => segment.State == STFU.NPR.Graph.VisibilityState.Visible)}, hidden={context.Graph.VisibilitySegments.Count(segment => segment.State == STFU.NPR.Graph.VisibilityState.Hidden)}",
-            _ when step.GetType().Name.Contains("Stroke", StringComparison.Ordinal) =>
-                $"candidates={context.Graph.Candidates.Count}, strokes={context.Graph.StyledStrokes.Count}",
-            _ => $"graph={CountItems(context)}"
+            _ when stepName.Contains("Project", StringComparison.Ordinal) =>
+                $"vertices={metrics.Vertices}, triangles={metrics.Triangles}",
+            _ when stepName.Contains("Feature", StringComparison.Ordinal) =>
+                $"curves={metrics.Curves}, lines={metrics.FeatureLines}",
+            _ when stepName.Contains("Visibility", StringComparison.Ordinal) ||
+                stepName.Contains("Occlusion", StringComparison.Ordinal) =>
+                $"visible={metrics.VisibleSegments}, hidden={metrics.HiddenSegments}",
+            _ when stepName.Contains("Stroke", StringComparison.Ordinal) =>
+                $"candidates={metrics.Candidates}, strokes={metrics.StyledStrokes}",
+            _ => $"graph={metrics.TotalCount}"
         };
+
+        var counters = context.Counters.FormatStep(stepName + ".");
+        return string.IsNullOrEmpty(counters)
+            ? baseNotes
+            : baseNotes + "; " + counters;
     }
+
+    private readonly record struct StepMetrics(
+        int TotalCount,
+        int Vertices,
+        int Triangles,
+        int Curves,
+        int FeatureLines,
+        int VisibleSegments,
+        int HiddenSegments,
+        int Candidates,
+        int StyledStrokes);
 }
 
 public sealed class NprPipeline<T1> : INprPipeline

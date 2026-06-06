@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.NPR.Graph;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
@@ -25,7 +26,7 @@ public sealed class DefaultApplyDrawProgressStep : STFU.NPR.Pipeline.INprStep
             totalLength = 1f;
         }
 
-        var progress = Math.Clamp(context.Settings.DefaultDrawing.DrawProgress, 0f, 1f);
+        var progress = NumericMath.Clamp01(context.Settings.DefaultDrawing.DrawProgress);
         var remaining = totalLength * progress;
 
         foreach (var path in context.Graph.DefaultPaths)
@@ -42,13 +43,13 @@ public sealed class DefaultApplyDrawProgressStep : STFU.NPR.Pipeline.INprStep
                 continue;
             }
 
-            var partial = DefaultPathMath.PartialPath(path.Points, remaining);
+            var partial = DefaultPointPathAdapter.PartialPath(path.Points, remaining);
             if (partial.Count > 1)
             {
                 context.Graph.DefaultDrawablePaths.Add(path with
                 {
                     Points = partial,
-                    Length = DefaultPathMath.PathLength(partial)
+                    Length = DefaultPointPathAdapter.PathLength(partial)
                 });
             }
 

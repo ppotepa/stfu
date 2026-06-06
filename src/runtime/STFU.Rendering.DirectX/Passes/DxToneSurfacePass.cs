@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using STFU.Common.Math;
 using STFU.NPR.Rendering;
 using STFU.Rendering.Abstractions.Diagnostics;
 using STFU.Rendering.Abstractions.Requests;
@@ -18,6 +19,7 @@ public sealed class DxToneSurfacePass : IDisposable
     private readonly ID3D11PixelShader _pixelShader;
     private readonly ID3D11Buffer _frameConstants;
     private readonly ID3D11SamplerState _sampler;
+    private readonly List<DxToneSurfaceUpload> _uploads = [];
     private bool _disposed;
 
     public DxToneSurfacePass(DirectXDevice device)
@@ -72,77 +74,98 @@ public sealed class DxToneSurfacePass : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var uploaded = 0;
+        var cacheHits = 0;
+        var cacheMisses = 0;
         var uploadWatch = Stopwatch.StartNew();
-        var uploads = new List<DxToneSurfaceUpload>(layer.Tones.Count);
+        _uploads.Clear();
+        _uploads.EnsureCapacity(layer.Tones.Count);
         foreach (var tone in layer.Tones)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var upload = _uploader.Upload(tone);
+            var upload = _uploader.Upload(tone, out var cacheHit);
             if (upload is null)
             {
                 continue;
             }
 
-            uploads.Add(upload);
+            _uploads.Add(upload);
             uploaded++;
+            if (cacheHit)
+            {
+                cacheHits++;
+            }
+            else
+            {
+                cacheMisses++;
+            }
         }
 
         uploadWatch.Stop();
-        diagnostics.AddTiming("GpuToneSurfaceUpload", uploadWatch.Elapsed.TotalMilliseconds, $"tones={uploaded}");
+        diagnostics.AddTiming(
+            "GpuToneSurfaceUpload",
+            uploadWatch.Elapsed.TotalMilliseconds,
+            $"tones={uploaded}; cacheHits={cacheHits}; cacheMisses={cacheMisses}");
 
-        if (uploads.Count == 0 || target.RenderTargetView is null)
+        if (_uploads.Count == 0 || target.RenderTargetView is null)
         {
-            foreach (var upload in uploads)
+            for (var i = 0; i < _uploads.Count; i++)
             {
-                upload.Dispose();
+                _uploads[i].Dispose();
             }
 
+            _uploads.Clear();
             return;
         }
 
         try
         {
-            var drawWatch = Stopwatch.StartNew();
-            _device.Context.OMSetRenderTargets(target.RenderTargetView);
-            _device.Context.RSSetViewport(0, 0, request.Width, request.Height);
-            _device.Context.IASetPrimitiveTopology(Vortice.Direct3D.PrimitiveTopology.TriangleList);
-            _device.Context.IASetInputLayout(null);
-            _device.Context.VSSetShader(_vertexShader);
-            _device.Context.PSSetShader(_pixelShader);
-            _device.Context.PSSetSampler(0, _sampler);
-            _device.Context.VSSetConstantBuffer(0, _frameConstants);
-            _device.Context.PSSetConstantBuffer(0, _frameConstants);
-            _device.Context.OMSetBlendState(_states.PremultipliedAlphaBlend);
-            _device.Context.RSSetState(_states.NoCullRasterizer);
-            _device.Context.OMSetDepthStencilState(_states.DepthDisabled);
-
-            unsafe
+            using (_device.Lock())
             {
-                var constants = stackalloc float[8];
-                foreach (var upload in uploads)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    constants[0] = request.Width;
-                    constants[1] = request.Height;
-                    constants[2] = 1f / Math.Max(1, request.Width);
-                    constants[3] = 1f / Math.Max(1, request.Height);
-                    constants[4] = Math.Clamp(upload.Source.Opacity * layer.Opacity, 0f, 1f);
-                    _device.Context.UpdateSubresource(_frameConstants, 0, null, (IntPtr)constants, 0, 0);
-                    _device.Context.PSSetShaderResource(0, upload.ShaderResourceView);
-                    _device.Context.Draw(3, 0);
-                }
-            }
+                var drawWatch = Stopwatch.StartNew();
+                _device.Context.OMSetRenderTargets(target.RenderTargetView);
+                _device.Context.RSSetViewport(0, 0, request.Width, request.Height);
+                _device.Context.IASetPrimitiveTopology(Vortice.Direct3D.PrimitiveTopology.TriangleList);
+                _device.Context.IASetInputLayout(null);
+                _device.Context.VSSetShader(_vertexShader);
+                _device.Context.PSSetShader(_pixelShader);
+                _device.Context.PSSetSampler(0, _sampler);
+                _device.Context.VSSetConstantBuffer(0, _frameConstants);
+                _device.Context.PSSetConstantBuffer(0, _frameConstants);
+                _device.Context.OMSetBlendState(_states.PremultipliedAlphaBlend);
+                _device.Context.RSSetState(_states.NoCullRasterizer);
+                _device.Context.OMSetDepthStencilState(_states.DepthDisabled);
 
-            _device.Context.PSSetShaderResource(0, null!);
-            drawWatch.Stop();
-            diagnostics.AddTiming("GpuToneSurfaceDraw", drawWatch.Elapsed.TotalMilliseconds, $"tones={uploads.Count}");
+                unsafe
+                {
+                    var constants = stackalloc float[8];
+                    for (var i = 0; i < _uploads.Count; i++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var upload = _uploads[i];
+                        constants[0] = request.Width;
+                        constants[1] = request.Height;
+                        constants[2] = NumericMath.InverseAtLeast(request.Width);
+                        constants[3] = NumericMath.InverseAtLeast(request.Height);
+                        constants[4] = NumericMath.Clamp01(upload.Source.Opacity * layer.Opacity);
+                        _device.Context.UpdateSubresource(_frameConstants, 0, null, (IntPtr)constants, 0, 0);
+                        _device.Context.PSSetShaderResource(0, upload.ShaderResourceView);
+                        _device.Context.Draw(3, 0);
+                    }
+                }
+
+                _device.Context.PSSetShaderResource(0, null!);
+                drawWatch.Stop();
+                diagnostics.AddTiming("GpuToneSurfaceDraw", drawWatch.Elapsed.TotalMilliseconds, $"tones={_uploads.Count}");
+            }
         }
         finally
         {
-            foreach (var upload in uploads)
+            for (var i = 0; i < _uploads.Count; i++)
             {
-                upload.Dispose();
+                _uploads[i].Dispose();
             }
+
+            _uploads.Clear();
         }
     }
 
@@ -154,6 +177,7 @@ public sealed class DxToneSurfacePass : IDisposable
         }
 
         _disposed = true;
+        _uploader.Dispose();
         _sampler.Dispose();
         _frameConstants.Dispose();
         _pixelShader.Dispose();

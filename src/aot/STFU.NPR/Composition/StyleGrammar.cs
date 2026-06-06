@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.NPR.Graph;
 using STFU.Strokes.Export;
 
@@ -137,24 +138,24 @@ public sealed record StyleGrammar(
         var minScreenLength = kind switch
         {
             FeatureCurveKind.Boundary or FeatureCurveKind.Silhouette => 0f,
-            FeatureCurveKind.ContactAccent => Math.Max(0f, fallbackMinScreenLength * 0.75f),
-            FeatureCurveKind.Construction => Math.Max(0f, fallbackMinScreenLength * 0.6f),
-            FeatureCurveKind.HatchGuide => Math.Max(0f, fallbackMinScreenLength * 0.55f),
-            FeatureCurveKind.Hatch => Math.Max(0f, fallbackMinScreenLength * 0.65f),
-            FeatureCurveKind.SurfaceFlow => Math.Max(0f, fallbackMinScreenLength * 0.85f),
-            FeatureCurveKind.Ridge or FeatureCurveKind.Valley or FeatureCurveKind.SuggestiveContour or FeatureCurveKind.ApparentRidge => Math.Max(0f, fallbackMinScreenLength * 0.9f),
-            _ => Math.Max(0f, fallbackMinScreenLength)
+            FeatureCurveKind.ContactAccent => NumericMath.AtLeast(fallbackMinScreenLength * 0.75f, 0f),
+            FeatureCurveKind.Construction => NumericMath.AtLeast(fallbackMinScreenLength * 0.6f, 0f),
+            FeatureCurveKind.HatchGuide => NumericMath.AtLeast(fallbackMinScreenLength * 0.55f, 0f),
+            FeatureCurveKind.Hatch => NumericMath.AtLeast(fallbackMinScreenLength * 0.65f, 0f),
+            FeatureCurveKind.SurfaceFlow => NumericMath.AtLeast(fallbackMinScreenLength * 0.85f, 0f),
+            FeatureCurveKind.Ridge or FeatureCurveKind.Valley or FeatureCurveKind.SuggestiveContour or FeatureCurveKind.ApparentRidge => NumericMath.AtLeast(fallbackMinScreenLength * 0.9f, 0f),
+            _ => NumericMath.AtLeast(fallbackMinScreenLength, 0f)
         };
 
         var densityPerTile = kind switch
         {
-            FeatureCurveKind.ContactAccent => Math.Max(1f, fallbackMaxDensityPerTile * 0.65f),
-            FeatureCurveKind.Construction => Math.Max(1f, fallbackMaxDensityPerTile * 0.9f),
-            FeatureCurveKind.HatchGuide => Math.Max(1f, fallbackMaxDensityPerTile * 0.85f),
-            FeatureCurveKind.Hatch => Math.Max(1f, fallbackMaxDensityPerTile),
-            FeatureCurveKind.SurfaceFlow => Math.Max(1f, fallbackMaxDensityPerTile * 0.8f),
-            FeatureCurveKind.Ridge or FeatureCurveKind.Valley or FeatureCurveKind.SuggestiveContour or FeatureCurveKind.ApparentRidge => Math.Max(1f, fallbackMaxDensityPerTile * 0.7f),
-            _ => Math.Max(1f, fallbackMaxDensityPerTile * 0.75f)
+            FeatureCurveKind.ContactAccent => NumericMath.AtLeast(fallbackMaxDensityPerTile * 0.65f, 1f),
+            FeatureCurveKind.Construction => NumericMath.AtLeast(fallbackMaxDensityPerTile * 0.9f, 1f),
+            FeatureCurveKind.HatchGuide => NumericMath.AtLeast(fallbackMaxDensityPerTile * 0.85f, 1f),
+            FeatureCurveKind.Hatch => NumericMath.AtLeast(fallbackMaxDensityPerTile, 1f),
+            FeatureCurveKind.SurfaceFlow => NumericMath.AtLeast(fallbackMaxDensityPerTile * 0.8f, 1f),
+            FeatureCurveKind.Ridge or FeatureCurveKind.Valley or FeatureCurveKind.SuggestiveContour or FeatureCurveKind.ApparentRidge => NumericMath.AtLeast(fallbackMaxDensityPerTile * 0.7f, 1f),
+            _ => NumericMath.AtLeast(fallbackMaxDensityPerTile * 0.75f, 1f)
         };
 
         return new LinePriorityRule(

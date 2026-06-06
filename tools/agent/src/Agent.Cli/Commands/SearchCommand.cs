@@ -17,7 +17,8 @@ public static class SearchCommand
             return AgentEnvelope.Failure("search", root, Path.GetRelativePath(root, solution), "missing_pattern", "Provide --pattern <text>.");
         }
 
-        var args = new List<string> { "--line-number", "--column", "--glob", "!**/bin/**", "--glob", "!**/obj/**" };
+        var args = new List<string> { "--line-number", "--column" };
+        args.AddRange(PathFilter.HardRgGlobArgs(config));
         if (options.Literal) args.Add("--fixed-strings");
         var type = options.Get("type");
         if (type == "cs") args.AddRange(["--glob", "*.cs"]);

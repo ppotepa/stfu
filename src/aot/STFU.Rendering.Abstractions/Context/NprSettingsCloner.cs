@@ -6,27 +6,32 @@ public static class NprSettingsCloner
 {
     public static NprSettings Clone(NprSettings source)
     {
-        var copy = new NprSettings
-        {
-            Seed = source.Seed,
-            CreaseAngleDegrees = source.CreaseAngleDegrees,
-            MinimumProjectedTriangleArea = source.MinimumProjectedTriangleArea,
-            MinimumStrokeLength = source.MinimumStrokeLength,
-            SurfaceFlowShadeThreshold = source.SurfaceFlowShadeThreshold,
-            SurfaceFlowDensity = source.SurfaceFlowDensity,
-            HatchShadeThreshold = source.HatchShadeThreshold,
-            HatchDensity = source.HatchDensity,
-            HatchLength = source.HatchLength,
-            HiddenLineDepthBias = source.HiddenLineDepthBias,
-            NearClipDepth = source.NearClipDepth,
-            FarClipDepth = source.FarClipDepth,
-            ScreenClipMarginPixels = source.ScreenClipMarginPixels,
-            MaxProjectedTriangleAreaRatio = source.MaxProjectedTriangleAreaRatio,
-            FeatureLineDensity = source.FeatureLineDensity,
-            MinimumSalience = source.MinimumSalience,
-            SurfaceBufferScale = source.SurfaceBufferScale,
-            MainFillEnabled = source.MainFillEnabled
-        };
+        return CopyInto(source, new NprSettings());
+    }
+
+    public static NprSettings CopyInto(NprSettings source, NprSettings copy)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(copy);
+
+        copy.Seed = source.Seed;
+        copy.CreaseAngleDegrees = source.CreaseAngleDegrees;
+        copy.MinimumProjectedTriangleArea = source.MinimumProjectedTriangleArea;
+        copy.MinimumStrokeLength = source.MinimumStrokeLength;
+        copy.SurfaceFlowShadeThreshold = source.SurfaceFlowShadeThreshold;
+        copy.SurfaceFlowDensity = source.SurfaceFlowDensity;
+        copy.HatchShadeThreshold = source.HatchShadeThreshold;
+        copy.HatchDensity = source.HatchDensity;
+        copy.HatchLength = source.HatchLength;
+        copy.HiddenLineDepthBias = source.HiddenLineDepthBias;
+        copy.NearClipDepth = source.NearClipDepth;
+        copy.FarClipDepth = source.FarClipDepth;
+        copy.ScreenClipMarginPixels = source.ScreenClipMarginPixels;
+        copy.MaxProjectedTriangleAreaRatio = source.MaxProjectedTriangleAreaRatio;
+        copy.FeatureLineDensity = source.FeatureLineDensity;
+        copy.MinimumSalience = source.MinimumSalience;
+        copy.SurfaceBufferScale = source.SurfaceBufferScale;
+        copy.MainFillEnabled = source.MainFillEnabled;
 
         copy.StrokeStyle.Seed = source.StrokeStyle.Seed;
         copy.StrokeStyle.Medium = source.StrokeStyle.Medium;

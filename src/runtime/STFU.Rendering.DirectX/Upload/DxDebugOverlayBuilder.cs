@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.NPR.Debug;
 using STFU.Strokes;
 
@@ -77,10 +78,7 @@ public static class DxDebugOverlayBuilder
 
     private static (StrokeColor color, float opacity) ColorFromHeat(float value, byte alpha)
     {
-        var clamped = Math.Clamp(value, 0f, 1f);
-        var red = (byte)(220f * (1f - clamped) + 20f * clamped);
-        var green = (byte)(40f + 175f * clamped);
-        var blue = (byte)(45f + 35f * (1f - clamped));
+        var (red, green, blue) = ColorMath.HeatRgb(value);
         return (new StrokeColor(red, green, blue), alpha / 255f);
     }
 }

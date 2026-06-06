@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using STFU.Common.Math;
 using STFU.Logging;
 using STFU.NPR.Debug;
 using STFU.NPR.Graph;
@@ -21,7 +22,7 @@ namespace STFU.Rendering.DirectX.Backend;
 public sealed class DirectXRenderBackend : IGpuRenderBackend
 {
     [ThreadStatic]
-    private static NprGraph? s_reusableGraph;
+    private static NprRenderContextScratch? s_reusableScratch;
 
     public const string BackendId = "directx-d3d11";
 
@@ -29,6 +30,8 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
     private readonly ICpuRenderBackend _cpuFallback;
     private readonly DxReadbackPass _readbackPass;
     private readonly DxNprFrameRenderer _frameRenderer;
+    private readonly DxGpuVisibilityBufferPass _visibilityPass;
+    private long _lastMemoryLogRevision;
 
     public DirectXRenderBackend(
         DirectXDevice device,
@@ -39,6 +42,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
         _cpuFallback = cpuFallback;
         _readbackPass = new DxReadbackPass(device, surfacePool);
         _frameRenderer = new DxNprFrameRenderer(device);
+        _visibilityPass = new DxGpuVisibilityBufferPass(device);
     }
 
     public bool IsAvailable => OperatingSystem.IsWindows() && !_device.IsDisposed;
@@ -67,6 +71,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var resolvedWorkerCount = request.Budget.ResolveWorkerCount();
 
         if (request.ExecutionProfile == NprExecutionProfile.FullCpuReference)
         {
@@ -103,7 +108,9 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
         {
             Width = request.Width,
             Height = request.Height,
-            WorkerCount = request.Budget.ResolveWorkerCount(),
+            WorkerCount = resolvedWorkerCount,
+            WorkerBudgetMode = request.Budget.WorkerBudgetMode,
+            ProcessorCount = Environment.ProcessorCount,
             Notes = _device.Support.AdapterName
         };
 
@@ -112,6 +119,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
         StrokeFrame strokeFrame = StrokeFrame.Empty;
         NprFrame nprFrame = NprFrame.Empty;
         NprDebugFrame debugFrame = NprDebugFrame.Empty;
+        NprGraph? pipelineGraph = null;
 
         if (request.ContentKind == NprRenderContentKind.NprPipeline)
         {
@@ -121,7 +129,10 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
             }
 
             var contextWatch = Stopwatch.StartNew();
-            var context = NprRenderContextFactory.Create(request, s_reusableGraph ??= new NprGraph());
+            var context = NprRenderContextFactory.CreateWithScratch(
+                request,
+                s_reusableScratch ??= new NprRenderContextScratch(),
+                cancellationToken);
             contextWatch.Stop();
             diagnostics.AddTiming("BuildNprContext", contextWatch.Elapsed.TotalMilliseconds);
 
@@ -132,7 +143,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
 
             foreach (var trace in context.StepTraces)
             {
-                var notes = trace.AllocatedBytes > 0
+                var notes = request.DiagnosticsOptions?.EnableStepAllocationTracking == true && trace.AllocatedBytes > 0
                     ? $"{trace.Notes}; alloc={trace.AllocatedBytes}"
                     : trace.Notes;
                 diagnostics.AddTiming($"NprStep.{trace.StepName}", trace.Milliseconds, notes);
@@ -140,37 +151,73 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
 
             nprFrame = context.NprFrame;
             debugFrame = context.DebugFrame;
+            pipelineGraph = context.Graph;
             diagnostics.PathCount = strokeFrame.Paths.Count;
             diagnostics.LayerCount = nprFrame.Layers.Count;
             diagnostics.ToneSurfaceCount = context.Graph.ToneSurfaces.Count;
         }
 
-        using var deviceLock = _device.Lock();
         var rentWatch = Stopwatch.StartNew();
-        var gpuLease = _device.TexturePool.RentRenderTarget(request.Width, request.Height, GpuSurfaceFormat.Bgra8888Unorm);
+        GpuTextureLease gpuLease;
+        using (_device.Lock())
+        {
+            gpuLease = _device.TexturePool.RentRenderTarget(request.Width, request.Height, GpuSurfaceFormat.Bgra8888Unorm);
+        }
+
         rentWatch.Stop();
         diagnostics.AddTiming("GpuTextureRent", rentWatch.Elapsed.TotalMilliseconds);
 
         try
         {
-            if (!_device.Resources.TryGetTexture(gpuLease.Texture, out var target))
+            DirectXTextureResource target;
+            using (_device.Lock())
+            {
+                if (!_device.Resources.TryGetTexture(gpuLease.Texture, out target!))
+                {
+                    throw new InvalidOperationException("DirectX render target could not be resolved from resource registry.");
+                }
+            }
+
+            if (target is null)
             {
                 throw new InvalidOperationException("DirectX render target could not be resolved from resource registry.");
+            }
+
+            if (request.Quality.UseGpuVisibilityBuffer &&
+                request.ContentKind == NprRenderContentKind.NprPipeline &&
+                pipelineGraph is not null)
+            {
+                _visibilityPass.Execute(
+                    pipelineGraph,
+                    request.Width,
+                    request.Height,
+                    diagnostics,
+                    cancellationToken);
             }
 
             _frameRenderer.Render(target, request, strokeFrame, nprFrame, debugFrame, diagnostics, cancellationToken);
 
             if (request.Budget.RequireGpuReadback)
             {
+                if (!request.Budget.AllowGpuReadback)
+                {
+                    throw new InvalidOperationException("GPU readback is required for this request, but GPU readback is disabled by the frame budget.");
+                }
+
                 var readbackWatch = Stopwatch.StartNew();
                 var pixelLease = _readbackPass.ReadToPixelSurface(gpuLease.Texture, cancellationToken);
                 readbackWatch.Stop();
-                diagnostics.AddTiming("GpuReadback", readbackWatch.Elapsed.TotalMilliseconds);
+                var readbackBytes = pixelLease.Surface.Stride * pixelLease.Surface.Height;
+                diagnostics.AddTiming(
+                    "GpuReadback",
+                    readbackWatch.Elapsed.TotalMilliseconds,
+                    $"readbacks=1, bytes={readbackBytes}");
                 gpuLease.Dispose();
 
                 total.Stop();
                 diagnostics.TotalMilliseconds = total.Elapsed.TotalMilliseconds;
-                diagnostics.AllocatedBytes = Math.Max(0, GC.GetTotalAllocatedBytes(false) - allocatedBefore);
+                diagnostics.AllocatedBytes = NumericMath.AtLeast(GC.GetTotalAllocatedBytes(false) - allocatedBefore, 0);
+                LogMemoryIfNeeded(request, diagnostics);
 
                 return ValueTask.FromResult(new NprRenderResult
                 {
@@ -186,9 +233,15 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 });
             }
 
+            if (!request.Budget.PreferGpuPresentation && !request.Budget.AllowGpuReadback)
+            {
+                throw new InvalidOperationException("GPU readback is disabled for this request, but direct GPU presentation was not selected.");
+            }
+
             total.Stop();
             diagnostics.TotalMilliseconds = total.Elapsed.TotalMilliseconds;
-            diagnostics.AllocatedBytes = Math.Max(0, GC.GetTotalAllocatedBytes(false) - allocatedBefore);
+            diagnostics.AllocatedBytes = NumericMath.AtLeast(GC.GetTotalAllocatedBytes(false) - allocatedBefore, 0);
+            LogMemoryIfNeeded(request, diagnostics);
 
             return ValueTask.FromResult(new NprRenderResult
             {
@@ -209,4 +262,48 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
             throw;
         }
     }
+
+    private void LogMemoryIfNeeded(NprRenderRequest request, NprRenderDiagnostics diagnostics)
+    {
+        if (request.DiagnosticsOptions?.EnableMemoryLogs != true)
+        {
+            return;
+        }
+
+        if (request.Revision != 1 && request.Revision - _lastMemoryLogRevision < 120)
+        {
+            return;
+        }
+
+        _lastMemoryLogRevision = request.Revision;
+        using var process = Process.GetCurrentProcess();
+        var gcInfo = GC.GetGCMemoryInfo();
+        var renderTargets = _device.TexturePool.Snapshot();
+        var readbacks = _device.ReadbackTexturePool.Snapshot();
+
+        StfuLog.Write(
+            StfuLogDomain.Memory,
+            "directx.render",
+            $"revision={request.Revision}",
+            properties: new Dictionary<string, object?>
+            {
+                ["revision"] = request.Revision,
+                ["profile"] = request.ExecutionProfile,
+                ["output"] = request.Budget.RequireGpuReadback ? "readback" : "texture",
+                ["workingSetMb"] = BufferSizingMath.ToMegabytes(process.WorkingSet64),
+                ["privateMb"] = BufferSizingMath.ToMegabytes(process.PrivateMemorySize64),
+                ["gcHeapMb"] = BufferSizingMath.ToMegabytes(GC.GetTotalMemory(false)),
+                ["gcHeapSizeMb"] = BufferSizingMath.ToMegabytes(gcInfo.HeapSizeBytes),
+                ["allocatedFrameMb"] = BufferSizingMath.ToMegabytes(diagnostics.AllocatedBytes),
+                ["rtRetained"] = renderTargets.RetainedCount,
+                ["rtCreated"] = renderTargets.CreatedCount,
+                ["rtReused"] = renderTargets.ReusedCount,
+                ["rtDisposed"] = renderTargets.DisposedCount,
+                ["readbackRetained"] = readbacks.RetainedCount,
+                ["readbackCreated"] = readbacks.CreatedCount,
+                ["readbackReused"] = readbacks.ReusedCount,
+                ["readbackDisposed"] = readbacks.DisposedCount
+            });
+    }
+
 }

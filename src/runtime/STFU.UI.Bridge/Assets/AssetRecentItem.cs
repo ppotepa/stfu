@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.UI.Bridge.Binding;
 
 namespace STFU.UI.Bridge.Assets;
@@ -74,7 +75,7 @@ public sealed class AssetRecentItem : BindableObject
                 return directory;
             }
 
-            var tail = parts.Skip(Math.Max(0, parts.Length - 2));
+            var tail = parts.Skip(NumericMath.AtLeast(parts.Length - 2, 0));
             var prefix = parts.Length > 2 ? "...\\" : string.Empty;
             return prefix + string.Join("\\", tail);
         }

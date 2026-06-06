@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using STFU.Common.Math;
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.Abstractions.Surfaces;
 
@@ -56,8 +57,8 @@ internal sealed class AvaloniaBitmapPresenter
             return;
         }
 
-        _width = Math.Max(1, width);
-        _height = Math.Max(1, height);
+        _width = NumericMath.AtLeast(width, 1);
+        _height = NumericMath.AtLeast(height, 1);
         _bitmap = new WriteableBitmap(
             new PixelSize(_width, _height),
             new Vector(96, 96),

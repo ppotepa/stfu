@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using STFU.Common.Math;
 using STFU.Engine;
 using STFU.NPR.Composition;
 using STFU.NPR.Debug;
@@ -27,6 +28,7 @@ public sealed class EngineViewportControl : Control
     private bool _loggedOrbitInput;
     private bool _loggedPanInput;
     private bool _loggedFovInput;
+    private bool _invalidateQueued;
     private readonly DispatcherTimer _renderTimer;
 
     public EngineViewportControl(StfuEngine engine)
@@ -51,7 +53,7 @@ public sealed class EngineViewportControl : Control
         _renderBridge = new ViewportRenderBridge(
             session,
             _bitmapPresenter,
-            InvalidateVisual,
+            RequestInvalidate,
             directXPresenter);
 
         ApplyStartupOptions(startupOptions);
@@ -67,7 +69,7 @@ public sealed class EngineViewportControl : Control
         {
             Interval = TimeSpan.FromMilliseconds(16)
         };
-        _renderTimer.Tick += (_, _) => InvalidateVisual();
+        _renderTimer.Tick += (_, _) => RequestInvalidate();
 
         AttachedToVisualTree += (_, _) =>
         {
@@ -109,9 +111,28 @@ public sealed class EngineViewportControl : Control
         base.Render(context);
 
         var bounds = Bounds;
-        var width = Math.Max(1, (int)bounds.Width);
-        var height = Math.Max(1, (int)bounds.Height);
+        var width = NumericMath.AtLeast((int)bounds.Width, 1);
+        var height = NumericMath.AtLeast((int)bounds.Height, 1);
 
+        ProcessFrame(width, height);
+
+        if (!_renderBridge.IsDirectGpuPresenting)
+        {
+            _bitmapPresenter.Draw(context, bounds, ViewportPaperColor());
+            DrawDebugOverlay(context, _viewport.Snapshot.DebugFrame, _viewport.DebugOverlay);
+        }
+    }
+
+    internal void PumpDirectFrame()
+    {
+        var bounds = Bounds;
+        var width = NumericMath.AtLeast((int)bounds.Width, 1);
+        var height = NumericMath.AtLeast((int)bounds.Height, 1);
+        ProcessFrame(width, height);
+    }
+
+    private void ProcessFrame(int width, int height)
+    {
         _renderBridge.RequestFrame(width, height, _viewport.RenderMode);
         var presentedFrame = _renderBridge.ApplyPendingResultIfAny();
 
@@ -123,12 +144,28 @@ public sealed class EngineViewportControl : Control
         {
             _session.Workspace.Viewport.PublishViewportSize(width, height);
         }
+    }
 
-        if (!_renderBridge.IsDirectGpuPresenting)
+    private void RequestInvalidate()
+    {
+        QueueInvalidate();
+    }
+
+    private void QueueInvalidate()
+    {
+        if (_invalidateQueued)
         {
-            _bitmapPresenter.Draw(context, bounds, ViewportPaperColor());
-            DrawDebugOverlay(context, _viewport.Snapshot.DebugFrame, _viewport.DebugOverlay);
+            return;
         }
+
+        _invalidateQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _invalidateQueued = false;
+                InvalidateVisual();
+            },
+            DispatcherPriority.Background);
     }
 
     private static Color ViewportPaperColor()
@@ -221,10 +258,7 @@ public sealed class EngineViewportControl : Control
 
         static Color ColorFromHeat(float value, byte alpha)
         {
-            var clamped = Math.Clamp(value, 0f, 1f);
-            var red = (byte)(220f * (1f - clamped) + 20f * clamped);
-            var green = (byte)(40f + 175f * clamped);
-            var blue = (byte)(45f + 35f * (1f - clamped));
+            var (red, green, blue) = ColorMath.HeatRgb(value);
             return Color.FromArgb(alpha, red, green, blue);
         }
     }
@@ -285,7 +319,7 @@ public sealed class EngineViewportControl : Control
             }
         }
 
-        InvalidateVisual();
+        RequestInvalidate();
         e.Handled = true;
     }
 
@@ -310,7 +344,7 @@ public sealed class EngineViewportControl : Control
             _loggedFovInput = true;
         }
 
-        InvalidateVisual();
+        RequestInvalidate();
         e.Handled = true;
     }
 
@@ -435,14 +469,14 @@ public sealed class EngineViewportControl : Control
             StfuUiLog.Write($"NPR preset: {preset.Id} ({preset.Name})");
         }
 
-        InvalidateVisual();
+        RequestInvalidate();
         e.Handled = true;
 
         void SetOverlay(DebugOverlayKind overlay, string label)
         {
             _session.Workspace.Viewport.DebugOverlay = overlay;
             StfuUiLog.Write($"Viewport debug overlay: {label}");
-            InvalidateVisual();
+            RequestInvalidate();
             e.Handled = true;
         }
 
@@ -451,7 +485,7 @@ public sealed class EngineViewportControl : Control
             ApplyPreset(presetId);
             _session.Workspace.Viewport.RenderMode = renderModeValue;
             StfuUiLog.Write($"Viewport render mode: {renderModeValue}");
-            InvalidateVisual();
+            RequestInvalidate();
             e.Handled = true;
         }
 
@@ -473,7 +507,7 @@ public sealed class EngineViewportControl : Control
         _session.Workspace.DefaultDrawing.DrawProgress = 0f;
         _session.FrameHistory.Reset();
         StfuUiLog.Write("Default draw progress reset.");
-        InvalidateVisual();
+        RequestInvalidate();
     }
 
     private void FinishDefaultDrawing()
@@ -486,7 +520,7 @@ public sealed class EngineViewportControl : Control
         _session.Workspace.DefaultDrawing.DrawProgress = 1f;
         _session.FrameHistory.Reset();
         StfuUiLog.Write("Default draw progress completed.");
-        InvalidateVisual();
+        RequestInvalidate();
     }
 
     private void ToggleDefaultAutoDraw()
@@ -499,7 +533,7 @@ public sealed class EngineViewportControl : Control
         var drawing = _activeNprPreset.ActiveSettings.DefaultDrawing;
         _session.Workspace.DefaultDrawing.AutoDraw = !drawing.AutoDraw;
         StfuUiLog.Write($"Default auto-draw: {(drawing.AutoDraw ? "on" : "off")}");
-        InvalidateVisual();
+        RequestInvalidate();
     }
 
     private void StopOrbit(IPointer pointer)

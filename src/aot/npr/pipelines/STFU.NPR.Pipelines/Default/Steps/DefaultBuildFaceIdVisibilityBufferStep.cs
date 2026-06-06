@@ -1,42 +1,295 @@
+using STFU.Common.Math;
 using STFU.NPR.Graph;
+using STFU.Parallelism;
+using System.Runtime.InteropServices;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
 
 public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.INprStep
 {
+    private const int VisibilityTileSize = 32;
     private DefaultFaceIdVisibilityBuffer? _buffer;
+    private TriangleRasterInfo[] _triangleInfos = [];
+    private int[] _rangeTileCounts = [];
+    private int[] _rangeTileOffsets = [];
+    private int[] _tileCounts = [];
+    private int[] _tileOffsets = [];
+    private int[] _tileWriteCursors = [];
+    private int[] _tileTriangleIndices = [];
+    private long[] _tilePixelTests = [];
+    private long[] _tilePixelWrites = [];
 
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
         var drawing = context.Settings.DefaultDrawing;
-        var width = Math.Max(8, (int)MathF.Floor(context.Width * drawing.DepthScale));
-        var height = Math.Max(8, (int)MathF.Floor(context.Height * drawing.DepthScale));
+        var width = RasterMath.AtLeastPixels((int)NumericMath.Floor(context.Width * drawing.DepthScale), 8);
+        var height = RasterMath.AtLeastPixels((int)NumericMath.Floor(context.Height * drawing.DepthScale), 8);
 
         var buffer = RentBuffer(width, height, context.Graph.Triangles.Count);
         context.Graph.DefaultFaceIdVisibility = buffer;
+        var triangleCount = context.Graph.Triangles.Count;
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.sourceTriangles", triangleCount);
 
         if (!drawing.OcclusionCulling)
         {
             Array.Fill(buffer.FaceVisible, true);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileCount", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.rangeCount", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.totalTileRefs", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.validRasterInfoCount", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", 0);
             return;
         }
 
-        for (var triangleIndex = 0; triangleIndex < context.Graph.Triangles.Count; triangleIndex++)
+        buffer.Clear();
+        if (triangleCount == 0)
         {
-            var triangle = context.Graph.Triangles[triangleIndex];
-            var a = context.Graph.Vertices[triangle.A];
-            var b = context.Graph.Vertices[triangle.B];
-            var c = context.Graph.Vertices[triangle.C];
-
-            if (TriangleOutsideClip(a.Ndc, b.Ndc, c.Ndc))
-            {
-                continue;
-            }
-
-            Rasterize(context, buffer, triangleIndex, a, b, c);
+            buffer.MarkVisibleFaces(clear: false);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileCount", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.rangeCount", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.totalTileRefs", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.validRasterInfoCount", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", 0);
+            return;
         }
 
-        buffer.MarkVisibleFaces();
+        var scaleX = buffer.Width / (float)NumericMath.AtLeast(context.Width, 1);
+        var scaleY = buffer.Height / (float)NumericMath.AtLeast(context.Height, 1);
+        var tileSize = RasterMath.AtLeastPixels(VisibilityTileSize, 8);
+        var tilesPerRow = RasterMath.TilesPerAxis(buffer.Width, tileSize);
+        var tileRows = RasterMath.TilesPerAxis(buffer.Height, tileSize);
+        var tileCount = tilesPerRow * tileRows;
+        var rangeCount = DeterministicParallel.GetRangeCount(triangleCount, context.WorkerCount, 64);
+
+        if (context.WorkerCount <= 1 || triangleCount < 256 || tileCount <= 1 || rangeCount <= 1)
+        {
+            long pixelTests = 0;
+            long pixelWrites = 0;
+            RasterizeSequential(
+                buffer,
+                context.Graph.Triangles,
+                context.Graph.Vertices,
+                scaleX,
+                scaleY,
+                ref pixelTests,
+                ref pixelWrites);
+            buffer.MarkVisibleFaces(clear: false);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileCount", tileCount);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.rangeCount", 1);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.totalTileRefs", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.validRasterInfoCount", triangleCount);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", pixelTests);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", pixelWrites);
+            return;
+        }
+
+        EnsureScratchCapacity(triangleCount, rangeCount, tileCount);
+        var triangles = context.Graph.Triangles;
+        var vertices = context.Graph.Vertices;
+
+        DeterministicParallel.ForRanges(
+            0,
+            triangleCount,
+            context.WorkerCount,
+            context.CancellationToken,
+            (startInclusive, endExclusive, _, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var triangleSpan = CollectionsMarshal.AsSpan(triangles);
+                var vertexSpan = CollectionsMarshal.AsSpan(vertices);
+                for (var triangleIndex = startInclusive; triangleIndex < endExclusive; triangleIndex++)
+                {
+                    if ((triangleIndex & 0x3FF) == 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    ref readonly var triangle = ref triangleSpan[triangleIndex];
+                    _triangleInfos[triangleIndex] = BuildTriangleRasterInfo(
+                        in triangle,
+                        triangleIndex,
+                        vertexSpan,
+                        scaleX,
+                        scaleY,
+                        buffer.Width,
+                        buffer.Height,
+                        tileSize,
+                        tilesPerRow);
+                }
+            },
+            minItemsPerRange: 64);
+
+        var validRasterInfoCount = 0;
+        for (var triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++)
+        {
+            if (_triangleInfos[triangleIndex].IsValid)
+            {
+                validRasterInfoCount++;
+            }
+        }
+
+        Array.Clear(_rangeTileCounts, 0, rangeCount * tileCount);
+        DeterministicParallel.ForRanges(
+            0,
+            triangleCount,
+            context.WorkerCount,
+            context.CancellationToken,
+            (startInclusive, endExclusive, rangeIndex, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var rangeBase = rangeIndex * tileCount;
+                for (var triangleIndex = startInclusive; triangleIndex < endExclusive; triangleIndex++)
+                {
+                    if ((triangleIndex & 0x3FF) == 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    ref readonly var info = ref _triangleInfos[triangleIndex];
+                    if (!info.IsValid)
+                    {
+                        continue;
+                    }
+
+                    for (var tileY = info.MinTileY; tileY <= info.MaxTileY; tileY++)
+                    {
+                        var tileRowBase = tileY * tilesPerRow;
+                        for (var tileX = info.MinTileX; tileX <= info.MaxTileX; tileX++)
+                        {
+                            _rangeTileCounts[rangeBase + tileRowBase + tileX]++;
+                        }
+                    }
+                }
+            },
+            minItemsPerRange: 64);
+
+        Array.Clear(_tileCounts, 0, tileCount);
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            var total = 0;
+            for (var rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++)
+            {
+                total += _rangeTileCounts[rangeIndex * tileCount + tileIndex];
+            }
+
+            _tileCounts[tileIndex] = total;
+        }
+
+        var maxRefsPerTile = 0;
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            maxRefsPerTile = NumericMath.AtLeast(maxRefsPerTile, _tileCounts[tileIndex]);
+        }
+
+        var totalRefs = PrefixSums.ExclusiveFromCounts(_tileCounts.AsSpan(0, tileCount), _tileOffsets.AsSpan(0, tileCount));
+        EnsureTileRefCapacity(totalRefs);
+
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            var cursor = _tileOffsets[tileIndex];
+            for (var rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++)
+            {
+                var count = _rangeTileCounts[rangeIndex * tileCount + tileIndex];
+                _rangeTileOffsets[rangeIndex * tileCount + tileIndex] = cursor;
+                cursor += count;
+            }
+        }
+
+        Array.Copy(_rangeTileOffsets, _tileWriteCursors, _rangeTileOffsets.Length);
+        Array.Clear(_tilePixelTests, 0, tileCount);
+        Array.Clear(_tilePixelWrites, 0, tileCount);
+        DeterministicParallel.ForRanges(
+            0,
+            triangleCount,
+            context.WorkerCount,
+            context.CancellationToken,
+            (startInclusive, endExclusive, rangeIndex, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var rangeBase = rangeIndex * tileCount;
+                for (var triangleIndex = startInclusive; triangleIndex < endExclusive; triangleIndex++)
+                {
+                    if ((triangleIndex & 0x3FF) == 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    ref readonly var info = ref _triangleInfos[triangleIndex];
+                    if (!info.IsValid)
+                    {
+                        continue;
+                    }
+
+                    for (var tileY = info.MinTileY; tileY <= info.MaxTileY; tileY++)
+                    {
+                        var tileRowBase = tileY * tilesPerRow;
+                        for (var tileX = info.MinTileX; tileX <= info.MaxTileX; tileX++)
+                        {
+                            var tileIndex = tileRowBase + tileX;
+                            var writeIndex = _tileWriteCursors[rangeBase + tileIndex]++;
+                            _tileTriangleIndices[writeIndex] = triangleIndex;
+                        }
+                    }
+                }
+            },
+            minItemsPerRange: 64);
+
+        DeterministicParallel.ForRanges(
+            0,
+            tileCount,
+            context.WorkerCount,
+            context.CancellationToken,
+            (startInclusive, endExclusive, _, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                for (var tileIndex = startInclusive; tileIndex < endExclusive; tileIndex++)
+                {
+                    if ((tileIndex & 0x3FF) == 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+
+                    long localPixelTests = 0;
+                    long localPixelWrites = 0;
+                    RasterizeTile(
+                        buffer,
+                        tileIndex,
+                        tileSize,
+                        tilesPerRow,
+                        totalRefs,
+                        _tileOffsets[tileIndex],
+                        _tileCounts[tileIndex],
+                        _tileTriangleIndices,
+                        _triangleInfos,
+                        ref localPixelTests,
+                        ref localPixelWrites);
+                    _tilePixelTests[tileIndex] = localPixelTests;
+                    _tilePixelWrites[tileIndex] = localPixelWrites;
+                }
+            },
+            minItemsPerRange: 1);
+
+        buffer.MarkVisibleFaces(clear: false);
+        long totalPixelTests = 0;
+        long totalPixelWrites = 0;
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            totalPixelTests += _tilePixelTests[tileIndex];
+            totalPixelWrites += _tilePixelWrites[tileIndex];
+        }
+
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileCount", tileCount);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.rangeCount", rangeCount);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.totalTileRefs", totalRefs);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.validRasterInfoCount", validRasterInfoCount);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", maxRefsPerTile);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", totalPixelTests);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", totalPixelWrites);
     }
 
     private DefaultFaceIdVisibilityBuffer RentBuffer(int width, int height, int faceCount)
@@ -48,120 +301,478 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         {
             _buffer = new DefaultFaceIdVisibilityBuffer(width, height, faceCount);
         }
-        else
-        {
-            _buffer.Clear();
-        }
 
         return _buffer;
     }
 
-    private static void Rasterize(
-        STFU.NPR.Pipeline.NprContext context,
-        DefaultFaceIdVisibilityBuffer buffer,
-        int triangleIndex,
-        ProjectedVertex a,
-        ProjectedVertex b,
-        ProjectedVertex c)
+    private void EnsureScratchCapacity(int triangleCount, int rangeCount, int tileCount)
     {
-        var scaleX = buffer.Width / (float)Math.Max(context.Width, 1);
-        var scaleY = buffer.Height / (float)Math.Max(context.Height, 1);
-        var av = ToBufferVertex(scaleX, scaleY, a);
-        var bv = ToBufferVertex(scaleX, scaleY, b);
-        var cv = ToBufferVertex(scaleX, scaleY, c);
-        var area = DefaultFaceIdVisibilityBuffer.EdgeFunction(av.X, av.Y, bv.X, bv.Y, cv.X, cv.Y);
-        if (MathF.Abs(area) < 1e-7f)
+        if (_triangleInfos.Length < triangleCount)
+        {
+            _triangleInfos = new TriangleRasterInfo[triangleCount];
+        }
+
+        var rangeTileLength = rangeCount * tileCount;
+        if (_rangeTileCounts.Length < rangeTileLength)
+        {
+            _rangeTileCounts = new int[rangeTileLength];
+            _rangeTileOffsets = new int[rangeTileLength];
+        }
+
+        if (_tileCounts.Length < tileCount)
+        {
+            _tileCounts = new int[tileCount];
+            _tileOffsets = new int[tileCount];
+        }
+
+        if (_tileWriteCursors.Length < rangeTileLength)
+        {
+            _tileWriteCursors = new int[rangeTileLength];
+        }
+
+        if (_tilePixelTests.Length < tileCount)
+        {
+            _tilePixelTests = new long[tileCount];
+            _tilePixelWrites = new long[tileCount];
+        }
+    }
+
+    private void EnsureTileRefCapacity(int totalRefs)
+    {
+        if (_tileTriangleIndices.Length < totalRefs)
+        {
+            _tileTriangleIndices = new int[totalRefs];
+        }
+    }
+
+    private static TriangleRasterInfo BuildTriangleRasterInfo(
+        in ProjectedTriangle triangle,
+        int triangleIndex,
+        ReadOnlySpan<ProjectedVertex> vertices,
+        float scaleX,
+        float scaleY,
+        int bufferWidth,
+        int bufferHeight,
+        int tileSize,
+        int tilesPerRow)
+    {
+        var a = vertices[triangle.A];
+        var b = vertices[triangle.B];
+        var c = vertices[triangle.C];
+
+                if (Geometry3D.TriangleOutsideClip(a.Ndc, b.Ndc, c.Ndc))
+        {
+            return default;
+        }
+
+        var ax = a.Position.X * scaleX;
+        var ay = a.Position.Y * scaleY;
+        var bx = b.Position.X * scaleX;
+        var by = b.Position.Y * scaleY;
+        var cx = c.Position.X * scaleX;
+        var cy = c.Position.Y * scaleY;
+        var area = DefaultFaceIdVisibilityBuffer.EdgeFunction(ax, ay, bx, by, cx, cy);
+        if (NumericMath.Abs(area) < 1e-7f)
+        {
+            return default;
+        }
+
+        var (minX, maxX, minY, maxY) = RasterMath.TrianglePixelBounds(ax, ay, bx, by, cx, cy, bufferWidth, bufferHeight);
+        if (minX > maxX || minY > maxY)
+        {
+            return default;
+        }
+
+        var invArea = 1f / area;
+        var stepX0 = cy - by;
+        var stepY0 = -(cx - bx);
+        var stepX1 = ay - cy;
+        var stepY1 = -(ax - cx);
+        var stepX2 = by - ay;
+        var stepY2 = -(bx - ax);
+
+        return new TriangleRasterInfo(
+            true,
+            triangleIndex,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            area,
+            invArea,
+            stepX0,
+            stepY0,
+            stepX1,
+            stepY1,
+            stepX2,
+            stepY2,
+            a.Depth01 * invArea,
+            b.Depth01 * invArea,
+            c.Depth01 * invArea,
+            area >= 0f,
+            minX,
+            maxX,
+            minY,
+            maxY,
+            RasterMath.TileRangeFromPixelRange(minX, maxX, tileSize, tilesPerRow).MinTile,
+            RasterMath.TileRangeFromPixelRange(minX, maxX, tileSize, tilesPerRow).MaxTile,
+            RasterMath.TileRangeFromPixelRange(minY, maxY, tileSize, RasterMath.TilesPerAxis(bufferHeight, tileSize)).MinTile,
+            RasterMath.TileRangeFromPixelRange(minY, maxY, tileSize, RasterMath.TilesPerAxis(bufferHeight, tileSize)).MaxTile,
+            a.Depth01,
+            b.Depth01,
+            c.Depth01);
+    }
+
+    private static void RasterizeSequential(
+        DefaultFaceIdVisibilityBuffer buffer,
+        List<ProjectedTriangle> triangles,
+        List<ProjectedVertex> vertices,
+        float scaleX,
+        float scaleY,
+        ref long pixelTests,
+        ref long pixelWrites)
+    {
+        var triangleSpan = CollectionsMarshal.AsSpan(triangles);
+        var vertexSpan = CollectionsMarshal.AsSpan(vertices);
+        for (var triangleIndex = 0; triangleIndex < triangleSpan.Length; triangleIndex++)
+        {
+            ref readonly var triangle = ref triangleSpan[triangleIndex];
+            var a = vertexSpan[triangle.A];
+            var b = vertexSpan[triangle.B];
+            var c = vertexSpan[triangle.C];
+
+            if (Geometry3D.TriangleOutsideClip(a.Ndc, b.Ndc, c.Ndc))
+            {
+                continue;
+            }
+
+            Rasterize(
+                buffer,
+                triangleIndex,
+                scaleX,
+                scaleY,
+                a,
+                b,
+                c,
+                ref pixelTests,
+                ref pixelWrites);
+        }
+    }
+
+    private static void RasterizeTile(
+        DefaultFaceIdVisibilityBuffer buffer,
+        int tileIndex,
+        int tileSize,
+        int tilesPerRow,
+        int totalRefs,
+        int tileOffset,
+        int tileCount,
+        int[] tileTriangleIndices,
+        TriangleRasterInfo[] triangleInfos,
+        ref long pixelTests,
+        ref long pixelWrites)
+    {
+        if (tileCount <= 0)
         {
             return;
         }
 
-        var minX = Math.Max(0, (int)MathF.Floor(MathF.Min(av.X, MathF.Min(bv.X, cv.X)) - 1f));
-        var maxX = Math.Min(buffer.Width - 1, (int)MathF.Ceiling(MathF.Max(av.X, MathF.Max(bv.X, cv.X)) + 1f));
-        var minY = Math.Max(0, (int)MathF.Floor(MathF.Min(av.Y, MathF.Min(bv.Y, cv.Y)) - 1f));
-        var maxY = Math.Min(buffer.Height - 1, (int)MathF.Ceiling(MathF.Max(av.Y, MathF.Max(bv.Y, cv.Y)) + 1f));
+        var tileX = tileIndex % tilesPerRow;
+        var tileY = tileIndex / tilesPerRow;
+        var tileMinX = tileX * tileSize;
+        var tileMinY = tileY * tileSize;
+        var tileMaxX = NumericMath.AtMost(buffer.Width - 1, tileMinX + tileSize - 1);
+        var tileMaxY = NumericMath.AtMost(buffer.Height - 1, tileMinY + tileSize - 1);
+        var depthBuffer = buffer.Depth;
+        var faceBuffer = buffer.FaceId;
 
-        var stepX0 = cv.Y - bv.Y;
-        var stepY0 = -(cv.X - bv.X);
-        var stepX1 = av.Y - cv.Y;
-        var stepY1 = -(av.X - cv.X);
-        var stepX2 = bv.Y - av.Y;
-        var stepY2 = -(bv.X - av.X);
-        var rowStartX = minX + 0.5f;
-        var rowStartY = minY + 0.5f;
-        var rowW0 = DefaultFaceIdVisibilityBuffer.EdgeFunction(bv.X, bv.Y, cv.X, cv.Y, rowStartX, rowStartY);
-        var rowW1 = DefaultFaceIdVisibilityBuffer.EdgeFunction(cv.X, cv.Y, av.X, av.Y, rowStartX, rowStartY);
-        var rowW2 = DefaultFaceIdVisibilityBuffer.EdgeFunction(av.X, av.Y, bv.X, bv.Y, rowStartX, rowStartY);
-        var positiveArea = area >= 0f;
-
-        for (var y = minY; y <= maxY; y++)
+        for (var refIndex = tileOffset; refIndex < tileOffset + tileCount && refIndex < totalRefs; refIndex++)
         {
-            var w0 = rowW0;
-            var w1 = rowW1;
-            var w2 = rowW2;
-
-            for (var x = minX; x <= maxX; x++)
+            var triangleIndex = tileTriangleIndices[refIndex];
+            ref readonly var triangle = ref triangleInfos[triangleIndex];
+            var minX = NumericMath.AtLeast(tileMinX, triangle.MinX);
+            var maxX = NumericMath.AtMost(tileMaxX, triangle.MaxX);
+            var minY = NumericMath.AtLeast(tileMinY, triangle.MinY);
+            var maxY = NumericMath.AtMost(tileMaxY, triangle.MaxY);
+            if (minX > maxX || minY > maxY)
             {
-                var inside = positiveArea
-                    ? w0 >= -1e-5f && w1 >= -1e-5f && w2 >= -1e-5f
-                    : w0 <= 1e-5f && w1 <= 1e-5f && w2 <= 1e-5f;
-
-                if (!inside)
-                {
-                    w0 += stepX0;
-                    w1 += stepX1;
-                    w2 += stepX2;
-                    continue;
-                }
-
-                var l0 = w0 / area;
-                var l1 = w1 / area;
-                var l2 = w2 / area;
-                var depth = l0 * av.Depth01 + l1 * bv.Depth01 + l2 * cv.Depth01;
-
-                if (depth is < 0f or > 1f)
-                {
-                    w0 += stepX0;
-                    w1 += stepX1;
-                    w2 += stepX2;
-                    continue;
-                }
-
-                var index = y * buffer.Width + x;
-                if (depth < buffer.Depth[index])
-                {
-                    buffer.Depth[index] = depth;
-                    buffer.FaceId[index] = triangleIndex;
-                }
-
-                w0 += stepX0;
-                w1 += stepX1;
-                w2 += stepX2;
+                continue;
             }
 
-            rowW0 += stepY0;
-            rowW1 += stepY1;
-            rowW2 += stepY2;
+            RasterizeClipped(
+                buffer,
+                triangleIndex,
+                minX,
+                maxX,
+                minY,
+                maxY,
+                triangle,
+                depthBuffer,
+                faceBuffer,
+                ref pixelTests,
+                ref pixelWrites);
         }
     }
 
-    private static BufferVertex ToBufferVertex(float scaleX, float scaleY, ProjectedVertex vertex)
+    private static unsafe void RasterizeClipped(
+        DefaultFaceIdVisibilityBuffer buffer,
+        int triangleIndex,
+        int minX,
+        int maxX,
+        int minY,
+        int maxY,
+        in TriangleRasterInfo triangle,
+        float[] depthBuffer,
+        int[] faceBuffer,
+        ref long pixelTests,
+        ref long pixelWrites)
     {
-        return new BufferVertex(
-            vertex.Position.X * scaleX,
-            vertex.Position.Y * scaleY,
-            vertex.Depth01);
+        var rowStartX = minX + 0.5f;
+        var rowStartY = minY + 0.5f;
+        var rowW0 = DefaultFaceIdVisibilityBuffer.EdgeFunction(triangle.Bx, triangle.By, triangle.Cx, triangle.Cy, rowStartX, rowStartY);
+        var rowW1 = DefaultFaceIdVisibilityBuffer.EdgeFunction(triangle.Cx, triangle.Cy, triangle.Ax, triangle.Ay, rowStartX, rowStartY);
+        var rowW2 = DefaultFaceIdVisibilityBuffer.EdgeFunction(triangle.Ax, triangle.Ay, triangle.Bx, triangle.By, rowStartX, rowStartY);
+        var width = buffer.Width;
+
+        fixed (float* depthBufferPtr = depthBuffer)
+        fixed (int* faceBufferPtr = faceBuffer)
+        {
+            if (triangle.PositiveArea)
+            {
+                for (var y = minY; y <= maxY; y++)
+                {
+                    var w0 = rowW0;
+                    var w1 = rowW1;
+                    var w2 = rowW2;
+                    var rowIndex = y * width + minX;
+                    var depthCursor = depthBufferPtr + rowIndex;
+                    var faceCursor = faceBufferPtr + rowIndex;
+
+                    for (var x = minX; x <= maxX; x++)
+                    {
+                        pixelTests++;
+                        if (w0 >= -1e-5f && w1 >= -1e-5f && w2 >= -1e-5f)
+                        {
+                            var depth = w0 * triangle.DepthScale0 + w1 * triangle.DepthScale1 + w2 * triangle.DepthScale2;
+                            var currentDepth = *depthCursor;
+                            var currentFace = *faceCursor;
+
+                            if (depth is >= 0f and <= 1f &&
+                                (currentFace < 0 ||
+                                 depth < currentDepth ||
+                                 (NumericMath.Abs(depth - currentDepth) <= 1e-7f && triangleIndex < currentFace)))
+                            {
+                                *depthCursor = depth;
+                                *faceCursor = triangleIndex;
+                                pixelWrites++;
+                            }
+                        }
+
+                        w0 += triangle.StepX0;
+                        w1 += triangle.StepX1;
+                        w2 += triangle.StepX2;
+                        depthCursor++;
+                        faceCursor++;
+                    }
+
+                    rowW0 += triangle.StepY0;
+                    rowW1 += triangle.StepY1;
+                    rowW2 += triangle.StepY2;
+                }
+            }
+            else
+            {
+                for (var y = minY; y <= maxY; y++)
+                {
+                    var w0 = rowW0;
+                    var w1 = rowW1;
+                    var w2 = rowW2;
+                    var rowIndex = y * width + minX;
+                    var depthCursor = depthBufferPtr + rowIndex;
+                    var faceCursor = faceBufferPtr + rowIndex;
+
+                    for (var x = minX; x <= maxX; x++)
+                    {
+                        pixelTests++;
+                        if (w0 <= 1e-5f && w1 <= 1e-5f && w2 <= 1e-5f)
+                        {
+                            var depth = w0 * triangle.DepthScale0 + w1 * triangle.DepthScale1 + w2 * triangle.DepthScale2;
+                            var currentDepth = *depthCursor;
+                            var currentFace = *faceCursor;
+
+                            if (depth is >= 0f and <= 1f &&
+                                (currentFace < 0 ||
+                                 depth < currentDepth ||
+                                 (NumericMath.Abs(depth - currentDepth) <= 1e-7f && triangleIndex < currentFace)))
+                            {
+                                *depthCursor = depth;
+                                *faceCursor = triangleIndex;
+                                pixelWrites++;
+                            }
+                        }
+
+                        w0 += triangle.StepX0;
+                        w1 += triangle.StepX1;
+                        w2 += triangle.StepX2;
+                        depthCursor++;
+                        faceCursor++;
+                    }
+
+                    rowW0 += triangle.StepY0;
+                    rowW1 += triangle.StepY1;
+                    rowW2 += triangle.StepY2;
+                }
+            }
+        }
     }
 
-    private static bool TriangleOutsideClip(System.Numerics.Vector3 a, System.Numerics.Vector3 b, System.Numerics.Vector3 c)
+    private static void Rasterize(
+        DefaultFaceIdVisibilityBuffer buffer,
+        int triangleIndex,
+        float scaleX,
+        float scaleY,
+        in ProjectedVertex a,
+        in ProjectedVertex b,
+        in ProjectedVertex c,
+        ref long pixelTests,
+        ref long pixelWrites)
     {
-        if (a.X < -1f && b.X < -1f && c.X < -1f) return true;
-        if (a.X > 1f && b.X > 1f && c.X > 1f) return true;
-        if (a.Y < -1f && b.Y < -1f && c.Y < -1f) return true;
-        if (a.Y > 1f && b.Y > 1f && c.Y > 1f) return true;
-        if (a.Z < -1f && b.Z < -1f && c.Z < -1f) return true;
-        if (a.Z > 1f && b.Z > 1f && c.Z > 1f) return true;
-        return false;
+        var ax = a.Position.X * scaleX;
+        var ay = a.Position.Y * scaleY;
+        var bx = b.Position.X * scaleX;
+        var by = b.Position.Y * scaleY;
+        var cx = c.Position.X * scaleX;
+        var cy = c.Position.Y * scaleY;
+        var area = DefaultFaceIdVisibilityBuffer.EdgeFunction(ax, ay, bx, by, cx, cy);
+        if (NumericMath.Abs(area) < 1e-7f)
+        {
+            return;
+        }
+
+        var (minX, maxX, minY, maxY) = RasterMath.TrianglePixelBounds(ax, ay, bx, by, cx, cy, buffer.Width, buffer.Height);
+
+        var stepX0 = cy - by;
+        var stepY0 = -(cx - bx);
+        var stepX1 = ay - cy;
+        var stepY1 = -(ax - cx);
+        var stepX2 = by - ay;
+        var stepY2 = -(bx - ax);
+        var rowStartX = minX + 0.5f;
+        var rowStartY = minY + 0.5f;
+        var rowW0 = DefaultFaceIdVisibilityBuffer.EdgeFunction(bx, by, cx, cy, rowStartX, rowStartY);
+        var rowW1 = DefaultFaceIdVisibilityBuffer.EdgeFunction(cx, cy, ax, ay, rowStartX, rowStartY);
+        var rowW2 = DefaultFaceIdVisibilityBuffer.EdgeFunction(ax, ay, bx, by, rowStartX, rowStartY);
+        var invArea = 1f / area;
+        var depthScale0 = a.Depth01 * invArea;
+        var depthScale1 = b.Depth01 * invArea;
+        var depthScale2 = c.Depth01 * invArea;
+        var width = buffer.Width;
+        var depthBuffer = buffer.Depth;
+        var faceBuffer = buffer.FaceId;
+        if (area >= 0f)
+        {
+            for (var y = minY; y <= maxY; y++)
+            {
+                var w0 = rowW0;
+                var w1 = rowW1;
+                var w2 = rowW2;
+                var rowIndex = y * width + minX;
+
+                for (var x = minX; x <= maxX; x++)
+                {
+                    pixelTests++;
+                    if (w0 >= -1e-5f && w1 >= -1e-5f && w2 >= -1e-5f)
+                    {
+                        var depth = w0 * depthScale0 + w1 * depthScale1 + w2 * depthScale2;
+
+                        if (depth is >= 0f and <= 1f && depth < depthBuffer[rowIndex])
+                        {
+                            depthBuffer[rowIndex] = depth;
+                            faceBuffer[rowIndex] = triangleIndex;
+                            pixelWrites++;
+                        }
+                    }
+
+                    w0 += stepX0;
+                    w1 += stepX1;
+                    w2 += stepX2;
+                    rowIndex++;
+                }
+
+                rowW0 += stepY0;
+                rowW1 += stepY1;
+                rowW2 += stepY2;
+            }
+        }
+        else
+        {
+            for (var y = minY; y <= maxY; y++)
+            {
+                var w0 = rowW0;
+                var w1 = rowW1;
+                var w2 = rowW2;
+                var rowIndex = y * width + minX;
+
+                for (var x = minX; x <= maxX; x++)
+                {
+                    pixelTests++;
+                    if (w0 <= 1e-5f && w1 <= 1e-5f && w2 <= 1e-5f)
+                    {
+                        var depth = w0 * depthScale0 + w1 * depthScale1 + w2 * depthScale2;
+
+                        if (depth is >= 0f and <= 1f && depth < depthBuffer[rowIndex])
+                        {
+                            depthBuffer[rowIndex] = depth;
+                            faceBuffer[rowIndex] = triangleIndex;
+                            pixelWrites++;
+                        }
+                    }
+
+                    w0 += stepX0;
+                    w1 += stepX1;
+                    w2 += stepX2;
+                    rowIndex++;
+                }
+
+                rowW0 += stepY0;
+                rowW1 += stepY1;
+                rowW2 += stepY2;
+            }
+        }
     }
 
-    private readonly record struct BufferVertex(float X, float Y, float Depth01);
+    private readonly record struct TriangleRasterInfo(
+        bool IsValid,
+        int TriangleIndex,
+        float Ax,
+        float Ay,
+        float Bx,
+        float By,
+        float Cx,
+        float Cy,
+        float Area,
+        float InvArea,
+        float StepX0,
+        float StepY0,
+        float StepX1,
+        float StepY1,
+        float StepX2,
+        float StepY2,
+        float DepthScale0,
+        float DepthScale1,
+        float DepthScale2,
+        bool PositiveArea,
+        int MinX,
+        int MaxX,
+        int MinY,
+        int MaxY,
+        int MinTileX,
+        int MaxTileX,
+        int MinTileY,
+        int MaxTileY,
+        float Depth0,
+        float Depth1,
+        float Depth2);
 }

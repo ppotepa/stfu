@@ -3,7 +3,7 @@ using STFU.Mesh;
 
 namespace STFU.NPR.Graph;
 
-public sealed record ProjectedMesh(
+public readonly record struct ProjectedMesh(
     EntityId EntityId,
     MeshHandle MeshHandle,
     MeshData Mesh,

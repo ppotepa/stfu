@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Globalization;
+using STFU.Common.Math;
 using STFU.NPR.Composition;
 using STFU.NPR.Graph;
 using STFU.NPR.Pipeline;
@@ -113,9 +114,34 @@ public static class DefaultParitySnapshotBuilder
                 visibility?.Height ?? 0,
                 visibleFaces.Length,
                 visibleFaces,
+                visibility is null ? null : HashIntArray(visibility.FaceId),
                 lineVisibleFaces.Length,
                 lineVisibleFaces),
             projectedVertices,
+            context.Graph.Triangles
+                .Select(triangle => new DefaultParityTriangleSnapshot(
+                    triangle.StableId,
+                    triangle.ProjectedMeshIndex,
+                    triangle.MeshTriangleIndex,
+                    triangle.A,
+                    triangle.B,
+                    triangle.C,
+                    [triangle.Normal.X, triangle.Normal.Y, triangle.Normal.Z],
+                    triangle.Depth,
+                    triangle.ScreenArea,
+                    triangle.IsFrontFacing,
+                    triangle.IsVisible))
+                .ToArray(),
+            context.Graph.TopologyEdges
+                .Select(edge => new DefaultParityTopologyEdgeSnapshot(
+                    edge.StableId,
+                    edge.StartVertexIndex,
+                    edge.EndVertexIndex,
+                    edge.FirstTriangleIndex,
+                    edge.SecondTriangleIndex,
+                    edge.NormalAngleDegrees,
+                    edge.IsBoundary))
+                .ToArray(),
             context.Graph.DefaultFragments
                 .Select(fragment => new DefaultParityFragmentSnapshot(
                     fragment.StableId,
@@ -148,6 +174,11 @@ public static class DefaultParitySnapshotBuilder
         return JsonSerializer.Serialize(snapshot, new DefaultParitySnapshotJsonContext(options).DefaultParitySnapshot);
     }
 
+    public static DefaultParitySnapshot? FromJson(string json)
+    {
+        return JsonSerializer.Deserialize(json, DefaultParitySnapshotJsonContext.Default.DefaultParitySnapshot);
+    }
+
     private static DefaultParityPathSnapshot CreatePathSnapshot(DefaultProjectedPath path)
     {
         return new DefaultParityPathSnapshot(
@@ -161,5 +192,17 @@ public static class DefaultParitySnapshotBuilder
     private static float[] ToArray(System.Numerics.Vector3 vector)
     {
         return [vector.X, vector.Y, vector.Z];
+    }
+
+    private static ulong HashIntArray(IReadOnlyList<int> values)
+    {
+        var hash = HashMath.FnvOffset64;
+
+        for (var index = 0; index < values.Count; index++)
+        {
+            hash = HashMath.Fnv1A(hash, values[index]);
+        }
+
+        return hash;
     }
 }

@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.UI.Bridge.Binding;
 
 namespace STFU.UI.Bridge.Layers;
@@ -25,6 +26,6 @@ public sealed class IntentRouteItem : BindableObject
     public int Count
     {
         get => _count;
-        set => SetProperty(ref _count, Math.Max(0, value));
+        set => SetProperty(ref _count, NumericMath.AtLeast(value, 0));
     }
 }

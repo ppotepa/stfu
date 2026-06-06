@@ -9,6 +9,10 @@ public sealed class AgentConfig
     public string CacheDirectory { get; set; } = ".agents/cache";
     public string[] ExcludePatterns { get; set; } = [];
     public string[] GeneratedPatterns { get; set; } = [];
+    public string[] AlwaysExcludePatterns { get; set; } = [];
+    public string DefaultConcatProfile { get; set; } = "";
+    public Dictionary<string, ConcatProfile> ConcatProfiles { get; set; } = [];
+    public Dictionary<string, string[]> IncludeScopes { get; set; } = [];
 
     public static AgentConfig Load(string root)
     {
@@ -21,4 +25,10 @@ public sealed class AgentConfig
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         return JsonSerializer.Deserialize<AgentConfig>(File.ReadAllText(path), options) ?? new AgentConfig();
     }
+}
+
+public sealed class ConcatProfile
+{
+    public string[] Include { get; set; } = [];
+    public string[] Exclude { get; set; } = [];
 }

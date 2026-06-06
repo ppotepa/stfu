@@ -7,6 +7,7 @@
     <ProjectReference Include="..\STFU.Common\STFU.Common.csproj" />
     <ProjectReference Include="..\STFU.Engine\STFU.Engine.csproj" />
     <ProjectReference Include="..\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\STFU.Parallelism\STFU.Parallelism.csproj" />
     <ProjectReference Include="..\STFU.Strokes\STFU.Strokes.csproj" />
   </ItemGroup>
 

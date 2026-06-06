@@ -2,6 +2,8 @@ using STFU.NPR.Fields;
 using STFU.NPR.Temporal;
 using STFU.NPR.Rendering;
 
+using STFU.Common.Math;
+
 namespace STFU.NPR.Graph;
 
 public sealed class NprGraph
@@ -139,7 +141,7 @@ public sealed class NprGraph
             return score;
         }
 
-        var clamped = Math.Clamp(fallbackImportance, 0f, 1f);
+        var clamped = NumericMath.Clamp01(fallbackImportance);
         return new SalienceScore(clamped, 1f, clamped, 1f, clamped, 1f, 0f, clamped);
     }
 }

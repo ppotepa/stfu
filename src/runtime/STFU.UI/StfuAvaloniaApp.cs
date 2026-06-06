@@ -1,7 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Markup.Xaml.Styling;
+using Avalonia.Markup.Xaml;
 using Semi.Avalonia;
 using STFU.UI.Styling;
 
@@ -15,10 +15,7 @@ public sealed class StfuAvaloniaApp : Application
         {
             Locale = CultureInfo.GetCultureInfo("en-US")
         });
-        Styles.Add(new StyleInclude(new Uri("avares://STFU.UI/Styling/"))
-        {
-            Source = new Uri("avares://STFU.UI/Styling/Theme.axaml")
-        });
+        AvaloniaXamlLoader.Load(this);
         UiThemeService.ApplyLight();
         StfuUiLog.Write("Avalonia styles initialized.");
     }

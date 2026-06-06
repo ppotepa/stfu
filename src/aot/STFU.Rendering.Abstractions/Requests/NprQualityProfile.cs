@@ -1,3 +1,5 @@
+using STFU.NPR.Analysis;
+
 namespace STFU.Rendering.Abstractions.Requests;
 
 public sealed record NprQualityProfile(
@@ -11,7 +13,10 @@ public sealed record NprQualityProfile(
     bool UseGpuToneRaster = true,
     bool UseGpuDebugOverlayRaster = true,
     bool UseGpuMeshWireframe = true,
-    float GpuStrokeCoverageSoftness = 1.0f)
+    bool UseGpuVisibilityBuffer = false,
+    GpuMeshWireframePath GpuMeshWireframePath = GpuMeshWireframePath.Native,
+    float GpuStrokeCoverageSoftness = 1.0f,
+    MeshWireframeTopologyMode MeshWireframeTopologyMode = MeshWireframeTopologyMode.Welded)
 {
     public static NprQualityProfile Default { get; } = new();
 }

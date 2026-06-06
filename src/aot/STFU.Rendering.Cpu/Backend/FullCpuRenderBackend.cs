@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using STFU.Common.Math;
 using STFU.NPR.Debug;
 using STFU.NPR.Rendering;
 using STFU.Rendering.Abstractions.Backend;
@@ -9,18 +10,18 @@ using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.Abstractions.Surfaces;
 using STFU.Rendering.Cpu.Rasterization;
 using STFU.Strokes;
-using STFU.NPR.Graph;
 
 namespace STFU.Rendering.Cpu.Backend;
 
 public sealed class FullCpuRenderBackend : ICpuRenderBackend
 {
     [ThreadStatic]
-    private static NprGraph? s_reusableGraph;
+    private static NprRenderContextScratch? s_reusableScratch;
 
     private readonly PixelSurfacePool _surfacePool;
     private readonly CpuNprFrameRasterizer _nprRasterizer = new();
     private readonly CpuMeshWireframeBuilder _meshBuilder = new();
+    private readonly CpuRasterWorkspace _rasterWorkspace = new();
 
     public FullCpuRenderBackend(PixelSurfacePool surfacePool)
     {
@@ -46,6 +47,7 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var resolvedWorkerCount = request.Budget.ResolveWorkerCount();
 
         if (request.ExecutionProfile != NprExecutionProfile.FullCpuReference)
         {
@@ -56,7 +58,9 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
         {
             Width = request.Width,
             Height = request.Height,
-            WorkerCount = request.Budget.ResolveWorkerCount()
+            WorkerCount = resolvedWorkerCount,
+            WorkerBudgetMode = request.Budget.WorkerBudgetMode,
+            ProcessorCount = Environment.ProcessorCount
         };
 
         var total = Stopwatch.StartNew();
@@ -72,14 +76,19 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
             meshSegments = _meshBuilder.BuildSegments(
                 request.Scene,
                 request.Assets,
+                request.Analysis,
                 request.Camera,
                 request.Width,
                 request.Height,
                 request.Settings,
-                request.Theme);
+                request.Theme,
+                request.Quality.MeshWireframeTopologyMode);
             meshWatch.Stop();
-            diagnostics.AddTiming("CpuMeshWireframe", meshWatch.Elapsed.TotalMilliseconds);
             diagnostics.PathCount = meshSegments.Count;
+            diagnostics.AddTiming(
+                "CpuMeshWireframe",
+                meshWatch.Elapsed.TotalMilliseconds,
+                $"topology={request.Quality.MeshWireframeTopologyMode}; edges={_meshBuilder.LastTopologyEdgeCount}; segments={meshSegments.Count}");
         }
         else
         {
@@ -89,7 +98,10 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
             }
 
             var contextWatch = Stopwatch.StartNew();
-            var context = NprRenderContextFactory.Create(request, s_reusableGraph ??= new NprGraph());
+            var context = NprRenderContextFactory.CreateWithScratch(
+                request,
+                s_reusableScratch ??= new NprRenderContextScratch(),
+                cancellationToken);
             contextWatch.Stop();
             diagnostics.AddTiming("BuildNprContext", contextWatch.Elapsed.TotalMilliseconds);
 
@@ -101,7 +113,7 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
             diagnostics.AddTiming("NprPipeline.Execute", pipelineWatch.Elapsed.TotalMilliseconds, request.ActivePipelineId);
             foreach (var trace in context.StepTraces)
             {
-                var notes = trace.AllocatedBytes > 0
+                var notes = request.DiagnosticsOptions?.EnableStepAllocationTracking == true && trace.AllocatedBytes > 0
                     ? $"{trace.Notes}; alloc={trace.AllocatedBytes}"
                     : trace.Notes;
                 diagnostics.AddTiming($"NprStep.{trace.StepName}", trace.Milliseconds, notes);
@@ -122,18 +134,18 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
             var rasterWatch = Stopwatch.StartNew();
             if (meshSegments is not null)
             {
-                _nprRasterizer.RasterizeMeshWireframe(lease.Surface, request, meshSegments);
+                _nprRasterizer.RasterizeMeshWireframe(lease.Surface, request, meshSegments, _rasterWorkspace, cancellationToken);
             }
             else
             {
-                _nprRasterizer.Rasterize(lease.Surface, request, strokeFrame, nprFrame);
+                _nprRasterizer.Rasterize(lease.Surface, request, strokeFrame, nprFrame, _rasterWorkspace, cancellationToken);
             }
             rasterWatch.Stop();
             diagnostics.AddTiming("CpuRasterize", rasterWatch.Elapsed.TotalMilliseconds);
 
             total.Stop();
             diagnostics.TotalMilliseconds = total.Elapsed.TotalMilliseconds;
-            diagnostics.AllocatedBytes = Math.Max(0, GC.GetTotalAllocatedBytes(false) - allocatedBefore);
+            diagnostics.AllocatedBytes = NumericMath.AtLeast(GC.GetTotalAllocatedBytes(false) - allocatedBefore, 0);
 
             return ValueTask.FromResult(new NprRenderResult
             {

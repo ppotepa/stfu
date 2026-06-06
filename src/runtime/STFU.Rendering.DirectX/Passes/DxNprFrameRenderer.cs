@@ -15,13 +15,14 @@ public sealed class DxNprFrameRenderer
     private readonly DxStrokeRasterPass _strokePass;
     private readonly DxMeshWireframePass _meshPass;
     private readonly DxDebugOverlayPass _debugPass;
+    private readonly List<NprLayerFrame> _visibleLayers = [];
 
     public DxNprFrameRenderer(DirectXDevice device)
     {
         _clearPass = new DxClearPass(device);
         _strokePass = new DxStrokeRasterPass(device);
         _tonePass = new DxToneSurfacePass(device);
-        _meshPass = new DxMeshWireframePass(new DxMeshWireframeBuilder(), _strokePass);
+        _meshPass = new DxMeshWireframePass(device, new DxMeshWireframeBuilder(), _strokePass);
         _debugPass = new DxDebugOverlayPass(device, _strokePass);
     }
 
@@ -49,25 +50,39 @@ public sealed class DxNprFrameRenderer
         }
         else if (nprFrame.Layers.Count > 0)
         {
-            foreach (var layer in nprFrame.Layers.Where(layer => layer.Visible).OrderBy(layer => layer.Order))
+            var layers = BuildVisibleLayerOrder(nprFrame.Layers);
+            for (var i = 0; i < layers.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var layer = layers[i];
 
                 if (request.Quality.RasterizeToneSurfaces && request.Quality.UseGpuToneRaster)
                 {
                     _tonePass.Execute(target, request, layer, diagnostics, cancellationToken);
                 }
 
-                if (layer.Shading.Count > 0)
+                if (layer.ShadingSegments is { Count: > 0 } shadingSegments)
+                {
+                    _strokePass.Execute(target, request, shadingSegments, layer.Opacity, diagnostics, cancellationToken);
+                }
+                else if (layer.Shading.Count > 0)
                 {
                     _strokePass.Execute(target, request, layer.Shading, layer.Opacity, diagnostics, cancellationToken);
                 }
 
-                if (layer.Strokes.Count > 0)
+                if (layer.StrokeSegments is { Count: > 0 } strokeSegments)
+                {
+                    _strokePass.Execute(target, request, strokeSegments, layer.Opacity, diagnostics, cancellationToken);
+                }
+                else if (layer.Strokes.Count > 0)
                 {
                     _strokePass.Execute(target, request, layer.Strokes, layer.Opacity, diagnostics, cancellationToken);
                 }
             }
+        }
+        else if (strokeFrame.Segments is { Count: > 0 } frameSegments)
+        {
+            _strokePass.Execute(target, request, frameSegments, 1f, diagnostics, cancellationToken);
         }
         else if (strokeFrame.Paths.Count > 0)
         {
@@ -78,5 +93,20 @@ public sealed class DxNprFrameRenderer
         {
             _debugPass.Execute(target, request, debugFrame, diagnostics, cancellationToken);
         }
+    }
+
+    private List<NprLayerFrame> BuildVisibleLayerOrder(IReadOnlyList<NprLayerFrame> layers)
+    {
+        _visibleLayers.Clear();
+        for (var i = 0; i < layers.Count; i++)
+        {
+            if (layers[i].Visible)
+            {
+                _visibleLayers.Add(layers[i]);
+            }
+        }
+
+        _visibleLayers.Sort(static (a, b) => a.Order.CompareTo(b.Order));
+        return _visibleLayers;
     }
 }

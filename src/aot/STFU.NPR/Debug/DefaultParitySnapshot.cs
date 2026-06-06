@@ -11,6 +11,8 @@ public sealed record DefaultParitySnapshot(
     DefaultParityCountsSnapshot Counts,
     DefaultParityVisibilitySnapshot Visibility,
     IReadOnlyList<DefaultParityProjectedVertexSnapshot> ProjectedVertices,
+    IReadOnlyList<DefaultParityTriangleSnapshot> Triangles,
+    IReadOnlyList<DefaultParityTopologyEdgeSnapshot> TopologyEdges,
     IReadOnlyList<DefaultParityFragmentSnapshot> Fragments,
     IReadOnlyList<DefaultParityPathSnapshot> Paths,
     IReadOnlyList<DefaultParityPathSnapshot> DrawablePaths,
@@ -68,6 +70,7 @@ public sealed record DefaultParityVisibilitySnapshot(
     int BufferHeight,
     int VisibleFaceCount,
     IReadOnlyList<int> VisibleFaces,
+    ulong? FaceIdHash = null,
     int? LineVisibleFaceCount = null,
     IReadOnlyList<int>? LineVisibleFaces = null);
 
@@ -79,6 +82,28 @@ public sealed record DefaultParityProjectedVertexSnapshot(
     float Depth01,
     bool IsVisible,
     float[] Ndc);
+
+public sealed record DefaultParityTriangleSnapshot(
+    int StableId,
+    int ProjectedMeshIndex,
+    int MeshTriangleIndex,
+    int A,
+    int B,
+    int C,
+    float[] Normal,
+    float Depth,
+    float ScreenArea,
+    bool IsFrontFacing,
+    bool IsVisible);
+
+public sealed record DefaultParityTopologyEdgeSnapshot(
+    int StableId,
+    int StartVertexIndex,
+    int EndVertexIndex,
+    int FirstTriangleIndex,
+    int SecondTriangleIndex,
+    float NormalAngleDegrees,
+    bool IsBoundary);
 
 public sealed record DefaultParityFragmentSnapshot(
     int StableId,

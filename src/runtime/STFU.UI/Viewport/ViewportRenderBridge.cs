@@ -1,8 +1,11 @@
+using System.Diagnostics;
 using Avalonia.Threading;
+using STFU.Common.Math;
 using STFU.Messaging.Commands;
 using STFU.NPR.Composition;
 using STFU.NPR.Debug;
 using STFU.Logging;
+using STFU.Parallelism;
 using STFU.Rendering.Abstractions.Execution;
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Strokes;
@@ -16,6 +19,7 @@ namespace STFU.UI;
 
 internal sealed class ViewportRenderBridge : IDisposable
 {
+    private readonly NprRenderOptimizerMode _optimizerMode;
     private readonly UiEngineSession _session;
     private readonly INprRenderScheduler _scheduler;
     private readonly AvaloniaBitmapPresenter _bitmapPresenter;
@@ -25,6 +29,8 @@ internal sealed class ViewportRenderBridge : IDisposable
     private NprRenderResult? _pendingResult;
     private long _revision;
     private long _lastLoggedRevision;
+    private long _lastEnqueuedRevision;
+    private long _lastCompletedRevision;
     private DateTimeOffset _lastDrawTick = DateTimeOffset.Now;
     private bool _renderInFlight;
     private bool _lastPresentedWithGpuTexture;
@@ -37,6 +43,7 @@ internal sealed class ViewportRenderBridge : IDisposable
         DirectXViewportPresenter? directXPresenter = null)
     {
         _session = session;
+        _optimizerMode = NprRenderOptimizerModeResolver.ResolveFromEnvironment();
         _scheduler = session.RenderScheduler;
         _bitmapPresenter = presenter;
         _directXPresenter = directXPresenter;
@@ -53,14 +60,9 @@ internal sealed class ViewportRenderBridge : IDisposable
             return;
         }
 
-        width = Math.Max(1, width);
-        height = Math.Max(1, height);
+        width = NumericMath.AtLeast(width, 1);
+        height = NumericMath.AtLeast(height, 1);
         UpdateDefaultDrawProgress();
-
-        if (_renderInFlight)
-        {
-            return;
-        }
 
         _session.Workspace.Assets.TickAnimation();
 
@@ -72,6 +74,20 @@ internal sealed class ViewportRenderBridge : IDisposable
         var executionProfile = ResolveExecutionProfile(renderer.BackendPreference);
         var useDirectGpuPresenter = ShouldUseDirectPresentation(renderer.PresentationPreference, executionProfile, out var presentationWarning);
         var runtimeStatus = BuildRuntimeStatus(renderer, executionProfile, useDirectGpuPresenter, presentationWarning);
+        var frameBudget = new NprFrameBudget(
+            TargetFps: 60,
+            MaxWorkerThreads: renderer.MaxRenderWorkers,
+            AllowContinuousRendering: true,
+            AllowDroppingOldFrames: true,
+            EnableTileParallelism: renderer.EnableTileParallelism,
+            TileSize: 32,
+            RequireGpuReadback: executionProfile == NprExecutionProfile.CpuDrivenGpuAccelerated && !useDirectGpuPresenter,
+            AllowGpuReadback: executionProfile != NprExecutionProfile.CpuDrivenGpuAccelerated || !useDirectGpuPresenter,
+            PreferGpuPresentation: useDirectGpuPresenter,
+            EnableGpuDebugLayer: false,
+            EnableGpuTiming: renderer.EnableGpuTimings,
+            WorkerBudgetMode: renderer.WorkerBudgetMode);
+        var resolvedWorkerCount = frameBudget.ResolveWorkerCount();
         renderer.UpdateRuntimeStatus(
             runtimeStatus.EffectiveBackend,
             runtimeStatus.EffectiveApi,
@@ -80,6 +96,12 @@ internal sealed class ViewportRenderBridge : IDisposable
             runtimeStatus.StatusMessage);
         if (revision == 1 || revision % 120 == 0)
         {
+            bool renderInFlight;
+            lock (_gate)
+            {
+                renderInFlight = _renderInFlight;
+            }
+
             StfuLog.Write(
                 StfuLogDomain.Viewport,
                 "frame.request",
@@ -90,11 +112,24 @@ internal sealed class ViewportRenderBridge : IDisposable
                     ["width"] = width,
                     ["height"] = height,
                     ["profile"] = executionProfile,
-                    ["presentation"] = runtimeStatus.EffectivePresentation
+                    ["presentation"] = runtimeStatus.EffectivePresentation,
+                    ["workerBudgetMode"] = frameBudget.WorkerBudgetMode,
+                    ["maxRenderWorkers"] = frameBudget.MaxWorkerThreads,
+                    ["resolvedWorkers"] = resolvedWorkerCount,
+                    ["processorCount"] = WorkerBudget.LogicalProcessorCount,
+                    ["tileSize"] = frameBudget.TileSize,
+                    ["tileParallelism"] = frameBudget.EnableTileParallelism,
+                    ["directGpu"] = useDirectGpuPresenter,
+                    ["requireGpuReadback"] = frameBudget.RequireGpuReadback,
+                    ["renderInFlight"] = renderInFlight
                 });
         }
 
         var presetState = _session.ActivePreset;
+        var debugOverlay = _session.Workspace.Viewport.DebugOverlay;
+        var includeDebugFrame = contentKind == NprRenderContentKind.NprPipeline &&
+            debugOverlay != DebugOverlayKind.None;
+        var diagnosticsOptions = CreateViewportDiagnosticsOptions(renderer);
         var request = new NprRenderRequest(
             Revision: revision,
             Width: width,
@@ -117,24 +152,20 @@ internal sealed class ViewportRenderBridge : IDisposable
             TimeSeconds: revision / 60f,
             PreviousFrame: _session.FrameHistory.GetPreviousFrame(),
             Quality: NprQualityProfile.Default,
-            Budget: new NprFrameBudget(
-                TargetFps: 60,
-                MaxWorkerThreads: 0,
-                AllowContinuousRendering: true,
-                AllowDroppingOldFrames: true,
-                EnableTileParallelism: true,
-                TileSize: 32,
-                RequireGpuReadback: executionProfile == NprExecutionProfile.CpuDrivenGpuAccelerated && !useDirectGpuPresenter,
-                AllowGpuReadback: true,
-                PreferGpuPresentation: useDirectGpuPresenter,
-                EnableGpuDebugLayer: false,
-                EnableGpuTiming: renderer.EnableGpuTimings),
+            Budget: frameBudget,
             Theme: BuildTheme(),
             ShowGrid: _session.Workspace.Viewport.ShowGrid && viewportRenderMode == ViewportRenderMode.Mesh,
-            IncludeDebugFrame: _session.Workspace.Viewport.DebugOverlay != DebugOverlayKind.None,
-            DebugOverlay: _session.Workspace.Viewport.DebugOverlay);
+            IncludeDebugFrame: includeDebugFrame,
+            DebugOverlay: debugOverlay,
+            DiagnosticsOptions: diagnosticsOptions,
+            OptimizerMode: _optimizerMode);
 
-        _renderInFlight = true;
+        lock (_gate)
+        {
+            _renderInFlight = true;
+            _lastEnqueuedRevision = revision;
+        }
+
         _ = _scheduler.EnqueueAsync(request);
     }
 
@@ -154,6 +185,11 @@ internal sealed class ViewportRenderBridge : IDisposable
 
         using (result)
         {
+            if (result.Status is NprRenderStatus.Cancelled or NprRenderStatus.Dropped)
+            {
+                return false;
+            }
+
             if (result.Status != NprRenderStatus.Completed)
             {
                 if (result.Exception is not null)
@@ -224,23 +260,47 @@ internal sealed class ViewportRenderBridge : IDisposable
 
     private void OnRenderCompleted(NprRenderResult result)
     {
+        if (_disposed)
+        {
+            result.Dispose();
+            return;
+        }
+
+        if (result.Status is NprRenderStatus.Cancelled or NprRenderStatus.Dropped)
+        {
+            lock (_gate)
+            {
+                _lastCompletedRevision = NumericMath.AtLeast(_lastCompletedRevision, result.Revision);
+                _renderInFlight = _lastCompletedRevision < _lastEnqueuedRevision;
+            }
+
+            result.Dispose();
+            return;
+        }
+
+        lock (_gate)
+        {
+            _lastCompletedRevision = NumericMath.AtLeast(_lastCompletedRevision, result.Revision);
+            _renderInFlight = _lastCompletedRevision < _lastEnqueuedRevision;
+            _pendingResult?.Dispose();
+            _pendingResult = result;
+        }
+
         Dispatcher.UIThread.Post(() =>
         {
             if (_disposed)
             {
-                result.Dispose();
+                lock (_gate)
+                {
+                    _pendingResult?.Dispose();
+                    _pendingResult = null;
+                }
+
                 return;
             }
 
-            _renderInFlight = false;
-            lock (_gate)
-            {
-                _pendingResult?.Dispose();
-                _pendingResult = result;
-            }
-
             _requestPresent();
-        });
+        }, DispatcherPriority.Render);
     }
 
     private void UpdateDefaultDrawProgress()
@@ -254,12 +314,12 @@ internal sealed class ViewportRenderBridge : IDisposable
 
         var drawing = presetState.ActiveSettings.DefaultDrawing;
         var now = DateTimeOffset.Now;
-        var deltaTime = Math.Min((float)(now - _lastDrawTick).TotalSeconds, 0.05f);
+        var deltaTime = NumericMath.AtMost((float)(now - _lastDrawTick).TotalSeconds, 0.05f);
         _lastDrawTick = now;
 
         if (drawing.AutoDraw)
         {
-            drawing.DrawProgress = Math.Clamp(drawing.DrawProgress + deltaTime * drawing.DrawSpeed, 0f, 1f);
+            drawing.DrawProgress = NumericMath.Clamp01(drawing.DrawProgress + deltaTime * drawing.DrawSpeed);
         }
     }
 
@@ -304,7 +364,14 @@ internal sealed class ViewportRenderBridge : IDisposable
             return false;
         }
 
-        return false;
+        return directAvailable;
+    }
+
+    private static NprDiagnosticsOptions CreateViewportDiagnosticsOptions(RendererSettingsViewModel renderer)
+    {
+        return renderer.EnableGpuTimings
+            ? NprDiagnosticsOptions.InteractiveViewportTimings
+            : NprDiagnosticsOptions.InteractiveViewport;
     }
 
     private (string EffectiveBackend, string EffectiveApi, string EffectivePresentation, string AdapterName, string StatusMessage) BuildRuntimeStatus(
@@ -373,6 +440,7 @@ internal sealed class ViewportRenderBridge : IDisposable
         }
 
         _lastLoggedRevision = result.Revision;
+        LogProcessMemory(result);
         var pipelineMs = result.Diagnostics.Timings.FirstOrDefault(t => t.Name == "NprPipeline.Execute")?.Milliseconds ?? 0;
         if (result.ExecutionProfile == NprExecutionProfile.CpuDrivenGpuAccelerated)
         {
@@ -386,7 +454,8 @@ internal sealed class ViewportRenderBridge : IDisposable
                 $"pipeline={pipelineMs:0.00}ms clear={gpuClearMs:0.00}ms strokes={gpuStrokeMs:0.00}ms " +
                 $"tones={gpuToneMs:0.00}ms debug={gpuDebugMs:0.00}ms readback={gpuReadbackMs:0.00}ms " +
                 $"paths={result.Diagnostics.PathCount} layers={result.Diagnostics.LayerCount} " +
-                $"tones={result.Diagnostics.ToneSurfaceCount} adapter={result.Diagnostics.Notes}");
+                $"tones={result.Diagnostics.ToneSurfaceCount} workers={result.Diagnostics.WorkerCount} " +
+                $"mode={result.Diagnostics.WorkerBudgetMode} adapter={result.Diagnostics.Notes}");
             StfuLog.Write(
                 StfuLogDomain.RenderGpu,
                 "frame.completed",
@@ -404,6 +473,9 @@ internal sealed class ViewportRenderBridge : IDisposable
                     ["paths"] = result.Diagnostics.PathCount,
                     ["layers"] = result.Diagnostics.LayerCount,
                     ["tones"] = result.Diagnostics.ToneSurfaceCount,
+                    ["workers"] = result.Diagnostics.WorkerCount,
+                    ["workerBudgetMode"] = result.Diagnostics.WorkerBudgetMode,
+                    ["processorCount"] = result.Diagnostics.ProcessorCount,
                     ["adapter"] = result.Diagnostics.Notes
                 });
             StfuLog.Write(
@@ -414,7 +486,9 @@ internal sealed class ViewportRenderBridge : IDisposable
                 {
                     ["totalMs"] = result.Diagnostics.TotalMilliseconds,
                     ["pipelineMs"] = pipelineMs,
-                    ["readbackMs"] = gpuReadbackMs
+                    ["readbackMs"] = gpuReadbackMs,
+                    ["workers"] = result.Diagnostics.WorkerCount,
+                    ["workerBudgetMode"] = result.Diagnostics.WorkerBudgetMode
                 });
             return;
         }
@@ -423,7 +497,8 @@ internal sealed class ViewportRenderBridge : IDisposable
         StfuUiLog.Write(
             $"Full CPU frame {result.Revision}: total={result.Diagnostics.TotalMilliseconds:0.00}ms " +
             $"pipeline={pipelineMs:0.00}ms raster={rasterMs:0.00}ms paths={result.Diagnostics.PathCount} " +
-            $"layers={result.Diagnostics.LayerCount} tones={result.Diagnostics.ToneSurfaceCount} workers={result.Diagnostics.WorkerCount}");
+            $"layers={result.Diagnostics.LayerCount} tones={result.Diagnostics.ToneSurfaceCount} " +
+            $"workers={result.Diagnostics.WorkerCount} mode={result.Diagnostics.WorkerBudgetMode}");
         StfuLog.Write(
             StfuLogDomain.RenderCpu,
             "frame.completed",
@@ -437,7 +512,9 @@ internal sealed class ViewportRenderBridge : IDisposable
                 ["paths"] = result.Diagnostics.PathCount,
                 ["layers"] = result.Diagnostics.LayerCount,
                 ["tones"] = result.Diagnostics.ToneSurfaceCount,
-                ["workers"] = result.Diagnostics.WorkerCount
+                ["workers"] = result.Diagnostics.WorkerCount,
+                ["workerBudgetMode"] = result.Diagnostics.WorkerBudgetMode,
+                ["processorCount"] = result.Diagnostics.ProcessorCount
             });
         StfuLog.Write(
             StfuLogDomain.Perf,
@@ -447,7 +524,34 @@ internal sealed class ViewportRenderBridge : IDisposable
             {
                 ["totalMs"] = result.Diagnostics.TotalMilliseconds,
                 ["pipelineMs"] = pipelineMs,
-                ["rasterMs"] = rasterMs
+                ["rasterMs"] = rasterMs,
+                ["workers"] = result.Diagnostics.WorkerCount,
+                ["workerBudgetMode"] = result.Diagnostics.WorkerBudgetMode
+            });
+    }
+
+    private static void LogProcessMemory(NprRenderResult result)
+    {
+        using var process = Process.GetCurrentProcess();
+        var gcInfo = GC.GetGCMemoryInfo();
+        StfuLog.Write(
+            StfuLogDomain.Memory,
+            "viewport.presented",
+            $"revision={result.Revision}",
+            properties: new Dictionary<string, object?>
+            {
+                ["revision"] = result.Revision,
+                ["profile"] = result.ExecutionProfile,
+                ["output"] = result.OutputKind,
+                ["workingSetMb"] = BufferSizingMath.ToMegabytes(process.WorkingSet64),
+                ["privateMb"] = BufferSizingMath.ToMegabytes(process.PrivateMemorySize64),
+                ["gcHeapMb"] = BufferSizingMath.ToMegabytes(GC.GetTotalMemory(false)),
+                ["gcHeapSizeMb"] = BufferSizingMath.ToMegabytes(gcInfo.HeapSizeBytes),
+                ["totalAllocatedMb"] = BufferSizingMath.ToMegabytes(GC.GetTotalAllocatedBytes(false)),
+                ["allocatedFrameMb"] = BufferSizingMath.ToMegabytes(result.Diagnostics.AllocatedBytes),
+                ["gen0"] = GC.CollectionCount(0),
+                ["gen1"] = GC.CollectionCount(1),
+                ["gen2"] = GC.CollectionCount(2)
             });
     }
 

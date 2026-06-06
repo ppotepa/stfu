@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.NPR.Graph;
 using STFU.Strokes;
 
@@ -17,7 +18,7 @@ public sealed class DefaultStrokeHumanizer : IStrokeHumanizer
         var originalEnd = stroke.Points[^1];
         var dx = originalEnd.X - originalStart.X;
         var dy = originalEnd.Y - originalStart.Y;
-        var length = MathF.Sqrt(dx * dx + dy * dy);
+        var length = Geometry2D.SegmentLength(originalStart.X, originalStart.Y, originalEnd.X, originalEnd.Y);
 
         if (length <= 0.001f)
         {
@@ -55,13 +56,13 @@ public sealed class DefaultStrokeHumanizer : IStrokeHumanizer
         stroke.Points.Add(end);
 
         var thicknessPressure = medium.Pressure.Sample(0.5f);
-        stroke.Thickness = MathF.Max(
-            0.35f,
+        stroke.Thickness = NumericMath.AtLeast(
             stroke.Thickness * thicknessPressure +
-            NprRandom.SignedFloat(seed, 7) * style.ThicknessVariation * medium.Noise.ThicknessVariationScale);
+            NprRandom.SignedFloat(seed, 7) * style.ThicknessVariation * medium.Noise.ThicknessVariationScale,
+            0.35f);
 
         var opacityNoise = NprRandom.SignedFloat(seed, 9) * medium.Noise.OpacityVariationScale;
-        stroke.Opacity = Math.Clamp(
+        stroke.Opacity = NumericMath.Clamp(
             stroke.Opacity * medium.Pressure.Sample(0.5f) + opacityNoise,
             medium.OpacityFloor,
             1f);

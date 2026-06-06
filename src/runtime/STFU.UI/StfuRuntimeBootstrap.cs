@@ -1,6 +1,7 @@
 using System.Numerics;
 using STFU.Assets;
 using STFU.Camera;
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Engine;
 using STFU.Engine.Commands;
@@ -102,11 +103,11 @@ public static class StfuRuntimeBootstrap
         }
     }
 
-    private static STFU.Common.Math.Transform3D CreateHtmlParityTransform(MeshData mesh)
+    private static Transform3D CreateHtmlParityTransform(MeshData mesh)
     {
         if (mesh.Vertices.Count == 0)
         {
-            return STFU.Common.Math.Transform3D.Identity;
+            return Transform3D.Identity;
         }
 
         var min = mesh.Vertices[0].Position;
@@ -121,11 +122,11 @@ public static class StfuRuntimeBootstrap
 
         var center = (min + max) * 0.5f;
         var size = max - min;
-        var maxDimension = MathF.Max(size.X, MathF.Max(size.Y, size.Z));
+        var maxDimension = Geometry3D.MaxComponent(size);
         var scale = maxDimension > 1e-6f ? 1.45f / maxDimension : 1f;
         var scaleVector = new Vector3(scale, scale, scale);
 
-        return new STFU.Common.Math.Transform3D(
+        return new Transform3D(
             Position: -center * scale,
             Rotation: Vector3.Zero,
             Scale: scaleVector);

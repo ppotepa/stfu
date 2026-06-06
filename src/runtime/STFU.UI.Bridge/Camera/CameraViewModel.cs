@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Windows.Input;
 using STFU.Camera.Commands;
+using STFU.Common.Math;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Session;
 
@@ -27,7 +28,7 @@ public sealed class CameraViewModel : BindableObject
         _commands = commands;
         ResetCommand = new RelayCommand(Reset);
         FrameModelCommand = new RelayCommand(FrameModel);
-        OrbitStepCommand = new RelayCommand(() => Orbit(DegreesToRadians(12f), 0f));
+        OrbitStepCommand = new RelayCommand(() => Orbit(NumericMath.DegreesToRadians(12f), 0f));
         PanStepCommand = new RelayCommand(() => Pan(0.15f, 0.05f));
         RefreshFromEngine();
     }
@@ -79,7 +80,7 @@ public sealed class CameraViewModel : BindableObject
     public float FieldOfViewDegrees
     {
         get => _fieldOfViewDegrees;
-        set => SetCameraProperty(ref _fieldOfViewDegrees, Math.Clamp(value, 1f, 179f));
+        set => SetCameraProperty(ref _fieldOfViewDegrees, NumericMath.Clamp(value, 1f, 179f));
     }
 
     public float OrbitYawDegrees
@@ -88,14 +89,14 @@ public sealed class CameraViewModel : BindableObject
         set
         {
             var delta = value - _orbitYawDegrees;
-            if (Math.Abs(delta) < 0.001f)
+            if (NumericMath.Abs(delta) < 0.001f)
             {
                 return;
             }
 
             _orbitYawDegrees = value;
             OnPropertyChanged();
-            Orbit(DegreesToRadians(delta), 0f);
+            Orbit(NumericMath.DegreesToRadians(delta), 0f);
         }
     }
 
@@ -105,14 +106,14 @@ public sealed class CameraViewModel : BindableObject
         set
         {
             var delta = value - _orbitPitchDegrees;
-            if (Math.Abs(delta) < 0.001f)
+            if (NumericMath.Abs(delta) < 0.001f)
             {
                 return;
             }
 
             _orbitPitchDegrees = value;
             OnPropertyChanged();
-            Orbit(0f, DegreesToRadians(delta));
+            Orbit(0f, NumericMath.DegreesToRadians(delta));
         }
     }
 
@@ -214,8 +215,4 @@ public sealed class CameraViewModel : BindableObject
         SetProperty(ref _orbitPitchDegrees, 0f, nameof(OrbitPitchDegrees));
     }
 
-    private static float DegreesToRadians(float degrees)
-    {
-        return degrees * MathF.PI / 180f;
-    }
 }

@@ -1,92 +1,256 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
+using STFU.Common.Primitives;
 using STFU.Common.Math;
 using STFU.Mesh;
 using STFU.NPR.Graph;
+using STFU.Parallelism;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
 
 public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
 {
+    private const float RotationEpsilonSquared = 0.0000001f;
+    private const float ScaleEpsilonSquared = 0.0000001f;
+    private const float TranslationEpsilonSquared = 0.0000001f;
+    private readonly List<MeshProjectionJob> _jobs = [];
+    private ProjectedVertex[] _projectedVertices = [];
+
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
         var projection = context.View.Projection;
+        _jobs.Clear();
+        _jobs.EnsureCapacity(context.Scene.Entities.Count);
+        var initialMeshCount = context.Graph.Meshes.Count;
+        var vertexOffset = context.Graph.Vertices.Count;
+        var triangleOffset = context.Graph.Triangles.Count;
+        var projectedMeshIndex = initialMeshCount;
+        var totalVertices = 0;
+        var stagedVertexOffset = 0;
 
-        foreach (var entity in context.Scene.Entities)
+        if (context.Scene.Entities is List<STFU.Engine.Entities.Entity> entityList)
         {
-            if (!context.Assets.TryGetMesh(entity.Mesh, out var mesh) || mesh.Vertices.Count == 0)
+            var entities = CollectionsMarshal.AsSpan(entityList);
+            for (var entityIndex = 0; entityIndex < entities.Length; entityIndex++)
             {
-                continue;
+                var entity = entities[entityIndex];
+                if (!context.Assets.TryGetMesh(entity.Mesh, out var mesh) || mesh.Vertices.Count == 0)
+                {
+                    continue;
+                }
+
+                var transform = entity.Transform;
+                var hasRotation = Geometry3D.HasVectorLength(transform.Rotation, RotationEpsilonSquared);
+                var rotation = hasRotation ? Geometry3D.CreateYawPitchRollRotation(transform.Rotation) : Quaternion.Identity;
+                var hasScale = Geometry3D.HasNonIdentityScale(transform.Scale, ScaleEpsilonSquared);
+                var hasTranslation = Geometry3D.HasVectorLength(transform.Position, TranslationEpsilonSquared);
+                _jobs.Add(new MeshProjectionJob(
+                    entity.Id,
+                    entity.Mesh,
+                    mesh,
+                    vertexOffset,
+                    stagedVertexOffset,
+                    triangleOffset,
+                    transform,
+                    hasRotation,
+                    hasScale,
+                    hasTranslation,
+                    rotation));
+                projectedMeshIndex++;
+                vertexOffset += mesh.Vertices.Count;
+                triangleOffset += mesh.Triangles.Count;
+                totalVertices += mesh.Vertices.Count;
+                stagedVertexOffset += mesh.Vertices.Count;
             }
-
-            var vertexOffset = context.Graph.Vertices.Count;
-            var triangleOffset = context.Graph.Triangles.Count;
-            context.Graph.Vertices.EnsureCapacity(vertexOffset + mesh.Vertices.Count);
-            context.Graph.Meshes.EnsureCapacity(context.Graph.Meshes.Count + 1);
-            var transform = entity.Transform;
-            var hasRotation = HasRotation(transform.Rotation);
-            var rotation = hasRotation ? CreateRotation(transform.Rotation) : Quaternion.Identity;
-            var normalMatrix = hasRotation ? Matrix4x4.CreateFromQuaternion(rotation) : Matrix4x4.Identity;
-
-            for (var vertexIndex = 0; vertexIndex < mesh.Vertices.Count; vertexIndex++)
+        }
+        else
+        {
+            foreach (var entity in context.Scene.Entities)
             {
-                var vertex = mesh.Vertices[vertexIndex];
-                var worldPosition = hasRotation
-                    ? TransformPosition(vertex.Position, transform, rotation)
-                    : vertex.Position * transform.Scale + transform.Position;
-                var worldNormal = TransformNormal(vertex.Normal, normalMatrix, hasRotation);
-                var isVisible = projection.TryProject(worldPosition, out var position, out var depth, out var ndc, out var depth01);
+                if (!context.Assets.TryGetMesh(entity.Mesh, out var mesh) || mesh.Vertices.Count == 0)
+                {
+                    continue;
+                }
 
-                context.Graph.Vertices.Add(new ProjectedVertex(
-                    vertexOffset + vertexIndex,
-                    worldPosition,
-                    worldNormal,
-                    position,
-                    depth,
-                    isVisible,
-                    0f,
-                    0f,
-                    0f,
-                    0f,
-                    Vector3.Zero,
-                    ndc,
-                    depth01));
+                var transform = entity.Transform;
+                var hasRotation = Geometry3D.HasVectorLength(transform.Rotation, RotationEpsilonSquared);
+                var rotation = hasRotation ? Geometry3D.CreateYawPitchRollRotation(transform.Rotation) : Quaternion.Identity;
+                var hasScale = Geometry3D.HasNonIdentityScale(transform.Scale, ScaleEpsilonSquared);
+                var hasTranslation = Geometry3D.HasVectorLength(transform.Position, TranslationEpsilonSquared);
+                _jobs.Add(new MeshProjectionJob(
+                    entity.Id,
+                    entity.Mesh,
+                    mesh,
+                    vertexOffset,
+                    stagedVertexOffset,
+                    triangleOffset,
+                    transform,
+                    hasRotation,
+                    hasScale,
+                    hasTranslation,
+                    rotation));
+                projectedMeshIndex++;
+                vertexOffset += mesh.Vertices.Count;
+                triangleOffset += mesh.Triangles.Count;
+                totalVertices += mesh.Vertices.Count;
+                stagedVertexOffset += mesh.Vertices.Count;
             }
+        }
 
-            context.Graph.Meshes.Add(new ProjectedMesh(
-                entity.Id,
-                entity.Mesh,
-                mesh,
-                vertexOffset,
-                mesh.Vertices.Count,
-                triangleOffset,
-                mesh.Triangles.Count));
+        if (_jobs.Count == 0)
+        {
+            return;
+        }
+
+        context.Graph.Vertices.EnsureCapacity(vertexOffset);
+        context.Graph.Meshes.EnsureCapacity(projectedMeshIndex);
+        EnsureProjectedVertexCapacity(totalVertices);
+
+        var jobs = CollectionsMarshal.AsSpan(_jobs);
+        var parallel = context.WorkerCount > 1 && _jobs.Count > 1 && totalVertices >= 512;
+        if (parallel)
+        {
+            DeterministicParallel.ForRanges(
+                0,
+                _jobs.Count,
+                context.WorkerCount,
+                context.CancellationToken,
+                (start, end, _, cancellationToken) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    for (var index = start; index < end; index++)
+                    {
+                        if ((index & 0x3FF) == 0)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+
+                        var job = _jobs[index];
+                        ProjectMeshVertices(projection, in job, _projectedVertices);
+                    }
+                },
+                minItemsPerRange: 1);
+        }
+        else
+        {
+            for (var index = 0; index < _jobs.Count; index++)
+            {
+                ProjectMeshVertices(projection, in jobs[index], _projectedVertices);
+            }
+        }
+
+        CollectionsMarshal.SetCount(context.Graph.Vertices, vertexOffset);
+        var graphVertices = CollectionsMarshal.AsSpan(context.Graph.Vertices);
+        CollectionsMarshal.SetCount(context.Graph.Meshes, projectedMeshIndex);
+        var graphMeshes = CollectionsMarshal.AsSpan(context.Graph.Meshes);
+        for (var index = 0; index < _jobs.Count; index++)
+        {
+            ref readonly var job = ref jobs[index];
+            _projectedVertices
+                .AsSpan(job.StagedVertexOffset, job.Mesh.Vertices.Count)
+                .CopyTo(graphVertices.Slice(job.VertexOffset, job.Mesh.Vertices.Count));
+
+            graphMeshes[initialMeshCount + index] = new ProjectedMesh(
+                job.EntityId,
+                job.MeshHandle,
+                job.Mesh,
+                job.VertexOffset,
+                job.Mesh.Vertices.Count,
+                job.TriangleOffset,
+                job.Mesh.Triangles.Count);
         }
     }
 
-    private static Vector3 TransformPosition(Vector3 position, Transform3D transform, Quaternion rotation)
+    private void EnsureProjectedVertexCapacity(int required)
     {
-        return Vector3.Transform(position * transform.Scale, rotation) + transform.Position;
+        if (_projectedVertices.Length < required)
+        {
+            _projectedVertices = new ProjectedVertex[required];
+        }
     }
 
-    private static Vector3 TransformNormal(Vector3 normal, Matrix4x4 normalMatrix, bool hasRotation)
+    private static void ProjectMeshVertices(
+        ProjectionInfo projection,
+        in MeshProjectionJob job,
+        ProjectedVertex[] output)
     {
-        if (normal.LengthSquared() <= 1e-6f)
+        if (TryGetVertexSpan(job.Mesh.Vertices, out var vertices))
         {
-            return Vector3.UnitZ;
+            for (var vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
+            {
+                ProjectVertex(projection, job, vertices[vertexIndex], vertexIndex, output);
+            }
+
+            return;
         }
 
-        return hasRotation
-            ? Vector3.Normalize(Vector3.TransformNormal(normal, normalMatrix))
-            : Vector3.Normalize(normal);
+        for (var vertexIndex = 0; vertexIndex < job.Mesh.Vertices.Count; vertexIndex++)
+        {
+            ProjectVertex(projection, job, job.Mesh.Vertices[vertexIndex], vertexIndex, output);
+        }
     }
 
-    private static Quaternion CreateRotation(Vector3 rotation)
+    private static bool TryGetVertexSpan(
+        IReadOnlyList<MeshVertex> source,
+        out ReadOnlySpan<MeshVertex> vertices)
     {
-        return Quaternion.CreateFromYawPitchRoll(rotation.Y, rotation.X, rotation.Z);
+        switch (source)
+        {
+            case MeshVertex[] array:
+                vertices = array;
+                return true;
+            case List<MeshVertex> list:
+                vertices = CollectionsMarshal.AsSpan(list);
+                return true;
+            default:
+                vertices = default;
+                return false;
+        }
     }
 
-    private static bool HasRotation(Vector3 rotation)
+    private static void ProjectVertex(
+        ProjectionInfo projection,
+        in MeshProjectionJob job,
+        MeshVertex vertex,
+        int vertexIndex,
+        ProjectedVertex[] output)
     {
-        return rotation.LengthSquared() > 0.0000001f;
+        var worldPosition = Geometry3D.TransformPosition(
+            vertex.Position,
+            job.Transform.Scale,
+            job.Rotation,
+            job.Transform.Position,
+            job.HasRotation,
+            job.HasScale,
+            job.HasTranslation);
+        var isVisible = projection.TryProject(worldPosition, out var position, out var depth, out var ndc, out var depth01);
+
+        output[job.StagedVertexOffset + vertexIndex] = new ProjectedVertex(
+            job.VertexOffset + vertexIndex,
+            worldPosition,
+            vertex.Normal,
+            position,
+            depth,
+            isVisible,
+            0f,
+            0f,
+            0f,
+            0f,
+            Vector3.Zero,
+            ndc,
+            depth01);
     }
+
+    private readonly record struct MeshProjectionJob(
+        EntityId EntityId,
+        MeshHandle MeshHandle,
+        MeshData Mesh,
+        int VertexOffset,
+        int StagedVertexOffset,
+        int TriangleOffset,
+        Transform3D Transform,
+        bool HasRotation,
+        bool HasScale,
+        bool HasTranslation,
+        Quaternion Rotation);
 }

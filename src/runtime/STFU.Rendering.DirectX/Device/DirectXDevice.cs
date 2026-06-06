@@ -22,6 +22,7 @@ public sealed class DirectXDevice : IDisposable
         Support = support;
         Resources = new DirectXResourceRegistry();
         TexturePool = new DirectXTexturePool(this);
+        ReadbackTexturePool = new DirectXReadbackTexturePool(this);
     }
 
     public IDXGIFactory4 Factory { get; }
@@ -37,6 +38,8 @@ public sealed class DirectXDevice : IDisposable
     public DirectXResourceRegistry Resources { get; }
 
     public DirectXTexturePool TexturePool { get; }
+
+    public DirectXReadbackTexturePool ReadbackTexturePool { get; }
 
     public bool IsDisposed => _disposed;
 
@@ -54,6 +57,7 @@ public sealed class DirectXDevice : IDisposable
         }
 
         _disposed = true;
+        ReadbackTexturePool.Dispose();
         TexturePool.Dispose();
         Resources.Dispose();
         Context.ClearState();

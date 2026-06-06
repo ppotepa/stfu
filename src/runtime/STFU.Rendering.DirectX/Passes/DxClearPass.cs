@@ -27,6 +27,9 @@ public sealed class DxClearPass
             color.B / 255f,
             1f);
 
-        _device.Context.ClearRenderTargetView(target.RenderTargetView, rgba);
+        using (_device.Lock())
+        {
+            _device.Context.ClearRenderTargetView(target.RenderTargetView, rgba);
+        }
     }
 }

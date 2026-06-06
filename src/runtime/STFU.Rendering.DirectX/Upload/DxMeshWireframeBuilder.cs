@@ -5,6 +5,7 @@ using STFU.Camera;
 using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Engine.Scenes;
+using STFU.NPR.Analysis;
 using STFU.NPR.Pipeline;
 using STFU.NPR.Settings;
 using STFU.Rendering.Abstractions.Requests;
@@ -14,18 +15,25 @@ namespace STFU.Rendering.DirectX.Upload;
 
 public sealed class DxMeshWireframeBuilder
 {
-    private readonly Dictionary<MeshHandle, CachedMeshEdges> _edgeCache = new();
+    private readonly List<StrokeSegment2D> _segments = [];
+    private readonly DxMeshWireframeBatch _batch = new();
 
-    public List<StrokePath2D> BuildPaths(
+    public int LastTopologyEdgeCount { get; private set; }
+    public int LastDrawEdgeCount { get; private set; }
+
+    public List<StrokeSegment2D> BuildSegments(
         Scene scene,
         AssetRegistry assets,
+        MeshAnalysisCacheStore analysis,
         CameraState camera,
         int width,
         int height,
         NprSettings settings,
-        NprRenderTheme theme)
+        NprRenderTheme theme,
+        MeshWireframeTopologyMode topologyMode)
     {
-        var paths = new List<StrokePath2D>();
+        _segments.Clear();
+        LastTopologyEdgeCount = 0;
         var projection = ProjectionInfo.Create(camera, width, height, settings);
         var style = new StrokeStyle2D(0.55f, 1f, theme.MeshStrokeColor);
 
@@ -36,155 +44,145 @@ public sealed class DxMeshWireframeBuilder
                 continue;
             }
 
-            var edges = GetEdges(entity.Mesh, mesh);
-            paths.EnsureCapacity(paths.Count + edges.Length);
-            var worldPositions = ArrayPool<Vector3>.Shared.Rent(mesh.Vertices.Count);
+            var edges = analysis.GetOrCreateWireframeTopology(entity.Mesh, mesh, topologyMode).Edges;
+            LastTopologyEdgeCount += edges.Count;
+            _segments.EnsureCapacity(_segments.Count + edges.Count);
+            var projected = ArrayPool<Point2D>.Shared.Rent(mesh.Vertices.Count);
+            var projectedVisible = ArrayPool<bool>.Shared.Rent(mesh.Vertices.Count);
 
             try
             {
                 var transform = entity.Transform;
-                var hasRotation = HasRotation(transform.Rotation);
-                var rotation = hasRotation ? CreateRotation(transform.Rotation) : Quaternion.Identity;
+                var hasRotation = Geometry3D.HasVectorLength(transform.Rotation, 0.0000001f);
+                var rotation = hasRotation ? Geometry3D.CreateYawPitchRollRotation(transform.Rotation) : Quaternion.Identity;
                 for (var index = 0; index < mesh.Vertices.Count; index++)
                 {
-                    worldPositions[index] = hasRotation
-                        ? TransformVertex(mesh.Vertices[index].Position, transform.Scale, rotation, transform.Position)
-                        : mesh.Vertices[index].Position * transform.Scale + transform.Position;
+                    var worldPosition = Geometry3D.TransformPosition(
+                        mesh.Vertices[index].Position,
+                        transform.Scale,
+                        rotation,
+                        transform.Position,
+                        hasRotation,
+                        hasScale: true,
+                        hasTranslation: true);
+                    projectedVisible[index] = projection.TryProject(worldPosition, out projected[index], out _);
                 }
 
                 foreach (var edge in edges)
                 {
-                    if ((uint)edge.Start >= (uint)mesh.Vertices.Count ||
-                        (uint)edge.End >= (uint)mesh.Vertices.Count)
+                    if ((uint)edge.StartVertexIndex >= (uint)mesh.Vertices.Count ||
+                        (uint)edge.EndVertexIndex >= (uint)mesh.Vertices.Count)
                     {
                         continue;
                     }
 
-                    if (projection.TryProject(worldPositions[edge.Start], out var start, out _) &&
-                        projection.TryProject(worldPositions[edge.End], out var end, out _))
+                    if (projectedVisible[edge.StartVertexIndex] &&
+                        projectedVisible[edge.EndVertexIndex])
                     {
-                        paths.Add(StrokePath2D.Line(start, end, style));
+                        _segments.Add(new StrokeSegment2D(
+                            projected[edge.StartVertexIndex],
+                            projected[edge.EndVertexIndex],
+                            style));
                     }
                 }
             }
             finally
             {
-                ArrayPool<Vector3>.Shared.Return(worldPositions);
+                ArrayPool<Point2D>.Shared.Return(projected);
+                ArrayPool<bool>.Shared.Return(projectedVisible);
             }
         }
 
-        return paths;
+        return _segments;
     }
 
-    private CpuMeshEdge[] GetEdges(MeshHandle handle, STFU.Mesh.MeshData mesh)
+    public DxMeshWireframeBatch BuildGpuBatch(
+        Scene scene,
+        AssetRegistry assets,
+        MeshAnalysisCacheStore analysis,
+        CameraState camera,
+        int width,
+        int height,
+        NprSettings settings,
+        MeshWireframeTopologyMode topologyMode)
     {
-        if (_edgeCache.TryGetValue(handle, out var cached) &&
-            ReferenceEquals(cached.Triangles, mesh.Triangles))
-        {
-            return cached.Edges;
-        }
+        _batch.Clear();
+        LastTopologyEdgeCount = 0;
+        LastDrawEdgeCount = 0;
+        var edgeSignature = HashMath.FnvOffset64;
+        var projection = ProjectionInfo.Create(camera, width, height, settings);
 
-        var weldedVertexIds = BuildWeldedVertexIds(mesh, out var representativeVertexIndices);
-        var emittedEdges = new HashSet<long>(mesh.Triangles.Count * 3);
-        var edges = new List<CpuMeshEdge>(mesh.Triangles.Count * 3);
-
-        foreach (var triangle in mesh.Triangles)
+        foreach (var entity in scene.Entities)
         {
-            if ((uint)triangle.A >= (uint)weldedVertexIds.Length ||
-                (uint)triangle.B >= (uint)weldedVertexIds.Length ||
-                (uint)triangle.C >= (uint)weldedVertexIds.Length)
+            if (!assets.TryGetMesh(entity.Mesh, out var mesh) || mesh.Vertices.Count == 0)
             {
                 continue;
             }
 
-            AddEdge(weldedVertexIds[triangle.A], weldedVertexIds[triangle.B]);
-            AddEdge(weldedVertexIds[triangle.B], weldedVertexIds[triangle.C]);
-            AddEdge(weldedVertexIds[triangle.C], weldedVertexIds[triangle.A]);
-        }
+            edgeSignature = HashMath.Fnv1A(edgeSignature, entity.Mesh.Value);
+            edgeSignature = HashMath.Fnv1A(edgeSignature, mesh.Vertices.Count);
+            edgeSignature = HashMath.Fnv1A(edgeSignature, mesh.Triangles.Count);
+            edgeSignature = HashMath.Fnv1A(edgeSignature, (int)topologyMode);
+            edgeSignature = HashMath.Fnv1A(edgeSignature, width);
+            edgeSignature = HashMath.Fnv1A(edgeSignature, height);
 
-        var edgeArray = edges.ToArray();
-        _edgeCache[handle] = new CachedMeshEdges(mesh.Triangles, edgeArray);
-        return edgeArray;
-
-        void AddEdge(int weldedA, int weldedB)
-        {
-            if (weldedA < 0 ||
-                weldedB < 0 ||
-                weldedA == weldedB ||
-                !emittedEdges.Add(CreateEdgeKey(weldedA, weldedB)))
+            var edges = analysis.GetOrCreateWireframeTopology(entity.Mesh, mesh, topologyMode).Edges;
+            LastTopologyEdgeCount += edges.Count;
+            _batch.Edges.EnsureCapacity(_batch.Edges.Count + edges.Count);
+            _batch.Vertices.EnsureCapacity(_batch.Vertices.Count + edges.Count * 2);
+            var projected = ArrayPool<Point2D>.Shared.Rent(mesh.Vertices.Count);
+            var projectedVisible = ArrayPool<bool>.Shared.Rent(mesh.Vertices.Count);
+            try
             {
-                return;
+                var transform = entity.Transform;
+                var hasRotation = Geometry3D.HasVectorLength(transform.Rotation, 0.0000001f);
+                var rotation = hasRotation ? Geometry3D.CreateYawPitchRollRotation(transform.Rotation) : Quaternion.Identity;
+                for (var index = 0; index < mesh.Vertices.Count; index++)
+                {
+                    var worldPosition = Geometry3D.TransformPosition(
+                        mesh.Vertices[index].Position,
+                        transform.Scale,
+                        rotation,
+                        transform.Position,
+                        hasRotation,
+                        hasScale: true,
+                        hasTranslation: true);
+                    projectedVisible[index] = projection.TryProject(worldPosition, out projected[index], out _);
+                }
+
+                foreach (var edge in edges)
+                {
+                    if ((uint)edge.StartVertexIndex >= (uint)mesh.Vertices.Count ||
+                        (uint)edge.EndVertexIndex >= (uint)mesh.Vertices.Count)
+                    {
+                        continue;
+                    }
+
+                    if (!projectedVisible[edge.StartVertexIndex] ||
+                        !projectedVisible[edge.EndVertexIndex])
+                    {
+                        continue;
+                    }
+
+                    var start = _batch.Vertices.Count;
+                    var end = start + 1;
+                    _batch.Vertices.Add(new DxMeshVertex(projected[edge.StartVertexIndex]));
+                    _batch.Vertices.Add(new DxMeshVertex(projected[edge.EndVertexIndex]));
+                    _batch.Edges.Add(new DxMeshEdge(start, end));
+                    edgeSignature = HashMath.Fnv1A(edgeSignature, edge.StartVertexIndex);
+                    edgeSignature = HashMath.Fnv1A(edgeSignature, edge.EndVertexIndex);
+                }
             }
-
-            edges.Add(new CpuMeshEdge(
-                representativeVertexIndices[weldedA],
-                representativeVertexIndices[weldedB]));
-        }
-    }
-
-    private static int[] BuildWeldedVertexIds(
-        STFU.Mesh.MeshData mesh,
-        out int[] representativeVertexIndices)
-    {
-        var weldedByPosition = new Dictionary<QuantizedVertexKey, int>(mesh.Vertices.Count);
-        var representatives = new List<int>(mesh.Vertices.Count);
-        var weldedVertexIds = new int[mesh.Vertices.Count];
-
-        for (var index = 0; index < mesh.Vertices.Count; index++)
-        {
-            var key = QuantizedVertexKey.From(mesh.Vertices[index].Position);
-            if (!weldedByPosition.TryGetValue(key, out var weldedId))
+            finally
             {
-                weldedId = representatives.Count;
-                weldedByPosition[key] = weldedId;
-                representatives.Add(index);
+                ArrayPool<Point2D>.Shared.Return(projected);
+                ArrayPool<bool>.Shared.Return(projectedVisible);
             }
-
-            weldedVertexIds[index] = weldedId;
         }
 
-        representativeVertexIndices = representatives.ToArray();
-        return weldedVertexIds;
+        LastDrawEdgeCount = _batch.Edges.Count;
+        _batch.EdgeSignature = edgeSignature;
+        return _batch;
     }
 
-    private static long CreateEdgeKey(int a, int b)
-    {
-        var min = Math.Min(a, b);
-        var max = Math.Max(a, b);
-        return ((long)min << 32) | (uint)max;
-    }
-
-    private static Vector3 TransformVertex(Vector3 position, Vector3 scale, Quaternion rotation, Vector3 translation)
-    {
-        return Vector3.Transform(position * scale, rotation) + translation;
-    }
-
-    private static Quaternion CreateRotation(Vector3 rotation)
-    {
-        return Quaternion.CreateFromYawPitchRoll(rotation.Y, rotation.X, rotation.Z);
-    }
-
-    private static bool HasRotation(Vector3 rotation)
-    {
-        return rotation.LengthSquared() > 0.0000001f;
-    }
-
-    private sealed record CachedMeshEdges(
-        IReadOnlyList<STFU.Mesh.MeshTriangle> Triangles,
-        CpuMeshEdge[] Edges);
-
-    private readonly record struct CpuMeshEdge(int Start, int End);
-
-    private readonly record struct QuantizedVertexKey(long X, long Y, long Z)
-    {
-        private const float Scale = 100000f;
-
-        public static QuantizedVertexKey From(Vector3 position)
-        {
-            return new QuantizedVertexKey(
-                (long)MathF.Round(position.X * Scale),
-                (long)MathF.Round(position.Y * Scale),
-                (long)MathF.Round(position.Z * Scale));
-        }
-    }
 }

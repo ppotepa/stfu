@@ -38,7 +38,7 @@ public sealed class DirectXRenderingModule : IEngineModule
         var device = deviceResult.Device;
         var surfacePool = context.Services.TryGet<PixelSurfacePool>(out var existingPool)
             ? existingPool
-            : new PixelSurfacePool(maxRetainedSurfaces: 4);
+            : new PixelSurfacePool(maxRetainedSurfaces: 8);
         var gpuBackend = new DirectXRenderBackend(device, cpuBackend, surfacePool);
         var renderer = new DirectXNprRenderer(cpuBackend, gpuBackend);
         var worker = new DirectXRenderWorker(renderer);

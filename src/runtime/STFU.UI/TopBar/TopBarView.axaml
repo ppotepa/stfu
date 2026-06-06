@@ -31,9 +31,9 @@
                  Foreground="{DynamicResource StfuMutedBrush}"
                  VerticalAlignment="Center" />
       <ToggleSwitch Classes="topbar-toggle"
+                    x:Name="ModeToggle"
                     OffContent="MESH"
-                    OnContent="NPR"
-                    IsChecked="{Binding Viewport.IsNprModeSelected, Mode=TwoWay}" />
+                    OnContent="NPR" />
     </StackPanel>
 
     <StackPanel Grid.Column="2"
@@ -43,9 +43,9 @@
                 Spacing="9"
                 Margin="0,0,16,0">
       <ToggleSwitch Classes="topbar-toggle"
+                    x:Name="ThemeToggle"
                     OffContent="LIGHT"
                     OnContent="DARK"
-                    IsChecked="{Binding IsDarkTheme, Mode=TwoWay}"
                     ToolTip.Tip="Switch light/dark theme" />
     </StackPanel>
   </Grid>

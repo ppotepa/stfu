@@ -5,11 +5,6 @@ namespace STFU.UI.Bridge.Renderer;
 
 public sealed class RendererSettingsStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
-
     private readonly string _path;
 
     public RendererSettingsStore(string? path = null)
@@ -35,7 +30,9 @@ public sealed class RendererSettingsStore
             }
 
             using var stream = File.OpenRead(_path);
-            var snapshot = JsonSerializer.Deserialize<RendererSettingsSnapshot>(stream, JsonOptions) ?? new RendererSettingsSnapshot();
+            var snapshot = JsonSerializer.Deserialize(
+                stream,
+                RendererSettingsJsonContext.Default.RendererSettingsSnapshot) ?? new RendererSettingsSnapshot();
             StfuLog.Write(
                 StfuLogDomain.Ui,
                 "renderer.settings.loaded",
@@ -67,7 +64,10 @@ public sealed class RendererSettingsStore
         try
         {
             using var stream = File.Create(_path);
-            JsonSerializer.Serialize(stream, snapshot, JsonOptions);
+            JsonSerializer.Serialize(
+                stream,
+                snapshot,
+                RendererSettingsJsonContext.Default.RendererSettingsSnapshot);
             StfuLog.Write(
                 StfuLogDomain.Ui,
                 "renderer.settings.saved",
@@ -79,7 +79,10 @@ public sealed class RendererSettingsStore
                     ["api"] = snapshot.Api,
                     ["presentation"] = snapshot.Presentation,
                     ["hud"] = snapshot.ShowRendererHud,
-                    ["gpuTimings"] = snapshot.EnableGpuTimings
+                    ["gpuTimings"] = snapshot.EnableGpuTimings,
+                    ["workerBudgetMode"] = snapshot.WorkerBudgetMode,
+                    ["maxRenderWorkers"] = snapshot.MaxRenderWorkers,
+                    ["enableTileParallelism"] = snapshot.EnableTileParallelism
                 });
         }
         catch (Exception exception)

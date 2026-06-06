@@ -2,12 +2,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\..\..\STFU.Parallelism\STFU.Parallelism.csproj" />
     <ProjectReference Include="..\..\..\STFU.Strokes\STFU.Strokes.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

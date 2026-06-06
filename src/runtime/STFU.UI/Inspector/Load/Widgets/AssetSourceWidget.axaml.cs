@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -9,9 +10,90 @@ namespace STFU.UI.Inspector.Load.Widgets;
 
 public sealed partial class AssetSourceWidget : UserControl
 {
+    private StackPanel? _sourceOptionsHost;
+    private TextBlock? _sourceStatusText;
+    private WorkspaceViewModel? _workspace;
+
     public AssetSourceWidget()
     {
         AvaloniaXamlLoader.Load(this);
+        _sourceOptionsHost = this.FindControl<StackPanel>("SourceOptionsHost");
+        _sourceStatusText = this.FindControl<TextBlock>("SourceStatusText");
+        DataContextChanged += (_, _) => AttachWorkspace(DataContext as WorkspaceViewModel);
+        AttachedToVisualTree += (_, _) => AttachWorkspace(DataContext as WorkspaceViewModel);
+    }
+
+    private void AttachWorkspace(WorkspaceViewModel? workspace)
+    {
+        if (ReferenceEquals(_workspace, workspace))
+        {
+            RefreshSourceUi();
+            return;
+        }
+
+        if (_workspace is not null)
+        {
+            _workspace.Assets.PropertyChanged -= OnAssetsPropertyChanged;
+        }
+
+        _workspace = workspace;
+
+        if (_workspace is not null)
+        {
+            _workspace.Assets.PropertyChanged += OnAssetsPropertyChanged;
+        }
+
+        RefreshSourceUi();
+    }
+
+    private void OnAssetsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(AssetPanelViewModel.SourceStatus))
+        {
+            RefreshSourceUi();
+        }
+    }
+
+    private void RefreshSourceUi()
+    {
+        if (_sourceStatusText is not null)
+        {
+            _sourceStatusText.Text = _workspace?.Assets.SourceStatus ?? string.Empty;
+        }
+
+        if (_sourceOptionsHost is null)
+        {
+            return;
+        }
+
+        _sourceOptionsHost.Children.Clear();
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        foreach (var source in _workspace.Assets.SourceOptions)
+        {
+            var button = new Button
+            {
+                MinWidth = 112,
+                Tag = source,
+                Content = new TextBlock
+                {
+                    Text = source.DisplayName,
+                    FontWeight = Avalonia.Media.FontWeight.Bold,
+                    FontSize = 11
+                }
+            };
+            button.Classes.Add("option-pill");
+            if (source.IsSelected)
+            {
+                button.Classes.Add("active");
+            }
+
+            button.Click += OnSourceClicked;
+            _sourceOptionsHost.Children.Add(button);
+        }
     }
 
     private async void OnSourceClicked(object? sender, RoutedEventArgs e)

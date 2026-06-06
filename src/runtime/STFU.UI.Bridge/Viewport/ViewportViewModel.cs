@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.NPR.Debug;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Session;
@@ -26,13 +27,13 @@ public sealed class ViewportViewModel : BindableObject
     public int Width
     {
         get => _width;
-        private set => SetProperty(ref _width, Math.Max(1, value));
+        private set => SetProperty(ref _width, NumericMath.AtLeast(value, 1));
     }
 
     public int Height
     {
         get => _height;
-        private set => SetProperty(ref _height, Math.Max(1, value));
+        private set => SetProperty(ref _height, NumericMath.AtLeast(value, 1));
     }
 
     public double Fps

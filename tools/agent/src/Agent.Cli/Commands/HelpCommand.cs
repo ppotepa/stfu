@@ -27,6 +27,7 @@ public static class HelpCommand
         Console.WriteLine("  cache     inspect/clear cache buckets");
         Console.WriteLine();
         Console.WriteLine("Common flags: --format json|ndjson|table|markdown --max <n> --solution <path>");
+        Console.WriteLine("Concat flags: --profile <name>|all --include <scope[,scope]|glob>");
         Console.WriteLine();
         Console.WriteLine("Presets:");
         Console.WriteLine("  preset fbx-mesh-regression");

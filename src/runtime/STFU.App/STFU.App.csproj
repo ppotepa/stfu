@@ -8,6 +8,7 @@
     <ProjectReference Include="..\..\aot\STFU.Assets\STFU.Assets.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Camera\STFU.Camera.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\..\aot\STFU.Parallelism\STFU.Parallelism.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Viewport\STFU.Viewport.csproj" />
     <ProjectReference Include="..\STFU.Import.Fbx\STFU.Import.Fbx.csproj" />
@@ -20,6 +21,10 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.4" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootDescriptor Include="aot-roots.xml" />
   </ItemGroup>
 
   <PropertyGroup>

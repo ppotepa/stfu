@@ -31,6 +31,7 @@ typedef struct stfu_fbx_vertex {
     float normal_x;
     float normal_y;
     float normal_z;
+    int logical_vertex_index;
 } stfu_fbx_vertex;
 
 typedef struct stfu_fbx_triangle {
@@ -68,6 +69,14 @@ STFU_FBX_API int stfu_fbx_bake_mesh_at_time(
     int animation_index,
     float time_seconds,
     stfu_fbx_mesh_buffer *out_mesh);
+STFU_FBX_API int stfu_fbx_bake_vertices_at_time_into(
+    stfu_fbx_scene *scene,
+    int mesh_index,
+    int animation_index,
+    float time_seconds,
+    stfu_fbx_vertex *vertex_dst,
+    int vertex_capacity,
+    int *out_vertex_count);
 STFU_FBX_API void stfu_fbx_free_mesh_buffer(stfu_fbx_mesh_buffer *buffer);
 
 #ifdef __cplusplus

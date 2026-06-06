@@ -1,3 +1,4 @@
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Strokes;
 
@@ -81,7 +82,7 @@ public sealed record FeatureCurve(
             source,
             shade,
             importance,
-            Math.Clamp(confidence, 0f, 1f),
+            NumericMath.Clamp01(confidence),
             flags)
         {
             HatchLayerKind = hatchLayerKind,

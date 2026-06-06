@@ -18,7 +18,7 @@
                   Padding="0"
                   FontSize="16"
                   Content="⚙"
-                  Click="OnRendererOptionsClicked" />
+                  Click="OnSettingsClicked" />
 
           <Border Grid.Column="1"
                   Margin="10,0,0,0"

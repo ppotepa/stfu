@@ -6,28 +6,13 @@
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Text="ASSET SOURCE" Classes="load-section-title" />
         <TextBlock Grid.Column="1"
-                   Text="{Binding Assets.SourceStatus}"
+                   x:Name="SourceStatusText"
                    Foreground="{DynamicResource StfuMutedBrush}"
                    FontSize="11" />
       </Grid>
-      <ItemsControl ItemsSource="{Binding Assets.SourceOptions}">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" Spacing="0" />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <Button Classes="option-pill"
-                    Classes.active="{Binding IsSelected}"
-                    Click="OnSourceClicked"
-                    Tag="{Binding}"
-                    MinWidth="112">
-              <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="11" />
-            </Button>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+      <StackPanel x:Name="SourceOptionsHost"
+                  Orientation="Horizontal"
+                  Spacing="0" />
     </StackPanel>
   </Border>
 </UserControl>

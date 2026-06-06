@@ -1,82 +1,184 @@
+using STFU.Common.Math;
 using STFU.NPR.Graph;
+using STFU.NPR.Pipeline;
+using STFU.Parallelism;
 using STFU.Strokes;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
 
-public sealed class DefaultSimplifyAndSortPathsStep : STFU.NPR.Pipeline.INprStep
+public sealed class DefaultSimplifyAndSortPathsStep : INprStep
 {
-    public void Execute(STFU.NPR.Pipeline.NprContext context)
-    {
-        var epsilon = context.Settings.DefaultDrawing.PathSimplify;
-        var simplified = new List<(DefaultProjectedPath Path, float SortY)>(context.Graph.DefaultPaths.Count);
+    private SimplifyPartitionBuffer[] _partitions = [];
+    private readonly List<SimplifiedPathInfo> _merged = [];
 
-        foreach (var path in context.Graph.DefaultPaths)
+    public void Execute(NprContext context)
+    {
+        var pathCount = context.Graph.DefaultPaths.Count;
+        if (pathCount == 0)
         {
-            var points = Simplify(path.Points, epsilon);
-            if (points.Count > 1)
-            {
-                var length = ReferenceEquals(points, path.Points)
-                    ? path.Length
-                    : DefaultPathMath.PathLength(points);
-                var simplifiedPath = path with
-                {
-                    Points = points,
-                    Length = length
-                };
-                simplified.Add((simplifiedPath, AverageY(points)));
-            }
+            context.Graph.DefaultPaths.Clear();
+            context.Counters.Set("DefaultSimplifyAndSortPathsStep.inputPathCount", 0);
+            context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPathCount", 0);
+            context.Counters.Set("DefaultSimplifyAndSortPathsStep.inputPointCount", 0);
+            context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPointCount", 0);
+            context.Counters.Set("DefaultSimplifyAndSortPathsStep.simplifySkipped", 0);
+            return;
         }
 
-        simplified.Sort((left, right) => left.SortY.CompareTo(right.SortY));
+        var epsilon = context.Settings.DefaultDrawing.PathSimplify;
+        var inputPointCount = CountPoints(context.Graph.DefaultPaths);
+        var simplifySkipped = CountSimplifySkipped(context.Graph.DefaultPaths, epsilon);
+        var rangeCount = DeterministicParallel.GetRangeCount(pathCount, context.WorkerCount, minItemsPerRange: 64);
+        EnsurePartitionCapacity(rangeCount);
+
+        if (rangeCount <= 1)
+        {
+            SimplifyRange(context.Graph.DefaultPaths, 0, pathCount, epsilon, _partitions[0]);
+        }
+        else
+        {
+            DeterministicParallel.ForRanges(
+                0,
+                pathCount,
+                context.WorkerCount,
+                context.CancellationToken,
+                (startInclusive, endExclusive, rangeIndex, cancellationToken) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    SimplifyRange(context.Graph.DefaultPaths, startInclusive, endExclusive, epsilon, _partitions[rangeIndex]);
+                },
+                minItemsPerRange: 64);
+        }
+
+        _merged.Clear();
+        _merged.EnsureCapacity(pathCount);
+        for (var partitionIndex = 0; partitionIndex < rangeCount; partitionIndex++)
+        {
+            var partition = _partitions[partitionIndex];
+            _merged.AddRange(partition.Items);
+        }
+
+        _merged.Sort(static (left, right) =>
+        {
+            var compare = left.SortY.CompareTo(right.SortY);
+            if (compare != 0)
+            {
+                return compare;
+            }
+
+            compare = left.OriginalIndex.CompareTo(right.OriginalIndex);
+            if (compare != 0)
+            {
+                return compare;
+            }
+
+            return left.Path.StableId.CompareTo(right.Path.StableId);
+        });
 
         context.Graph.DefaultPaths.Clear();
-        for (var i = 0; i < simplified.Count; i++)
+        for (var i = 0; i < _merged.Count; i++)
         {
-            context.Graph.DefaultPaths.Add(simplified[i].Path with { PathIndex = i });
+            context.Graph.DefaultPaths.Add(_merged[i].Path with { PathIndex = i });
+        }
+
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.inputPathCount", pathCount);
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPathCount", context.Graph.DefaultPaths.Count);
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.inputPointCount", inputPointCount);
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPointCount", CountPoints(context.Graph.DefaultPaths));
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.simplifySkipped", simplifySkipped);
+    }
+
+    private static void SimplifyRange(
+        IReadOnlyList<DefaultProjectedPath> paths,
+        int startInclusive,
+        int endExclusive,
+        float epsilon,
+        SimplifyPartitionBuffer partition)
+    {
+        partition.Reset(endExclusive - startInclusive);
+
+        for (var pathIndex = startInclusive; pathIndex < endExclusive; pathIndex++)
+        {
+            var path = paths[pathIndex];
+            var points = Simplify(path.Points, epsilon, partition.Scratch);
+            if (points.Count <= 1)
+            {
+                continue;
+            }
+
+            var length = ReferenceEquals(points, path.Points)
+                ? path.Length
+                : DefaultPointPathAdapter.PathLength(points);
+            var simplifiedPath = path with
+            {
+                Points = points,
+                Length = length
+            };
+            partition.Items.Add(new SimplifiedPathInfo(simplifiedPath, AverageY(points), pathIndex));
         }
     }
 
-    private static IReadOnlyList<Point2D> Simplify(IReadOnlyList<Point2D> points, float epsilon)
+    private static IReadOnlyList<Point2D> Simplify(
+        IReadOnlyList<Point2D> points,
+        float epsilon,
+        SimplifyScratch scratch)
     {
         if (epsilon <= 0f || points.Count <= 2)
         {
             return points;
         }
 
-        var keep = new bool[points.Count];
-        keep[0] = true;
-        keep[^1] = true;
-        var stack = new Stack<(int Start, int End)>();
-        stack.Push((0, points.Count - 1));
+        scratch.EnsureCapacity(points.Count);
+        scratch.ClearKeep(points.Count);
+        scratch.Keep[0] = true;
+        scratch.Keep[points.Count - 1] = true;
+        var epsilonSquared = (double)epsilon * epsilon;
 
-        while (stack.Count > 0)
+        var stackCount = 0;
+        scratch.StackStart[stackCount] = 0;
+        scratch.StackEnd[stackCount] = points.Count - 1;
+        stackCount++;
+
+        while (stackCount > 0)
         {
-            var (start, end) = stack.Pop();
+            stackCount--;
+            var start = scratch.StackStart[stackCount];
+            var end = scratch.StackEnd[stackCount];
 
-            var maxDistance = -1d;
+            var maxDistanceSquared = -1d;
             var index = -1;
             for (var i = start + 1; i < end; i++)
             {
-                var distance = PerpendicularDistance(points[i], points[start], points[end]);
-                if (distance > maxDistance)
+                var distanceSquared = Geometry2D.PerpendicularDistanceSquared(
+                    points[i].X,
+                    points[i].Y,
+                    points[start].X,
+                    points[start].Y,
+                    points[end].X,
+                    points[end].Y);
+                if (distanceSquared > maxDistanceSquared)
                 {
-                    maxDistance = distance;
+                    maxDistanceSquared = distanceSquared;
                     index = i;
                 }
             }
 
-            if (maxDistance > epsilon)
+            if (maxDistanceSquared > epsilonSquared)
             {
-                keep[index] = true;
-                stack.Push((start, index));
-                stack.Push((index, end));
+                scratch.Keep[index] = true;
+                scratch.StackStart[stackCount] = start;
+                scratch.StackEnd[stackCount] = index;
+                stackCount++;
+                scratch.StackStart[stackCount] = index;
+                scratch.StackEnd[stackCount] = end;
+                stackCount++;
             }
         }
 
         var output = new List<Point2D>(points.Count);
         for (var i = 0; i < points.Count; i++)
         {
-            if (keep[i])
+            if (scratch.Keep[i])
             {
                 output.Add(points[i]);
             }
@@ -85,17 +187,43 @@ public sealed class DefaultSimplifyAndSortPathsStep : STFU.NPR.Pipeline.INprStep
         return output;
     }
 
-    private static double PerpendicularDistance(Point2D point, Point2D a, Point2D b)
+    private void EnsurePartitionCapacity(int rangeCount)
     {
-        var dx = (double)b.X - a.X;
-        var dy = (double)b.Y - a.Y;
-        if (dx == 0d && dy == 0d)
+        if (_partitions.Length >= rangeCount)
         {
-            return DefaultPathMath.SegmentLength(point, a);
+            return;
         }
 
-        return Math.Abs(dy * point.X - dx * point.Y + (double)b.X * a.Y - (double)b.Y * a.X) /
-            Math.Sqrt(dx * dx + dy * dy);
+        Array.Resize(ref _partitions, rangeCount);
+        for (var i = 0; i < _partitions.Length; i++)
+        {
+            _partitions[i] ??= new SimplifyPartitionBuffer();
+        }
+    }
+
+    private static int CountPoints(IReadOnlyList<DefaultProjectedPath> paths)
+    {
+        var count = 0;
+        for (var i = 0; i < paths.Count; i++)
+        {
+            count += paths[i].Points.Count;
+        }
+
+        return count;
+    }
+
+    private static int CountSimplifySkipped(IReadOnlyList<DefaultProjectedPath> paths, float epsilon)
+    {
+        var count = 0;
+        for (var i = 0; i < paths.Count; i++)
+        {
+            if (epsilon <= 0f || paths[i].Points.Count <= 2)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static float AverageY(IReadOnlyList<Point2D> points)
@@ -112,5 +240,52 @@ public sealed class DefaultSimplifyAndSortPathsStep : STFU.NPR.Pipeline.INprStep
         }
 
         return total / points.Count;
+    }
+
+    private readonly record struct SimplifiedPathInfo(
+        DefaultProjectedPath Path,
+        float SortY,
+        int OriginalIndex);
+
+    private sealed class SimplifyPartitionBuffer
+    {
+        public List<SimplifiedPathInfo> Items { get; } = [];
+
+        public SimplifyScratch Scratch { get; } = new();
+
+        public void Reset(int capacity)
+        {
+            Items.Clear();
+            Items.EnsureCapacity(capacity);
+        }
+    }
+
+    private sealed class SimplifyScratch
+    {
+        public bool[] Keep = [];
+
+        public int[] StackStart = [];
+
+        public int[] StackEnd = [];
+
+        public void EnsureCapacity(int pointCount)
+        {
+            if (Keep.Length < pointCount)
+            {
+                Keep = new bool[pointCount];
+            }
+
+            var stackCapacity = NumericMath.AtLeast(pointCount, 4);
+            if (StackStart.Length < stackCapacity)
+            {
+                StackStart = new int[stackCapacity];
+                StackEnd = new int[stackCapacity];
+            }
+        }
+
+        public void ClearKeep(int pointCount)
+        {
+            Array.Clear(Keep, 0, pointCount);
+        }
     }
 }

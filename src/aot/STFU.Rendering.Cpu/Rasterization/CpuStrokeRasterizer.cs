@@ -1,3 +1,5 @@
+using STFU.Common.Math;
+using STFU.Parallelism;
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.Abstractions.Surfaces;
 using STFU.Strokes;
@@ -6,16 +8,14 @@ namespace STFU.Rendering.Cpu.Rasterization;
 
 public sealed class CpuStrokeRasterizer
 {
-    private readonly List<CpuStrokeSegment> _segments = [];
-    private List<CpuStrokeSegment>[]? _bins;
-    private int _binCount;
-
     public void DrawPaths(
         PixelSurface target,
         IReadOnlyList<StrokePath2D> paths,
         float opacityScale,
         NprQualityProfile quality,
         NprFrameBudget budget,
+        CpuRasterWorkspace workspace,
+        CancellationToken cancellationToken = default,
         bool preservePathOrder = false)
     {
         if (paths.Count == 0)
@@ -23,15 +23,57 @@ public sealed class CpuStrokeRasterizer
             return;
         }
 
-        var segments = CpuStrokeSegmentBuilder.Build(paths, opacityScale, preservePathOrder, _segments);
-        DrawSegments(target, segments, quality, budget);
+        var segments = CpuStrokeSegmentBuilder.Build(
+            paths,
+            opacityScale,
+            preservePathOrder,
+            workspace.Segments,
+            workspace.PathSortScratch);
+        DrawSegments(target, segments, quality, budget, workspace, cancellationToken);
+    }
+
+    public void DrawStrokeSegments(
+        PixelSurface target,
+        IReadOnlyList<StrokeSegment2D> segments,
+        float opacityScale,
+        NprQualityProfile quality,
+        NprFrameBudget budget,
+        CpuRasterWorkspace workspace,
+        CancellationToken cancellationToken = default)
+    {
+        if (segments.Count == 0)
+        {
+            return;
+        }
+
+        var output = workspace.Segments;
+        output.Clear();
+        output.EnsureCapacity(segments.Count);
+        var order = 0;
+
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var segment = segments[i];
+            var opacity = NumericMath.Clamp01(segment.Style.Opacity * opacityScale);
+            output.Add(new CpuStrokeSegment(
+                segment.Start,
+                segment.End,
+                segment.Style.Color,
+                segment.Style.Thickness,
+                opacity,
+                order++));
+        }
+
+        DrawSegments(target, output, quality, budget, workspace, cancellationToken);
     }
 
     public void DrawSegments(
         PixelSurface target,
         IReadOnlyList<CpuStrokeSegment> segments,
         NprQualityProfile quality,
-        NprFrameBudget budget)
+        NprFrameBudget budget,
+        CpuRasterWorkspace workspace,
+        CancellationToken cancellationToken = default)
     {
         if (segments.Count == 0)
         {
@@ -39,112 +81,232 @@ public sealed class CpuStrokeRasterizer
         }
 
         var workerCount = budget.ResolveWorkerCount();
-        var parallel = budget.EnableTileParallelism && workerCount > 1;
-        var tileSize = Math.Clamp(budget.TileSize, 8, 256);
-        var tilesPerRow = Math.Max(1, (target.Width + tileSize - 1) / tileSize);
-        var tileRows = Math.Max(1, (target.Height + tileSize - 1) / tileSize);
+        var tileSize = RasterMath.ClampTileSize(budget.TileSize);
+        var tilesPerRow = RasterMath.TilesPerAxis(target.Width, tileSize);
+        var tileRows = RasterMath.TilesPerAxis(target.Height, tileSize);
         var tileCount = tilesPerRow * tileRows;
-        var bins = RentBins(tileCount);
+        var tiles = workspace.GetTiles(target.Width, target.Height, tileSize);
+        var parallel = budget.EnableTileParallelism && workerCount > 1 && segments.Count >= 64 && tileCount > 1;
+        var rangeCount = DeterministicParallel.GetRangeCount(segments.Count, workerCount, 64);
 
-        for (var s = 0; s < segments.Count; s++)
-        {
-            var segment = segments[s];
-            var segmentMinX = segment.MinX;
-            var segmentMaxX = segment.MaxX;
-            var segmentMinY = segment.MinY;
-            var segmentMaxY = segment.MaxY;
-            if (segmentMaxX < 0 ||
-                segmentMaxY < 0 ||
-                segmentMinX >= target.Width ||
-                segmentMinY >= target.Height)
+        if (!parallel || workerCount <= 1 || rangeCount <= 1)
             {
-                continue;
-            }
-
-            var minTileX = Math.Clamp((int)MathF.Floor(segmentMinX / tileSize), 0, tilesPerRow - 1);
-            var maxTileX = Math.Clamp((int)MathF.Floor(segmentMaxX / tileSize), 0, tilesPerRow - 1);
-            var minTileY = Math.Clamp((int)MathF.Floor(segmentMinY / tileSize), 0, tileRows - 1);
-            var maxTileY = Math.Clamp((int)MathF.Floor(segmentMaxY / tileSize), 0, tileRows - 1);
-
-            for (var ty = minTileY; ty <= maxTileY; ty++)
-            {
-                for (var tx = minTileX; tx <= maxTileX; tx++)
+                for (var i = 0; i < tileCount; i++)
                 {
-                    bins[ty * tilesPerRow + tx].Add(segment);
+                    var tileSegments = CollectTileSegmentsSequential(
+                        segments,
+                        tiles[i]);
+                    DrawTile(
+                        target,
+                        tiles[i],
+                        segments,
+                        tileSegments,
+                        0,
+                        tileSegments.Length,
+                        quality);
                 }
-            }
-        }
-
-        if (!parallel)
-        {
-            for (var i = 0; i < tileCount; i++)
-            {
-                DrawTile(target, CreateTile(i, tilesPerRow, tileSize, target.Width, target.Height), bins[i], quality);
-            }
 
             return;
         }
 
-        Parallel.For(
+        workspace.EnsureTileBinningCapacity(rangeCount, tileCount, segments.Count * 4);
+        Array.Clear(workspace.RangeTileCounts, 0, rangeCount * tileCount);
+        Array.Clear(workspace.TileCounts, 0, tileCount);
+        Array.Clear(workspace.TileOffsets, 0, tileCount);
+        Array.Clear(workspace.RangeTileOffsets, 0, rangeCount * tileCount);
+        Array.Clear(workspace.TileWriteCursors, 0, rangeCount * tileCount);
+
+        DeterministicParallel.ForRanges(
+            0,
+            segments.Count,
+            workerCount,
+            cancellationToken,
+            (start, end, rangeIndex, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                var rangeBase = rangeIndex * tileCount;
+                for (var s = start; s < end; s++)
+                {
+                    if ((s & 0x3FF) == 0)
+                    {
+                        token.ThrowIfCancellationRequested();
+                    }
+
+                    var segment = segments[s];
+                    var segmentMinX = segment.MinX;
+                    var segmentMaxX = segment.MaxX;
+                    var segmentMinY = segment.MinY;
+                    var segmentMaxY = segment.MaxY;
+                    if (segmentMaxX < 0 ||
+                        segmentMaxY < 0 ||
+                        segmentMinX >= target.Width ||
+                        segmentMinY >= target.Height)
+                    {
+                        continue;
+                    }
+
+                    var minTileX = RasterMath.TileIndexFromCoordinate(segmentMinX, tileSize, tilesPerRow);
+                    var maxTileX = RasterMath.TileIndexFromCoordinate(segmentMaxX, tileSize, tilesPerRow);
+                    var minTileY = RasterMath.TileIndexFromCoordinate(segmentMinY, tileSize, tileRows);
+                    var maxTileY = RasterMath.TileIndexFromCoordinate(segmentMaxY, tileSize, tileRows);
+
+                    for (var ty = minTileY; ty <= maxTileY; ty++)
+                    {
+                        var tileRowBase = ty * tilesPerRow;
+                        for (var tx = minTileX; tx <= maxTileX; tx++)
+                        {
+                            workspace.RangeTileCounts[rangeBase + tileRowBase + tx]++;
+                        }
+                    }
+                }
+            },
+            minItemsPerRange: 64);
+
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            var total = 0;
+            for (var rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++)
+            {
+                total += workspace.RangeTileCounts[rangeIndex * tileCount + tileIndex];
+            }
+
+            workspace.TileCounts[tileIndex] = total;
+        }
+
+        var totalRefs = PrefixSums.ExclusiveFromCounts(
+            workspace.TileCounts.AsSpan(0, tileCount),
+            workspace.TileOffsets.AsSpan(0, tileCount));
+        workspace.EnsureTileBinningCapacity(rangeCount, tileCount, totalRefs);
+        Array.Clear(workspace.TileSegmentIndices, 0, totalRefs);
+
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            var cursor = workspace.TileOffsets[tileIndex];
+            for (var rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++)
+            {
+                var count = workspace.RangeTileCounts[rangeIndex * tileCount + tileIndex];
+                workspace.RangeTileOffsets[rangeIndex * tileCount + tileIndex] = cursor;
+                cursor += count;
+            }
+        }
+
+        Array.Copy(workspace.RangeTileOffsets, workspace.TileWriteCursors, workspace.RangeTileOffsets.Length);
+        DeterministicParallel.ForRanges(
+            0,
+            segments.Count,
+            workerCount,
+            cancellationToken,
+            (start, end, rangeIndex, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                var rangeBase = rangeIndex * tileCount;
+                for (var s = start; s < end; s++)
+                {
+                    if ((s & 0x3FF) == 0)
+                    {
+                        token.ThrowIfCancellationRequested();
+                    }
+
+                    var segment = segments[s];
+                    var segmentMinX = segment.MinX;
+                    var segmentMaxX = segment.MaxX;
+                    var segmentMinY = segment.MinY;
+                    var segmentMaxY = segment.MaxY;
+                    if (segmentMaxX < 0 ||
+                        segmentMaxY < 0 ||
+                        segmentMinX >= target.Width ||
+                        segmentMinY >= target.Height)
+                    {
+                        continue;
+                    }
+
+                    var minTileX = RasterMath.TileIndexFromCoordinate(segmentMinX, tileSize, tilesPerRow);
+                    var maxTileX = RasterMath.TileIndexFromCoordinate(segmentMaxX, tileSize, tilesPerRow);
+                    var minTileY = RasterMath.TileIndexFromCoordinate(segmentMinY, tileSize, tileRows);
+                    var maxTileY = RasterMath.TileIndexFromCoordinate(segmentMaxY, tileSize, tileRows);
+
+                    for (var ty = minTileY; ty <= maxTileY; ty++)
+                    {
+                        var tileRowBase = ty * tilesPerRow;
+                        for (var tx = minTileX; tx <= maxTileX; tx++)
+                        {
+                            var tileIndex = tileRowBase + tx;
+                            var writeIndex = workspace.TileWriteCursors[rangeBase + tileIndex]++;
+                            workspace.TileSegmentIndices[writeIndex] = s;
+                        }
+                    }
+                }
+            },
+            minItemsPerRange: 64);
+
+        DeterministicParallel.ForRanges(
             0,
             tileCount,
-            new ParallelOptions { MaxDegreeOfParallelism = workerCount },
-            i => DrawTile(target, CreateTile(i, tilesPerRow, tileSize, target.Width, target.Height), bins[i], quality));
+            workerCount,
+            cancellationToken,
+            (start, end, _, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                for (var i = start; i < end; i++)
+                {
+                    if ((i & 0x3FF) == 0)
+                    {
+                        token.ThrowIfCancellationRequested();
+                    }
+
+                    DrawTile(
+                        target,
+                        tiles[i],
+                        segments,
+                        workspace.TileSegmentIndices,
+                        workspace.TileOffsets[i],
+                        workspace.TileCounts[i],
+                        quality);
+                }
+            },
+            minItemsPerRange: 1);
     }
 
-    private List<CpuStrokeSegment>[] RentBins(int tileCount)
+    private static int[] CollectTileSegmentsSequential(
+        IReadOnlyList<CpuStrokeSegment> segments,
+        CpuTile tile)
     {
-        if (_bins is null || _bins.Length < tileCount)
+        var indices = new List<int>();
+        for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
         {
-            _bins = new List<CpuStrokeSegment>[tileCount];
-            _binCount = tileCount;
-            for (var i = 0; i < tileCount; i++)
+            var segment = segments[segmentIndex];
+            if (segment.MaxX < tile.X ||
+                segment.MaxY < tile.Y ||
+                segment.MinX >= tile.Right ||
+                segment.MinY >= tile.Bottom)
             {
-                _bins[i] = [];
+                continue;
             }
 
-            return _bins;
+            indices.Add(segmentIndex);
         }
 
-        for (var i = 0; i < _binCount; i++)
-        {
-            _bins[i].Clear();
-        }
-
-        if (_binCount < tileCount)
-        {
-            for (var i = _binCount; i < tileCount; i++)
-            {
-                _bins[i] = [];
-            }
-        }
-
-        _binCount = tileCount;
-        return _bins;
+        return indices.ToArray();
     }
 
     private static CpuTile CreateTile(int index, int tilesPerRow, int tileSize, int targetWidth, int targetHeight)
     {
-        var tileX = index % tilesPerRow;
-        var tileY = index / tilesPerRow;
-        var x = tileX * tileSize;
-        var y = tileY * tileSize;
-        return new CpuTile(
-            x,
-            y,
-            Math.Min(tileSize, targetWidth - x),
-            Math.Min(tileSize, targetHeight - y));
+        var bounds = RasterMath.TileBounds(index, tilesPerRow, tileSize, targetWidth, targetHeight);
+        return new CpuTile(bounds.X, bounds.Y, bounds.Width, bounds.Height);
     }
 
     private static void DrawTile(
         PixelSurface target,
         CpuTile tile,
         IReadOnlyList<CpuStrokeSegment> segments,
+        int[] segmentIndices,
+        int segmentOffset,
+        int segmentCount,
         NprQualityProfile quality)
     {
-        foreach (var segment in segments)
+        for (var index = 0; index < segmentCount; index++)
         {
-            DrawSegmentInTile(target, tile, segment, quality);
+            DrawSegmentInTile(target, tile, segments[segmentIndices[segmentOffset + index]], quality);
         }
     }
 
@@ -154,10 +316,8 @@ public sealed class CpuStrokeRasterizer
         CpuStrokeSegment segment,
         NprQualityProfile quality)
     {
-        var minX = Math.Max(tile.X, (int)MathF.Floor(segment.MinX));
-        var maxX = Math.Min(tile.Right - 1, (int)MathF.Ceiling(segment.MaxX));
-        var minY = Math.Max(tile.Y, (int)MathF.Floor(segment.MinY));
-        var maxY = Math.Min(tile.Bottom - 1, (int)MathF.Ceiling(segment.MaxY));
+        var (minX, maxX) = RasterMath.ClampPixelRange(segment.MinX, segment.MaxX, tile.X, tile.Right);
+        var (minY, maxY) = RasterMath.ClampPixelRange(segment.MinY, segment.MaxY, tile.Y, tile.Bottom);
         if (maxX < minX || maxY < minY)
         {
             return;
@@ -175,8 +335,8 @@ public sealed class CpuStrokeRasterizer
             return;
         }
 
-        var radius = MathF.Max(0.2f, segment.Thickness * 0.5f);
-        var softness = MathF.Max(0.0001f, quality.LineCoverageSoftness);
+        var radius = NumericMath.AtLeast(segment.Thickness * 0.5f, 0.2f);
+        var softness = NumericMath.AtLeast(quality.LineCoverageSoftness, 0.0001f);
         var maxDistance = quality.AntialiasLines ? radius + softness : radius;
         var maxDistanceSq = maxDistance * maxDistance;
 
@@ -187,7 +347,7 @@ public sealed class CpuStrokeRasterizer
             {
                 var px = x + 0.5f;
                 var t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
-                t = Math.Clamp(t, 0f, 1f);
+                t = NumericMath.Clamp01(t);
                 var cx = ax + dx * t;
                 var cy = ay + dy * t;
                 var ddx = px - cx;
@@ -199,7 +359,7 @@ public sealed class CpuStrokeRasterizer
                 }
 
                 var coverage = quality.AntialiasLines
-                    ? Math.Clamp((radius + softness - MathF.Sqrt(distanceSq)) / softness, 0f, 1f)
+                    ? NumericMath.Clamp01((radius + softness - NumericMath.Sqrt(distanceSq)) / softness)
                     : 1f;
 
                 if (coverage <= 0f)

@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
+using STFU.Common.Math;
 
 namespace STFU.Logging;
 
@@ -7,15 +9,24 @@ public sealed class StfuLogSession
 {
     private const int DefaultMaxRetainedRuns = 50;
 
-    private StfuLogSession(string rootDirectory, int runNumber, DateTimeOffset startedAt)
+    private StfuLogSession(
+        string rootDirectory,
+        string dateDirectory,
+        int runNumber,
+        DateTimeOffset startedAt)
     {
         RootDirectory = rootDirectory;
+        DateDirectory = dateDirectory;
         RunNumber = runNumber;
         StartedAt = startedAt;
-        RunDirectory = Path.Combine(rootDirectory, runNumber.ToString("000000"));
+        RunDirectory = Path.Combine(dateDirectory, runNumber.ToString("000000", CultureInfo.InvariantCulture));
+        FileTimestamp = startedAt.ToLocalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture);
+        DisplayFileTimestamp = startedAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
     }
 
     public string RootDirectory { get; }
+
+    public string DateDirectory { get; }
 
     public string RunDirectory { get; }
 
@@ -23,60 +34,110 @@ public sealed class StfuLogSession
 
     public DateTimeOffset StartedAt { get; }
 
+    public string FileTimestamp { get; }
+
+    public string DisplayFileTimestamp { get; }
+
     public static StfuLogSession Start(string? rootDirectory = null, int maxRetainedRuns = DefaultMaxRetainedRuns)
     {
-        var root = Path.GetFullPath(rootDirectory ?? Path.Combine(Environment.CurrentDirectory, "logs", "data"));
+        var startedAt = DateTimeOffset.Now;
+        var root = Path.GetFullPath(rootDirectory ?? Path.Combine(Environment.CurrentDirectory, "logs"));
+        var dateStamp = startedAt.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var dateDirectory = Path.Combine(root, dateStamp);
         Directory.CreateDirectory(root);
+        Directory.CreateDirectory(dateDirectory);
 
         var maxRun = 0;
-        foreach (var directory in Directory.EnumerateDirectories(root))
+        foreach (var directory in Directory.EnumerateDirectories(dateDirectory))
         {
             var name = Path.GetFileName(directory);
             if (int.TryParse(name, out var runNumber))
             {
-                maxRun = Math.Max(maxRun, runNumber);
+                maxRun = NumericMath.AtLeast(maxRun, runNumber);
             }
         }
 
         var nextRun = maxRun + 1;
+        StfuLogSession? session = null;
+        for (var attempt = 0; attempt < 1024; attempt++)
+        {
+            var candidate = new StfuLogSession(root, dateDirectory, nextRun + attempt, startedAt);
+            Directory.CreateDirectory(candidate.RunDirectory);
 
-        var session = new StfuLogSession(root, nextRun, DateTimeOffset.Now);
-        Directory.CreateDirectory(session.RunDirectory);
+            var claimPath = Path.Combine(candidate.RunDirectory, ".session.claim");
+            try
+            {
+                using var claim = new FileStream(claimPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+                using var writer = new StreamWriter(claim);
+                writer.WriteLine(startedAt.ToString("O", CultureInfo.InvariantCulture));
+                writer.WriteLine(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+                session = candidate;
+                break;
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+        }
+
+        if (session is null)
+        {
+            throw new IOException($"Could not allocate a unique log run directory under '{dateDirectory}'.");
+        }
+
         session.ApplyRetention(maxRetainedRuns);
         return session;
     }
 
     public void WriteMetadata(IReadOnlyList<string> args)
     {
-        var metadata = new Dictionary<string, object?>
-        {
-            ["runNumber"] = RunNumber,
-            ["startedAt"] = StartedAt,
-            ["rootDirectory"] = RootDirectory,
-            ["runDirectory"] = RunDirectory,
-            ["cwd"] = Environment.CurrentDirectory,
-            ["baseDirectory"] = AppContext.BaseDirectory,
-            ["processId"] = Environment.ProcessId,
-            ["processPath"] = Environment.ProcessPath,
-            ["commandLine"] = Environment.CommandLine,
-            ["args"] = args.ToArray(),
-            ["machineName"] = Environment.MachineName,
-            ["userName"] = Environment.UserName,
-            ["os"] = Environment.OSVersion.ToString(),
-            ["runtime"] = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
-            ["runtimeIdentifier"] = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
-            ["architecture"] = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
-            ["processorCount"] = Environment.ProcessorCount,
-            ["gitCommit"] = TryReadGitValue("rev-parse HEAD"),
-            ["gitBranch"] = TryReadGitValue("rev-parse --abbrev-ref HEAD")
-        };
-
         var path = Path.Combine(RunDirectory, "run.json");
-        using var stream = File.Create(path);
-        JsonSerializer.Serialize(stream, metadata, new JsonSerializerOptions
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
         {
-            WriteIndented = true
+            Indented = true
         });
+
+        writer.WriteStartObject();
+        writer.WriteNumber("runNumber", RunNumber);
+        writer.WriteString("startedAt", StartedAt.ToString("O", CultureInfo.InvariantCulture));
+        writer.WriteString("rootDirectory", RootDirectory);
+        writer.WriteString("dateDirectory", DateDirectory);
+        writer.WriteString("runDirectory", RunDirectory);
+        writer.WriteString("fileTimestamp", FileTimestamp);
+        writer.WriteString("displayFileTimestamp", DisplayFileTimestamp);
+        writer.WriteString("cwd", Environment.CurrentDirectory);
+        writer.WriteString("baseDirectory", AppContext.BaseDirectory);
+        writer.WriteNumber("processId", Environment.ProcessId);
+        WriteStringOrNull(writer, "processPath", Environment.ProcessPath);
+        writer.WriteString("commandLine", Environment.CommandLine);
+        writer.WriteStartArray("args");
+        foreach (var arg in args)
+        {
+            writer.WriteStringValue(arg);
+        }
+        writer.WriteEndArray();
+        writer.WriteString("machineName", Environment.MachineName);
+        writer.WriteString("userName", Environment.UserName);
+        writer.WriteString("os", Environment.OSVersion.ToString());
+        writer.WriteString("runtime", System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription);
+        writer.WriteString("runtimeIdentifier", System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier);
+        writer.WriteString("architecture", System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString());
+        writer.WriteNumber("processorCount", Environment.ProcessorCount);
+        WriteStringOrNull(writer, "gitCommit", TryReadGitValue("rev-parse HEAD"));
+        WriteStringOrNull(writer, "gitBranch", TryReadGitValue("rev-parse --abbrev-ref HEAD"));
+        writer.WriteEndObject();
+    }
+
+    private static void WriteStringOrNull(Utf8JsonWriter writer, string propertyName, string? value)
+    {
+        if (value is null)
+        {
+            writer.WriteNull(propertyName);
+            return;
+        }
+
+        writer.WriteString(propertyName, value);
     }
 
     private void ApplyRetention(int maxRetainedRuns)
@@ -86,7 +147,7 @@ public sealed class StfuLogSession
             return;
         }
 
-        var runs = Directory.EnumerateDirectories(RootDirectory)
+        var runs = Directory.EnumerateDirectories(DateDirectory)
             .Select(path => new
             {
                 Path = path,

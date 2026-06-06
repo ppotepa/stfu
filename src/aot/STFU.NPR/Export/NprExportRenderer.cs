@@ -11,6 +11,8 @@ public sealed class NprExportRenderer
 
         var exportContext = new NprContext
         {
+            WorkerCount = sourceContext.WorkerCount,
+            WorkerBudgetMode = sourceContext.WorkerBudgetMode,
             Scene = sourceContext.Scene,
             Assets = sourceContext.Assets,
             Camera = sourceContext.Camera,
@@ -24,7 +26,10 @@ public sealed class NprExportRenderer
             FrameHistoryState = new Temporal.FrameHistoryState(),
             FrameId = sourceContext.FrameId,
             TimeSeconds = sourceContext.TimeSeconds,
-            PreviousFrame = sourceContext.PreviousFrame
+            PreviousFrame = sourceContext.PreviousFrame,
+            EnablePassTimings = sourceContext.EnablePassTimings,
+            EnableStepAllocationTracking = sourceContext.EnableStepAllocationTracking,
+            EnableDetailedStepNotes = sourceContext.EnableDetailedStepNotes
         };
 
         pipeline.Execute(exportContext);

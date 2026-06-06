@@ -1,34 +1,99 @@
+using STFU.Common.Math;
 using STFU.Strokes;
 
 namespace STFU.Rendering.DirectX.Upload;
 
 public static class DxStrokeInstanceBuilder
 {
+    public readonly record struct PathSortEntry(StrokePath2D Path, int OriginalIndex);
+
     public static List<DxStrokeInstance> Build(
         IReadOnlyList<StrokePath2D> paths,
         float opacityScale,
+        List<DxStrokeInstance> output,
+        List<PathSortEntry> sortScratch,
         bool preservePathOrder = false,
         float flags = 0f)
     {
-        var instances = new List<DxStrokeInstance>(Math.Max(4, paths.Count));
+        var instances = output;
+        instances.Clear();
+        instances.EnsureCapacity(NumericMath.AtLeast(paths.Count, 4));
         var order = 0;
 
-        if (!preservePathOrder && paths.Any(path => path.Metadata is not null))
+        if (!preservePathOrder && RequiresSort(paths))
         {
-            foreach (var path in paths.OrderByDescending(path => path.Metadata?.LayerOrder ?? 100))
+            sortScratch.Clear();
+            sortScratch.EnsureCapacity(paths.Count);
+            for (var i = 0; i < paths.Count; i++)
             {
-                AppendPath(path, opacityScale, instances, ref order, flags);
+                sortScratch.Add(new PathSortEntry(paths[i], i));
+            }
+
+            sortScratch.Sort(static (a, b) =>
+            {
+                var orderCompare = (b.Path.Metadata?.LayerOrder ?? 100).CompareTo(a.Path.Metadata?.LayerOrder ?? 100);
+                if (orderCompare != 0)
+                {
+                    return orderCompare;
+                }
+
+                return a.OriginalIndex.CompareTo(b.OriginalIndex);
+            });
+
+            for (var i = 0; i < sortScratch.Count; i++)
+            {
+                AppendPath(sortScratch[i].Path, opacityScale, instances, ref order, flags);
             }
 
             return instances;
         }
 
-        foreach (var path in paths)
+        for (var i = 0; i < paths.Count; i++)
         {
-            AppendPath(path, opacityScale, instances, ref order, flags);
+            AppendPath(paths[i], opacityScale, instances, ref order, flags);
         }
 
         return instances;
+    }
+
+    public static List<DxStrokeInstance> Build(
+        IReadOnlyList<StrokeSegment2D> segments,
+        float opacityScale,
+        List<DxStrokeInstance> output,
+        float flags = 0f)
+    {
+        output.Clear();
+        output.EnsureCapacity(NumericMath.AtLeast(segments.Count, 4));
+        var order = 0;
+
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var segment = segments[i];
+            var opacity = NumericMath.Clamp01(segment.Style.Opacity * opacityScale);
+            output.Add(Create(
+                segment.Start,
+                segment.End,
+                segment.Style.Color,
+                segment.Style.Thickness,
+                opacity,
+                order++,
+                flags));
+        }
+
+        return output;
+    }
+
+    private static bool RequiresSort(IReadOnlyList<StrokePath2D> paths)
+    {
+        for (var i = 0; i < paths.Count; i++)
+        {
+            if (paths[i].Metadata is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AppendPath(
@@ -38,12 +103,29 @@ public static class DxStrokeInstanceBuilder
         ref int order,
         float flags)
     {
+        var dashed = string.Equals(path.Metadata?.SourceKind, "DashedHiddenStroke", StringComparison.Ordinal);
+
+        if (path.TryGetSegment(out var segmentStart, out var segmentEnd))
+        {
+            if (path.RichPoints is { Count: > 1 } segmentRichPoints && segmentRichPoints.Count == 2)
+            {
+                var start = segmentRichPoints[0];
+                var end = segmentRichPoints[1];
+                var thickness = NumericMath.AtLeast((start.Thickness + end.Thickness) * 0.5f, 0.35f);
+                var opacity = NumericMath.Clamp01((start.Opacity + end.Opacity) * 0.5f * opacityScale);
+                AppendSegment(start.Position, end.Position, path.Style.Color, thickness, opacity, dashed, output, ref order, flags);
+                return;
+            }
+
+            var segmentOpacity = NumericMath.Clamp01(path.Style.Opacity * opacityScale);
+            AppendSegment(segmentStart, segmentEnd, path.Style.Color, path.Style.Thickness, segmentOpacity, dashed, output, ref order, flags);
+            return;
+        }
+
         if (path.Points.Count < 2)
         {
             return;
         }
-
-        var dashed = string.Equals(path.Metadata?.SourceKind, "DashedHiddenStroke", StringComparison.Ordinal);
 
         if (path.RichPoints is { Count: > 1 } richPoints && richPoints.Count == path.Points.Count)
         {
@@ -51,15 +133,15 @@ public static class DxStrokeInstanceBuilder
             {
                 var start = richPoints[index - 1];
                 var end = richPoints[index];
-                var thickness = MathF.Max(0.35f, (start.Thickness + end.Thickness) * 0.5f);
-                var opacity = Math.Clamp((start.Opacity + end.Opacity) * 0.5f * opacityScale, 0f, 1f);
+                var thickness = NumericMath.AtLeast((start.Thickness + end.Thickness) * 0.5f, 0.35f);
+                var opacity = NumericMath.Clamp01((start.Opacity + end.Opacity) * 0.5f * opacityScale);
                 AppendSegment(start.Position, end.Position, path.Style.Color, thickness, opacity, dashed, output, ref order, flags);
             }
 
             return;
         }
 
-        var pathOpacity = Math.Clamp(path.Style.Opacity * opacityScale, 0f, 1f);
+        var pathOpacity = NumericMath.Clamp01(path.Style.Opacity * opacityScale);
         for (var index = 1; index < path.Points.Count; index++)
         {
             AppendSegment(path.Points[index - 1], path.Points[index], path.Style.Color, path.Style.Thickness, pathOpacity, dashed, output, ref order, flags);
@@ -87,7 +169,7 @@ public static class DxStrokeInstanceBuilder
         const float gap = 4f;
         var dx = end.X - start.X;
         var dy = end.Y - start.Y;
-        var length = MathF.Sqrt(dx * dx + dy * dy);
+        var length = Geometry2D.SegmentLength(start.X, start.Y, end.X, end.Y);
         if (length <= 0.001f)
         {
             return;
@@ -98,7 +180,7 @@ public static class DxStrokeInstanceBuilder
         for (var offset = 0f; offset < length; offset += dash + gap)
         {
             var a = offset;
-            var b = MathF.Min(offset + dash, length);
+            var b = NumericMath.AtMost(offset + dash, length);
             if (b <= a)
             {
                 continue;
@@ -128,7 +210,7 @@ public static class DxStrokeInstanceBuilder
             color.G / 255f,
             color.B / 255f,
             opacity,
-            MathF.Max(0.35f, thickness),
+            NumericMath.AtLeast(thickness, 0.35f),
             order,
             flags);
     }

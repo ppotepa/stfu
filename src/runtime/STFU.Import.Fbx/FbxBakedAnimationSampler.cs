@@ -1,5 +1,6 @@
 using System.Numerics;
 using STFU.Animation.Clips;
+using STFU.Common.Math;
 using STFU.Mesh;
 
 namespace STFU.Import.Fbx;
@@ -13,6 +14,8 @@ public sealed class FbxBakedAnimationSampler : IDisposable
     private int[]? _meshTriangleCounts;
     private MeshVertex[]? _combinedVertices;
     private MeshTriangle[]? _combinedTriangles;
+    private int[]? _combinedLogicalVertexIds;
+    private FbxNativeVertex[][]? _meshVertexScratch;
     private MeshData? _combinedMesh;
     private int _combinedVertexCount;
     private bool _disposed;
@@ -59,7 +62,7 @@ public sealed class FbxBakedAnimationSampler : IDisposable
             return BakeCombinedMeshWithCachedTopology(animationIndex, timeSeconds);
         }
 
-        var meshes = new MeshData[Math.Max(0, _info.MeshCount)];
+        var meshes = new MeshData[NumericMath.AtLeast(_info.MeshCount, 0)];
         for (var i = 0; i < meshes.Length; i++)
         {
             var bakeStatus = FbxNative.BakeMeshAtTime(
@@ -94,38 +97,28 @@ public sealed class FbxBakedAnimationSampler : IDisposable
         var vertexOffsets = _meshVertexOffsets!;
         var vertexCounts = _meshVertexCounts!;
         var triangleCounts = _meshTriangleCounts!;
+        var vertexScratch = _meshVertexScratch!;
 
         for (var i = 0; i < vertexOffsets.Length; i++)
         {
-            var bakeStatus = FbxNative.BakeMeshAtTime(
-                _scene.DangerousGetHandle(),
-                i,
-                animationIndex,
-                (float)timeSeconds,
-                out var buffer);
+            var scratch = vertexScratch[i];
+            var bakeStatus = BakeVerticesIntoScratch(i, animationIndex, timeSeconds, scratch, out var bakedVertexCount);
 
             if (bakeStatus != 0)
             {
                 throw new InvalidOperationException($"FBX native mesh bake failed for mesh {i} with status {bakeStatus}.");
             }
 
-            try
+            if (bakedVertexCount != vertexCounts[i])
             {
-                if (buffer.VertexCount != vertexCounts[i] || buffer.TriangleCount != triangleCounts[i])
-                {
-                    ClearCachedTopology();
-                    return BakeCombinedMesh(animationIndex, timeSeconds);
-                }
+                ClearCachedTopology();
+                return BakeCombinedMesh(animationIndex, timeSeconds);
+            }
 
-                CopyVertices(buffer, vertices, vertexOffsets[i]);
-            }
-            finally
-            {
-                FbxNative.FreeMeshBuffer(ref buffer);
-            }
+            CopyVertices(scratch.AsSpan(0, bakedVertexCount), vertices, vertexOffsets[i]);
         }
 
-        return _combinedMesh ??= new MeshData(vertices, triangles);
+        return _combinedMesh ??= new MeshData(vertices, triangles, _combinedLogicalVertexIds);
     }
 
     private MeshData CombineMeshesAndCacheTopology(IReadOnlyList<MeshData> meshes)
@@ -145,9 +138,11 @@ public sealed class FbxBakedAnimationSampler : IDisposable
 
         var vertices = new MeshVertex[vertexCount];
         var triangles = new MeshTriangle[triangleCount];
+        var logicalVertexIds = new int[vertexCount];
         var vertexOffsets = new int[meshes.Count];
         var vertexCounts = new int[meshes.Count];
         var triangleCounts = new int[meshes.Count];
+        var vertexScratch = new FbxNativeVertex[meshes.Count][];
         var vertexOffset = 0;
         var triangleOffset = 0;
 
@@ -157,10 +152,15 @@ public sealed class FbxBakedAnimationSampler : IDisposable
             vertexOffsets[meshIndex] = vertexOffset;
             vertexCounts[meshIndex] = mesh.Vertices.Count;
             triangleCounts[meshIndex] = mesh.Triangles.Count;
+            vertexScratch[meshIndex] = new FbxNativeVertex[mesh.Vertices.Count];
 
             for (var i = 0; i < mesh.Vertices.Count; i++)
             {
                 vertices[vertexOffset + i] = mesh.Vertices[i];
+                logicalVertexIds[vertexOffset + i] = mesh.LogicalVertexIds is not null &&
+                    (uint)i < (uint)mesh.LogicalVertexIds.Count
+                    ? mesh.LogicalVertexIds[i] + vertexOffset
+                    : vertexOffset + i;
             }
 
             for (var i = 0; i < mesh.Triangles.Count; i++)
@@ -181,7 +181,9 @@ public sealed class FbxBakedAnimationSampler : IDisposable
         _meshTriangleCounts = triangleCounts;
         _combinedVertices = vertices;
         _combinedTriangles = triangles;
-        _combinedMesh = new MeshData(vertices, triangles);
+        _combinedLogicalVertexIds = logicalVertexIds;
+        _meshVertexScratch = vertexScratch;
+        _combinedMesh = new MeshData(vertices, triangles, logicalVertexIds);
         _combinedVertexCount = vertexCount;
 
         return _combinedMesh;
@@ -194,8 +196,30 @@ public sealed class FbxBakedAnimationSampler : IDisposable
         _meshTriangleCounts = null;
         _combinedVertices = null;
         _combinedTriangles = null;
+        _combinedLogicalVertexIds = null;
+        _meshVertexScratch = null;
         _combinedMesh = null;
         _combinedVertexCount = 0;
+    }
+
+    private unsafe int BakeVerticesIntoScratch(
+        int meshIndex,
+        int animationIndex,
+        double timeSeconds,
+        FbxNativeVertex[] scratch,
+        out int bakedVertexCount)
+    {
+        fixed (FbxNativeVertex* vertexDst = scratch)
+        {
+            return FbxNative.BakeVerticesAtTimeInto(
+                _scene.DangerousGetHandle(),
+                meshIndex,
+                animationIndex,
+                (float)timeSeconds,
+                (nint)vertexDst,
+                scratch.Length,
+                out bakedVertexCount);
+        }
     }
 
     private static unsafe void CopyVertices(FbxNativeMeshBuffer buffer, MeshVertex[] target, int targetOffset)
@@ -206,6 +230,11 @@ public sealed class FbxBakedAnimationSampler : IDisposable
         }
 
         var nativeVertices = new ReadOnlySpan<FbxNativeVertex>((void*)buffer.Vertices, buffer.VertexCount);
+        CopyVertices(nativeVertices, target, targetOffset);
+    }
+
+    private static void CopyVertices(ReadOnlySpan<FbxNativeVertex> nativeVertices, MeshVertex[] target, int targetOffset)
+    {
         for (var i = 0; i < nativeVertices.Length; i++)
         {
             var vertex = nativeVertices[i];
@@ -231,7 +260,7 @@ public sealed class FbxBakedAnimationSampler : IDisposable
                 continue;
             }
 
-            var duration = Math.Max(0, animation.TimeEnd - animation.TimeBegin);
+            var duration = NumericMath.AtLeast(animation.TimeEnd - animation.TimeBegin, 0d);
             animations.Add(new AnimationClip(animation.GetName(i), duration, 0, []));
         }
 

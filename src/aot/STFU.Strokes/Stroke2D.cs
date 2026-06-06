@@ -45,21 +45,67 @@ public readonly record struct StrokeMetadata(
     int LayerOrder = 0,
     int? EntityId = null);
 
-public sealed record StrokePath2D(
-    IReadOnlyList<Point2D> Points,
-    StrokeStyle2D Style,
-    IReadOnlyList<StrokePoint2D>? RichPoints = null,
-    StrokeMetadata? Metadata = null)
+public sealed class StrokePath2D
 {
+    private readonly IReadOnlyList<Point2D>? _points;
+    private readonly Point2D _segmentStart;
+    private readonly Point2D _segmentEnd;
+    private readonly bool _isSegment;
+    private Point2D[]? _materializedSegmentPoints;
+
+    public StrokePath2D(
+        IReadOnlyList<Point2D> points,
+        StrokeStyle2D style,
+        IReadOnlyList<StrokePoint2D>? richPoints = null,
+        StrokeMetadata? metadata = null)
+    {
+        _points = points ?? [];
+        Style = style;
+        RichPoints = richPoints;
+        Metadata = metadata;
+    }
+
+    public StrokePath2D(
+        Point2D start,
+        Point2D end,
+        StrokeStyle2D style,
+        IReadOnlyList<StrokePoint2D>? richPoints = null,
+        StrokeMetadata? metadata = null)
+    {
+        _isSegment = true;
+        _segmentStart = start;
+        _segmentEnd = end;
+        Style = style;
+        RichPoints = richPoints;
+        Metadata = metadata;
+    }
+
+    public IReadOnlyList<Point2D> Points => _isSegment
+        ? _materializedSegmentPoints ??= [_segmentStart, _segmentEnd]
+        : _points!;
+
+    public StrokeStyle2D Style { get; }
+
+    public IReadOnlyList<StrokePoint2D>? RichPoints { get; }
+
+    public StrokeMetadata? Metadata { get; }
+
     public static StrokePath2D Line(Point2D start, Point2D end, StrokeStyle2D style)
     {
-        var points = new[] { start, end };
-        var richPoints = new[]
-        {
-            StrokePoint2D.FromPoint(start, style),
-            StrokePoint2D.FromPoint(end, style)
-        };
+        return new StrokePath2D(start, end, style);
+    }
 
-        return new StrokePath2D(points, style, richPoints);
+    public bool TryGetSegment(out Point2D start, out Point2D end)
+    {
+        if (_isSegment)
+        {
+            start = _segmentStart;
+            end = _segmentEnd;
+            return true;
+        }
+
+        start = default;
+        end = default;
+        return false;
     }
 }

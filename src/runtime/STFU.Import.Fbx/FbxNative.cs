@@ -34,10 +34,18 @@ internal static partial class FbxNative
             return IntPtr.Zero;
         }
 
+        Exception? firstLoadFailure = null;
+        string? firstFailedCandidate = null;
         foreach (var candidate in EnumerateNativeLibraryCandidates())
         {
-            if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var handle))
+            if (!File.Exists(candidate))
             {
+                continue;
+            }
+
+            try
+            {
+                var handle = NativeLibrary.Load(candidate);
                 if (Interlocked.Exchange(ref _loggedNativeLibraryPath, 1) == 0)
                 {
                     StfuLog.Write(
@@ -48,15 +56,24 @@ internal static partial class FbxNative
 
                 return handle;
             }
+            catch (Exception exception) when (exception is DllNotFoundException or BadImageFormatException)
+            {
+                firstLoadFailure ??= exception;
+                firstFailedCandidate ??= candidate;
+            }
         }
 
         if (Interlocked.Exchange(ref _loggedNativeLibraryMissing, 1) == 0)
         {
+            var message = firstLoadFailure is null
+                ? "stfu_fbx native library could not be resolved."
+                : $"stfu_fbx native library exists but could not be loaded: {firstFailedCandidate}. {firstLoadFailure.Message}";
             StfuLog.Write(
                 StfuLogDomain.ImportFbx,
                 "native.missing",
-                "stfu_fbx native library could not be resolved.",
-                StfuLogLevel.Warning);
+                message,
+                StfuLogLevel.Warning,
+                exception: firstLoadFailure);
         }
 
         return IntPtr.Zero;
@@ -64,8 +81,12 @@ internal static partial class FbxNative
 
     private static IEnumerable<string> EnumerateNativeLibraryCandidates()
     {
+        var rid = GetWindowsRid();
         yield return Path.Combine(AppContext.BaseDirectory, "stfu_fbx.dll");
+        yield return Path.Combine(AppContext.BaseDirectory, rid, "stfu_fbx.dll");
+        yield return Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", "stfu_fbx.dll");
         yield return Path.Combine(Environment.CurrentDirectory, "stfu_fbx.dll");
+        yield return Path.Combine(Environment.CurrentDirectory, "artifacts", "native", "STFU.Native.Fbx", "stfu_fbx.dll");
 
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
@@ -73,6 +94,18 @@ internal static partial class FbxNative
             yield return Path.Combine(directory.FullName, "artifacts", "native", "STFU.Native.Fbx", "stfu_fbx.dll");
             directory = directory.Parent;
         }
+    }
+
+    private static string GetWindowsRid()
+    {
+        return RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => "win-x64",
+            Architecture.X86 => "win-x86",
+            Architecture.Arm64 => "win-arm64",
+            Architecture.Arm => "win-arm",
+            _ => "win-x64"
+        };
     }
 
     [LibraryImport(LibraryName, EntryPoint = "stfu_fbx_load", StringMarshalling = StringMarshalling.Utf8)]
@@ -97,6 +130,16 @@ internal static partial class FbxNative
         int animationIndex,
         float timeSeconds,
         out FbxNativeMeshBuffer buffer);
+
+    [LibraryImport(LibraryName, EntryPoint = "stfu_fbx_bake_vertices_at_time_into")]
+    internal static partial int BakeVerticesAtTimeInto(
+        nint scene,
+        int meshIndex,
+        int animationIndex,
+        float timeSeconds,
+        nint vertexDst,
+        int vertexCapacity,
+        out int vertexCount);
 
     [LibraryImport(LibraryName, EntryPoint = "stfu_fbx_free_mesh_buffer")]
     internal static partial void FreeMeshBuffer(ref FbxNativeMeshBuffer buffer);
@@ -163,6 +206,7 @@ internal struct FbxNativeVertex
     public float NormalX;
     public float NormalY;
     public float NormalZ;
+    public int LogicalVertexIndex;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -194,6 +238,7 @@ internal struct FbxNativeMeshBuffer
         var nativeTriangles = new ReadOnlySpan<FbxNativeTriangle>((void*)Triangles, TriangleCount);
         var vertices = new MeshVertex[VertexCount];
         var triangles = new MeshTriangle[TriangleCount];
+        var logicalVertexIds = new int[VertexCount];
 
         for (var i = 0; i < nativeVertices.Length; i++)
         {
@@ -201,6 +246,7 @@ internal struct FbxNativeMeshBuffer
             vertices[i] = new MeshVertex(
                 new Vector3(vertex.X, vertex.Y, vertex.Z),
                 new Vector3(vertex.NormalX, vertex.NormalY, vertex.NormalZ));
+            logicalVertexIds[i] = vertex.LogicalVertexIndex;
         }
 
         for (var i = 0; i < nativeTriangles.Length; i++)
@@ -209,6 +255,6 @@ internal struct FbxNativeMeshBuffer
             triangles[i] = new MeshTriangle(triangle.A, triangle.B, triangle.C);
         }
 
-        return new MeshData(vertices, triangles);
+        return new MeshData(vertices, triangles, logicalVertexIds);
     }
 }

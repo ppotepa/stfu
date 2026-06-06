@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
+using STFU.Common.Math;
 
 namespace STFU.Strokes.Export;
 
@@ -22,8 +23,8 @@ public sealed class SvgStrokeExporter : IStrokeExporter<SvgExportOptions>
         var pathsByLayer = GroupPaths(frame, options, warnings);
         using var writer = new StreamWriter(output, new UTF8Encoding(false), 4096, leaveOpen: true);
 
-        var width = MathF.Max(0f, frame.Width * options.Scale);
-        var height = MathF.Max(0f, frame.Height * options.Scale);
+        var width = NumericMath.AtLeast(frame.Width * options.Scale, 0f);
+        var height = NumericMath.AtLeast(frame.Height * options.Scale, 0f);
         writer.WriteLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
         writer.WriteLine(
             $"<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" width=\"{Format(width)}{Escape(options.Units)}\" height=\"{Format(height)}{Escape(options.Units)}\" viewBox=\"0 0 {Format(width)} {Format(height)}\">");
@@ -109,11 +110,12 @@ public sealed class SvgStrokeExporter : IStrokeExporter<SvgExportOptions>
             var start = richPoints[index - 1];
             var end = richPoints[index];
             var style = new StrokeStyle2D(
-                MathF.Max(0.2f, (start.Thickness + end.Thickness) * 0.5f),
-                Math.Clamp((start.Opacity + end.Opacity) * 0.5f, 0f, 1f),
+                NumericMath.AtLeast((start.Thickness + end.Thickness) * 0.5f, 0.2f),
+                NumericMath.Clamp01((start.Opacity + end.Opacity) * 0.5f),
                 path.Style.Color);
             var segment = new StrokePath2D(
-                [start.Position, end.Position],
+                start.Position,
+                end.Position,
                 style,
                 null,
                 path.Metadata);
@@ -258,6 +260,20 @@ public sealed class SvgStrokeExporter : IStrokeExporter<SvgExportOptions>
 
     private static string BuildPathData(StrokePath2D path, float scale)
     {
+        if (path.TryGetSegment(out var segmentStart, out var segmentEnd))
+        {
+            var segmentBuilder = new StringBuilder();
+            segmentBuilder.Append("M ");
+            segmentBuilder.Append(Format(segmentStart.X * scale));
+            segmentBuilder.Append(' ');
+            segmentBuilder.Append(Format(segmentStart.Y * scale));
+            segmentBuilder.Append(" L ");
+            segmentBuilder.Append(Format(segmentEnd.X * scale));
+            segmentBuilder.Append(' ');
+            segmentBuilder.Append(Format(segmentEnd.Y * scale));
+            return segmentBuilder.ToString();
+        }
+
         if (path.Points.Count < 2)
         {
             return string.Empty;
