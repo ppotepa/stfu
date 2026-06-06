@@ -52,6 +52,7 @@ compile_commands.json
 *.pdb
 *.ilk
 *.exp
+*.rpack
 
 # Node / Playwright tooling
 node_modules/
