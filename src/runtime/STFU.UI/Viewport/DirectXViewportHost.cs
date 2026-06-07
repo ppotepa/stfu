@@ -23,6 +23,7 @@ internal sealed class DirectXViewportHost : NativeControlHost
     private bool _isOrbiting;
     private bool _loggedNativeInput;
     private bool _loggedAvaloniaInput;
+    private int _requestRenderLogCounter;
 
     public DirectXViewportHost(
         DirectXViewportPresenter presenter,
@@ -86,12 +87,36 @@ internal sealed class DirectXViewportHost : NativeControlHost
 
         _childHandle = hwnd;
         _presenter.Attach(hwnd, width, height);
+        StfuLog.Write(
+            StfuLogDomain.Viewport,
+            "direct_host.attached",
+            $"hwnd={hwnd} size={width}x{height}",
+            StfuLogLevel.Debug,
+            new Dictionary<string, object?>
+            {
+                ["hwnd"] = hwnd,
+                ["width"] = width,
+                ["height"] = height,
+                ["isVisible"] = IsVisible,
+                ["presenterAttached"] = _presenter.IsAttached
+            });
         HookWndProc(hwnd);
         return new PlatformHandle(hwnd, "HWND");
     }
 
     protected override void DestroyNativeControlCore(IPlatformHandle control)
     {
+        StfuLog.Write(
+            StfuLogDomain.Viewport,
+            "direct_host.detaching",
+            $"hwnd={_childHandle}",
+            StfuLogLevel.Debug,
+            new Dictionary<string, object?>
+            {
+                ["hwnd"] = _childHandle,
+                ["isVisible"] = IsVisible,
+                ["presenterAttached"] = _presenter.IsAttached
+            });
         _presenter.Detach();
         if (_childHandle != IntPtr.Zero)
         {
@@ -235,14 +260,49 @@ internal sealed class DirectXViewportHost : NativeControlHost
 
     private void RequestRender()
     {
+        _requestRenderLogCounter++;
+        var shouldLogRenderRequest = _requestRenderLogCounter % 120 == 0;
+
         if (Dispatcher.UIThread.CheckAccess())
         {
+            if (shouldLogRenderRequest)
+            {
+                StfuLog.Write(
+                    StfuLogDomain.Viewport,
+                    "direct_host.request_render",
+                    $"count={_requestRenderLogCounter}",
+                    StfuLogLevel.Debug,
+                    new Dictionary<string, object?>
+                    {
+                        ["count"] = _requestRenderLogCounter,
+                        ["isVisible"] = IsVisible,
+                        ["childHandle"] = _childHandle,
+                        ["presenterAttached"] = _presenter.IsAttached
+                    });
+            }
+
             _pumpViewportFrame();
             return;
         }
 
         Dispatcher.UIThread.Post(() =>
         {
+            if (shouldLogRenderRequest)
+            {
+                StfuLog.Write(
+                    StfuLogDomain.Viewport,
+                    "direct_host.request_render",
+                    $"count={_requestRenderLogCounter}",
+                    StfuLogLevel.Debug,
+                    new Dictionary<string, object?>
+                    {
+                        ["count"] = _requestRenderLogCounter,
+                        ["isVisible"] = IsVisible,
+                        ["childHandle"] = _childHandle,
+                        ["presenterAttached"] = _presenter.IsAttached
+                    });
+            }
+
             _pumpViewportFrame();
         });
     }
@@ -302,7 +362,11 @@ internal sealed class DirectXViewportHost : NativeControlHost
         if (!_renderPump.IsEnabled)
         {
             _renderPump.Start();
-            StfuLog.Write(StfuLogDomain.Viewport, "directx.render_pump.started", "Direct GPU viewport render pump started.");
+            StfuLog.Write(
+                StfuLogDomain.Viewport,
+                "direct_host.pump_start",
+                "Direct GPU viewport render pump started.",
+                StfuLogLevel.Debug);
         }
     }
 
@@ -311,7 +375,11 @@ internal sealed class DirectXViewportHost : NativeControlHost
         if (_renderPump.IsEnabled)
         {
             _renderPump.Stop();
-            StfuLog.Write(StfuLogDomain.Viewport, "directx.render_pump.stopped", "Direct GPU viewport render pump stopped.");
+            StfuLog.Write(
+                StfuLogDomain.Viewport,
+                "direct_host.pump_stop",
+                "Direct GPU viewport render pump stopped.",
+                StfuLogLevel.Debug);
         }
     }
 

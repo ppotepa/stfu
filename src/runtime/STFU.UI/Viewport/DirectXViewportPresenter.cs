@@ -4,6 +4,18 @@ using STFU.UI.Bridge.Session;
 
 namespace STFU.UI;
 
+internal enum DirectXPresentAvailability
+{
+    Ready,
+    NotWindows,
+    DeviceUnavailable,
+    SwapChainUnavailable,
+    DeviceDisposed,
+    NotAttached,
+    NotGpuTexture,
+    NullGpuTextureLease
+}
+
 internal sealed class DirectXViewportPresenter : IDisposable
 {
     private readonly DirectXDevice? _device;
@@ -45,19 +57,56 @@ internal sealed class DirectXViewportPresenter : IDisposable
         _swapChain!.AttachOrResize(_swapChain.CurrentHwnd, width, height);
     }
 
-    public bool CanPresent(NprRenderResult result)
+    public DirectXPresentAvailability GetAvailability(NprRenderResult result)
     {
-        return IsAvailable &&
-            IsAttached &&
-            result.OutputKind == NprRenderOutputKind.GpuTexture &&
-            result.GpuTextureLease is not null;
+        if (!OperatingSystem.IsWindows())
+        {
+            return DirectXPresentAvailability.NotWindows;
+        }
+
+        if (_device is null)
+        {
+            return DirectXPresentAvailability.DeviceUnavailable;
+        }
+
+        if (_swapChain is null)
+        {
+            return DirectXPresentAvailability.SwapChainUnavailable;
+        }
+
+        if (_device.IsDisposed)
+        {
+            return DirectXPresentAvailability.DeviceDisposed;
+        }
+
+        if (!IsAttached)
+        {
+            return DirectXPresentAvailability.NotAttached;
+        }
+
+        if (result.OutputKind != NprRenderOutputKind.GpuTexture)
+        {
+            return DirectXPresentAvailability.NotGpuTexture;
+        }
+
+        if (result.GpuTextureLease is null)
+        {
+            return DirectXPresentAvailability.NullGpuTextureLease;
+        }
+
+        return DirectXPresentAvailability.Ready;
     }
 
-    public void Present(NprRenderResult result)
+    public bool CanPresent(NprRenderResult result)
+    {
+        return GetAvailability(result) == DirectXPresentAvailability.Ready;
+    }
+
+    public bool Present(NprRenderResult result)
     {
         if (!CanPresent(result) || result.GpuTextureLease is null)
         {
-            return;
+            return false;
         }
 
         using var deviceLock = _device!.Lock();
@@ -68,6 +117,7 @@ internal sealed class DirectXViewportPresenter : IDisposable
 
         _swapChain!.AttachOrResize(_swapChain.CurrentHwnd, source.Handle.Width, source.Handle.Height);
         _swapChain!.PresentTexture(source);
+        return true;
     }
 
     public void Detach()
