@@ -48,6 +48,8 @@
     <Project Path="tests/STFU.Parallelism.Tests/STFU.Parallelism.Tests.csproj" />
     <Project Path="tests/STFU.Rendering.Abstractions.Tests/STFU.Rendering.Abstractions.Tests.csproj" />
     <Project Path="tests/STFU.NPR.Parity.Tests/STFU.NPR.Parity.Tests.csproj" />
+    <Project Path="tests/STFU.Rendering.DirectX.Tests/STFU.Rendering.DirectX.Tests.csproj" />
+    <Project Path="tests/STFU.NPR.Pipelines.Tests/STFU.NPR.Pipelines.Tests.csproj" />
     <Project Path="tests/STFU.Rendering.Cpu.Tests/STFU.Rendering.Cpu.Tests.csproj" />
   </Folder>
 </Solution>

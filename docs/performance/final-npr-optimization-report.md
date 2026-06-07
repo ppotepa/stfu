@@ -65,3 +65,54 @@ The DX stroke pass tracks upload/recreate counters, uploaded bytes, and current 
 - GPU visibility remains acceleration, not the reference.
 - Benchmark defaults are changed only after sweep data.
 - `rpack inspect`, `rpack lint`, and `rpack check` pass on the final package.
+
+## Required final commands
+
+```text
+dotnet build STFU.slnx -c Release
+dotnet test STFU.slnx -c Release
+.\scripts\validate-final-npr-optimization.ps1
+.\scripts\validate-final-npr-optimization.ps1 -FullSweep
+```
+
+## Pipeline snapshot
+
+```text
+Scene
+→ Mesh
+→ Projection
+→ Visibility
+→ Edge Classification
+→ Fragments
+→ Paths
+→ Simplify
+→ InkFrame
+→ CPU Stroke Raster
+→ Tone Raster
+→ DirectX Upload
+→ GPU Present
+→ Parity / Validation
+```
+
+## DirectX readback audit
+
+| Mode | Expected readbacks | Actual readbacks | Pass |
+|---|---|---|---|
+| GPU present | 0 | TBD | TBD |
+| GPU readback | >0 | TBD | TBD |
+| GPU readback + visibility | >0 | TBD | TBD |
+
+## GPU visibility parity audit
+
+| Asset | Resolution | CPU faces | GPU faces | Match ratio | Fallback | Reason |
+|---|---|---|---|---|---|---|
+| suzanne.obj | 320x240 | TBD | TBD | TBD | TBD | TBD |
+| walking.fbx | 320x240 | TBD | TBD | TBD | TBD | TBD |
+
+## Worker scaling
+
+| Asset | Resolution | Workers | Avg frame ms | Notes |
+|---|---|---|---|---|
+| suzanne.obj | 800x600 | 1 | TBD | baseline |
+| suzanne.obj | 800x600 | 8 | TBD | parallel |
+| suzanne.obj | 800x600 | 16 | TBD | high parallel |

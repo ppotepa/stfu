@@ -4,15 +4,16 @@ using STFU.Common.Math;
 using STFU.Logging;
 using STFU.NPR.Debug;
 using STFU.NPR.Graph;
+using STFU.Rendering.Abstractions.Diagnostics;
 using STFU.NPR.Rendering;
 using STFU.Rendering.Abstractions.Backend;
 using STFU.Rendering.Abstractions.Context;
-using STFU.Rendering.Abstractions.Diagnostics;
 using STFU.Rendering.Abstractions.Execution;
 using STFU.Rendering.Abstractions.Gpu;
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.Abstractions.Surfaces;
 using STFU.Rendering.DirectX.Device;
+using STFU.Rendering.DirectX.Diagnostics;
 using STFU.Rendering.DirectX.Passes;
 using STFU.Strokes;
 
@@ -116,6 +117,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
 
         var total = Stopwatch.StartNew();
         var allocatedBefore = GC.GetTotalAllocatedBytes(false);
+        var counters = new DirectXRenderCounters();
         StrokeFrame strokeFrame = StrokeFrame.Empty;
         NprFrame nprFrame = NprFrame.Empty;
         NprDebugFrame debugFrame = NprDebugFrame.Empty;
@@ -199,6 +201,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
 
             if (request.Budget.RequireGpuReadback)
             {
+                var priorReadbacks = _readbackPass.Counters.Readbacks;
                 if (!request.Budget.AllowGpuReadback)
                 {
                     throw new InvalidOperationException("GPU readback is required for this request, but GPU readback is disabled by the frame budget.");
@@ -207,11 +210,13 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 var readbackWatch = Stopwatch.StartNew();
                 var pixelLease = _readbackPass.ReadToPixelSurface(gpuLease.Texture, cancellationToken);
                 readbackWatch.Stop();
+                var readbacks = _readbackPass.Counters.Readbacks - priorReadbacks;
+                counters.Readbacks += readbacks;
                 var readbackBytes = pixelLease.Surface.Stride * pixelLease.Surface.Height;
                 diagnostics.AddTiming(
                     "GpuReadback",
                     readbackWatch.Elapsed.TotalMilliseconds,
-                    $"readbacks=1, bytes={readbackBytes}");
+                    $"readbacks={readbacks}, bytes={readbackBytes}");
                 gpuLease.Dispose();
 
                 total.Stop();

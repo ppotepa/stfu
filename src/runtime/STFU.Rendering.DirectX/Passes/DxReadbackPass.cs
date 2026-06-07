@@ -50,6 +50,7 @@ public sealed class DxReadbackPass
                 }
 
                 Counters.RecordReadback(surface.Height, rowBytes);
+                _ = Counters.Readbacks;
                 return lease;
             }
             finally
