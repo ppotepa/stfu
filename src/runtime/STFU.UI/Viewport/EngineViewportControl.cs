@@ -133,7 +133,6 @@ public sealed class EngineViewportControl : Control
 
     private void ProcessFrame(int width, int height)
     {
-        _renderBridge.RequestFrame(width, height, _viewport.RenderMode);
         var presentedFrame = _renderBridge.ApplyPendingResultIfAny();
 
         if (presentedFrame)
@@ -144,6 +143,8 @@ public sealed class EngineViewportControl : Control
         {
             _session.Workspace.Viewport.PublishViewportSize(width, height);
         }
+
+        _renderBridge.RequestFrame(width, height, _viewport.RenderMode);
     }
 
     private void RequestInvalidate()
@@ -165,7 +166,7 @@ public sealed class EngineViewportControl : Control
                 _invalidateQueued = false;
                 InvalidateVisual();
             },
-            DispatcherPriority.Background);
+            DispatcherPriority.Render);
     }
 
     private static Color ViewportPaperColor()
