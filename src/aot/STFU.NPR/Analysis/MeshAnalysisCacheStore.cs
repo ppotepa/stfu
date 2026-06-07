@@ -1,4 +1,5 @@
 using System.Numerics;
+using STFU.Camera;
 using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Mesh;
@@ -11,8 +12,16 @@ public sealed class MeshAnalysisCacheStore
     private readonly Dictionary<MeshHandle, CacheEntry> _caches = new();
     private readonly Dictionary<WireframeTopologyKey, WireframeTopologyEntry> _wireframeTopologies = new();
     private readonly Dictionary<DefaultNprTopologyCacheKey, DefaultNprTopologyEntry> _defaultNprTopologies = new();
+    private readonly FrameProjectionCache _projectionCache = new();
 
     public int Count => _caches.Count;
+
+    public FrameProjectionCache ProjectionCache => _projectionCache;
+
+    public void ClearFrameCaches()
+    {
+        _projectionCache.Clear();
+    }
 
     public MeshAnalysisCache GetOrCreate(MeshHandle handle, MeshData mesh)
     {
@@ -83,6 +92,33 @@ public sealed class MeshAnalysisCacheStore
             signature,
             cache);
         return cache;
+    }
+
+    public ulong GetMeshSignature(MeshHandle handle, MeshData mesh)
+    {
+        var hash = CalculateTriangleSignature(mesh);
+        hash = FrameCacheHash.Add(hash, handle.Value);
+        hash = FrameCacheHash.Add(hash, mesh.Vertices.Count);
+        hash = FrameCacheHash.Add(hash, mesh.Triangles.Count);
+        return hash;
+    }
+
+    public static ulong CalculateTransformSignature(Transform3D transform)
+    {
+        var hash = FrameCacheHash.Start();
+        hash = FrameCacheHash.Add(hash, transform.Position);
+        hash = FrameCacheHash.Add(hash, transform.Rotation);
+        hash = FrameCacheHash.Add(hash, transform.Scale);
+        return hash;
+    }
+
+    public static ulong CalculateCameraSignature(CameraState camera)
+    {
+        var hash = FrameCacheHash.Start();
+        hash = FrameCacheHash.Add(hash, camera.Position);
+        hash = FrameCacheHash.Add(hash, camera.Target);
+        hash = FrameCacheHash.Add(hash, camera.FieldOfViewDegrees);
+        return hash;
     }
 
     public bool TryGet(MeshHandle handle, out MeshAnalysisCache cache)

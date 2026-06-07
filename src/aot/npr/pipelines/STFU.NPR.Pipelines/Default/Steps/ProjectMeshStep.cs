@@ -3,7 +3,9 @@ using System.Runtime.InteropServices;
 using STFU.Common.Primitives;
 using STFU.Common.Math;
 using STFU.Mesh;
+using STFU.NPR.Analysis;
 using STFU.NPR.Graph;
+using STFU.NPR.Projection;
 using STFU.Parallelism;
 
 namespace STFU.NPR.Pipeline.Default.Steps;
@@ -135,7 +137,7 @@ public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
         {
             for (var index = 0; index < _jobs.Count; index++)
             {
-                ProjectMeshVertices(projection, in jobs[index], _projectedVertices);
+                ProjectMeshVerticesWithCache(context, projection, in jobs[index], _projectedVertices);
             }
         }
 
@@ -166,6 +168,80 @@ public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
         if (_projectedVertices.Length < required)
         {
             _projectedVertices = new ProjectedVertex[required];
+        }
+    }
+
+
+    private static void ProjectMeshVerticesWithCache(
+        STFU.NPR.Pipeline.NprContext context,
+        ProjectionInfo projection,
+        in MeshProjectionJob job,
+        ProjectedVertex[] output)
+    {
+        var meshSignature = context.Analysis.GetMeshSignature(job.MeshHandle, job.Mesh);
+        var transformSignature = MeshAnalysisCacheStore.CalculateTransformSignature(job.Transform);
+        var cameraSignature = MeshAnalysisCacheStore.CalculateCameraSignature(context.Camera);
+        var cacheKey = new FrameProjectionCacheKey(
+            job.MeshHandle,
+            meshSignature,
+            transformSignature,
+            cameraSignature,
+            context.Width,
+            context.Height,
+            context.Settings.DefaultDrawing.DepthScale);
+
+        if (context.Analysis.ProjectionCache.TryGet(cacheKey, out var cached))
+        {
+            CopyCachedProjectedVertices(cached, in job, output);
+        }
+        else
+        {
+            MeshProjectionService.ProjectInto(
+                job.Mesh,
+                job.Transform,
+                projection,
+                job.VertexOffset,
+                output,
+                job.StagedVertexOffset);
+            var cachedVertices = new ProjectedVertex[job.Mesh.Vertices.Count];
+            Array.Copy(
+                output,
+                job.StagedVertexOffset,
+                cachedVertices,
+                0,
+                job.Mesh.Vertices.Count);
+            context.Analysis.ProjectionCache.Store(cacheKey, new ProjectedMeshFrame(cachedVertices, cachedVertices.Length));
+        }
+
+        context.Counters.Set("ProjectMeshStep.projectionCacheEntries", context.Analysis.ProjectionCache.Stats.Entries);
+        context.Counters.Set("ProjectMeshStep.projectionCacheHits", context.Analysis.ProjectionCache.Stats.Hits);
+        context.Counters.Set("ProjectMeshStep.projectionCacheMisses", context.Analysis.ProjectionCache.Stats.Misses);
+        context.Counters.Set("ProjectMeshStep.projectionCacheEvictions", context.Analysis.ProjectionCache.Stats.Evictions);
+        context.Counters.Set("ProjectMeshStep.projectedVertices", job.Mesh.Vertices.Count);
+    }
+
+    private static void CopyCachedProjectedVertices(
+        ProjectedMeshFrame cached,
+        in MeshProjectionJob job,
+        ProjectedVertex[] output)
+    {
+        for (var vertexIndex = 0; vertexIndex < cached.VertexCount; vertexIndex++)
+        {
+            var vertex = cached.Vertices[vertexIndex];
+            output[job.StagedVertexOffset + vertexIndex] = new ProjectedVertex(
+                job.VertexOffset + vertexIndex,
+                vertex.WorldPosition,
+                vertex.WorldNormal,
+                vertex.Position,
+                vertex.Depth,
+                vertex.IsVisible,
+                vertex.Curvature,
+                vertex.SmoothedCurvature,
+                vertex.SignedCurvature,
+                vertex.SmoothedSignedCurvature,
+                vertex.CurvatureDirection,
+                vertex.Ndc,
+                vertex.Depth01);
         }
     }
 

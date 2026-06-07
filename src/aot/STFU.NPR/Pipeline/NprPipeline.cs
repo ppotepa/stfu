@@ -118,7 +118,8 @@ internal static class NprPipelineRunner
             _ when stepName.Contains("Visibility", StringComparison.Ordinal) ||
                 stepName.Contains("Occlusion", StringComparison.Ordinal) =>
                 $"visible={metrics.VisibleSegments}, hidden={metrics.HiddenSegments}",
-            _ when stepName.Contains("Stroke", StringComparison.Ordinal) =>
+            _ when stepName.Contains("Stroke", StringComparison.Ordinal) ||
+                stepName.Contains("Ink", StringComparison.Ordinal) =>
                 $"candidates={metrics.Candidates}, strokes={metrics.StyledStrokes}",
             _ => $"graph={metrics.TotalCount}"
         };

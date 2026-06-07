@@ -22,6 +22,9 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
     private int[] _silhouetteSegmentIndices = [];
     private int[] _featureSegmentIndices = [];
     private int[] _boundarySegmentIndices = [];
+    private int _previousSilhouetteIndexCount;
+    private int _previousFeatureIndexCount;
+    private int _previousBoundaryIndexCount;
 
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
@@ -41,6 +44,9 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             context.Counters.Set("DefaultBuildInkFrameStep.segmentsOutput", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.segmentScratchCapacity", _segmentScratch.Length);
             context.Counters.Set("DefaultBuildInkFrameStep.frameSegmentCount", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearSilhouette", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearFeature", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", 0);
             return;
         }
 
@@ -183,6 +189,9 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("DefaultBuildInkFrameStep.segmentsOutput", totalSegments);
         context.Counters.Set("DefaultBuildInkFrameStep.segmentScratchCapacity", _segmentScratch.Length);
         context.Counters.Set("DefaultBuildInkFrameStep.frameSegmentCount", totalSegments);
+        context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearSilhouette", _previousSilhouetteIndexCount);
+        context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearFeature", _previousFeatureIndexCount);
+        context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", _previousBoundaryIndexCount);
     }
 
     private void EnsureCapacity(int pathCount)
@@ -259,6 +268,10 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                     break;
             }
         }
+
+        _previousSilhouetteIndexCount = silhouetteCursor;
+        _previousFeatureIndexCount = featureCursor;
+        _previousBoundaryIndexCount = boundaryCursor;
     }
 
     private static int CountStyledPathSegments(

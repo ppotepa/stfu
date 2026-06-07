@@ -74,7 +74,7 @@ public sealed class DxStrokeRasterPass : IDisposable
             _sortScratch,
             request.Quality.PreserveLayerOrdering);
         buildWatch.Stop();
-        diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}");
+        diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, source=paths");
 
         if (instances.Count == 0 || target.RenderTargetView is null)
         {
@@ -141,7 +141,7 @@ public sealed class DxStrokeRasterPass : IDisposable
             opacityScale,
             _instances);
         buildWatch.Stop();
-        diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}");
+        diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, source=segments");
 
         if (instances.Count == 0 || target.RenderTargetView is null)
         {

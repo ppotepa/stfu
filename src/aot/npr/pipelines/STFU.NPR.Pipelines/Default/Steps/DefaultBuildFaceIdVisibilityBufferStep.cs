@@ -18,6 +18,11 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
     private int[] _tileTriangleIndices = [];
     private long[] _tilePixelTests = [];
     private long[] _tilePixelWrites = [];
+    private int _lastWidth;
+    private int _lastHeight;
+    private int _lastTileCountX;
+    private int _lastTileCountY;
+    private int _lastTileCount;
 
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
@@ -63,6 +68,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         var tilesPerRow = RasterMath.TilesPerAxis(buffer.Width, tileSize);
         var tileRows = RasterMath.TilesPerAxis(buffer.Height, tileSize);
         var tileCount = tilesPerRow * tileRows;
+        EnsureTileLayout(buffer.Width, buffer.Height, tileSize);
         var rangeCount = DeterministicParallel.GetRangeCount(triangleCount, context.WorkerCount, 64);
 
         if (context.WorkerCount <= 1 || triangleCount < 256 || tileCount <= 1 || rangeCount <= 1)
@@ -290,6 +296,9 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", maxRefsPerTile);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", totalPixelTests);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", totalPixelWrites);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheWidth", _lastWidth);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheHeight", _lastHeight);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheTiles", _lastTileCount);
     }
 
     private DefaultFaceIdVisibilityBuffer RentBuffer(int width, int height, int faceCount)
@@ -303,6 +312,42 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         }
 
         return _buffer;
+    }
+
+    private void EnsureTileLayout(int width, int height, int tileSize)
+    {
+        var tileCountX = RasterMath.TilesPerAxis(width, tileSize);
+        var tileCountY = RasterMath.TilesPerAxis(height, tileSize);
+        var tileCount = tileCountX * tileCountY;
+
+        if (_lastWidth == width &&
+            _lastHeight == height &&
+            _lastTileCount == tileCount)
+        {
+            return;
+        }
+
+        _lastWidth = width;
+        _lastHeight = height;
+        _lastTileCountX = tileCountX;
+        _lastTileCountY = tileCountY;
+        _lastTileCount = tileCount;
+        EnsureTileScratchCapacity(tileCount);
+    }
+
+    private void EnsureTileScratchCapacity(int tileCount)
+    {
+        if (_tileCounts.Length < tileCount)
+        {
+            _tileCounts = new int[tileCount];
+            _tileOffsets = new int[tileCount];
+        }
+
+        if (_tilePixelTests.Length < tileCount)
+        {
+            _tilePixelTests = new long[tileCount];
+            _tilePixelWrites = new long[tileCount];
+        }
     }
 
     private void EnsureScratchCapacity(int triangleCount, int rangeCount, int tileCount)

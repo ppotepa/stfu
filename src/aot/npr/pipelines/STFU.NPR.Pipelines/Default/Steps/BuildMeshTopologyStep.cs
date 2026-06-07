@@ -122,6 +122,9 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("BuildMeshTopologyStep.perTriangleEdges", edgeCapacity);
         context.Counters.Set("BuildMeshTopologyStep.sharedEdges", 0);
         context.Counters.Set("BuildMeshTopologyStep.boundaryEdges", edgeCapacity);
+        context.Counters.Set("BuildMeshTopologyStep.topologyEdges", edgeCapacity);
+        context.Counters.Set("BuildMeshTopologyStep.projectedEdges", edgeCapacity);
+        context.Counters.Set("BuildMeshTopologyStep.cacheMode", 0);
         context.Counters.Set("BuildMeshTopologyStep.denseMode", 1);
     }
 
@@ -196,6 +199,9 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("BuildMeshTopologyStep.perTriangleEdges", edgeCount);
         context.Counters.Set("BuildMeshTopologyStep.sharedEdges", 0);
         context.Counters.Set("BuildMeshTopologyStep.boundaryEdges", edgeCount);
+        context.Counters.Set("BuildMeshTopologyStep.topologyEdges", edgeCount);
+        context.Counters.Set("BuildMeshTopologyStep.projectedEdges", edgeCount);
+        context.Counters.Set("BuildMeshTopologyStep.cacheMode", 0);
         context.Counters.Set("BuildMeshTopologyStep.denseMode", 0);
     }
 
@@ -325,6 +331,9 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("BuildMeshTopologyStep.perTriangleEdges", triangles.Count * 3);
         context.Counters.Set("BuildMeshTopologyStep.sharedEdges", addedEdges);
         context.Counters.Set("BuildMeshTopologyStep.boundaryEdges", boundaryEdges);
+        context.Counters.Set("BuildMeshTopologyStep.topologyEdges", addedEdges);
+        context.Counters.Set("BuildMeshTopologyStep.projectedEdges", addedEdges);
+        context.Counters.Set("BuildMeshTopologyStep.cacheMode", 1);
         context.Counters.Set("BuildMeshTopologyStep.denseMode", 0);
         context.Counters.Set("BuildMeshTopologyStep.cached", 1);
         context.Counters.Set("BuildMeshTopologyStep.cachedCandidateEdges", totalCachedEdges);
@@ -426,30 +435,45 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("BuildMeshTopologyStep.perTriangleEdges", triangleCount * 3);
         context.Counters.Set("BuildMeshTopologyStep.sharedEdges", edges.Count);
         context.Counters.Set("BuildMeshTopologyStep.boundaryEdges", boundaryEdges);
+        context.Counters.Set("BuildMeshTopologyStep.topologyEdges", edges.Count);
+        context.Counters.Set("BuildMeshTopologyStep.projectedEdges", edges.Count);
+        context.Counters.Set("BuildMeshTopologyStep.cacheMode", 0);
         context.Counters.Set("BuildMeshTopologyStep.denseMode", 0);
     }
 
     private void EnsureScratchCapacity(int edgeCapacity)
     {
+        var capacity = GrowCapacity(edgeCapacity);
         if (_topologyEdgeScratch.Length < edgeCapacity)
         {
-            _topologyEdgeScratch = new TopologyEdge[edgeCapacity];
+            _topologyEdgeScratch = new TopologyEdge[capacity];
         }
 
         if (_projectedEdgeScratch.Length < edgeCapacity)
         {
-            _projectedEdgeScratch = new ProjectedEdge[edgeCapacity];
+            _projectedEdgeScratch = new ProjectedEdge[capacity];
         }
 
         if (_edgeFlags.Length < edgeCapacity)
         {
-            _edgeFlags = new byte[edgeCapacity];
+            _edgeFlags = new byte[capacity];
         }
 
         if (_edgeOffsets.Length < edgeCapacity)
         {
-            _edgeOffsets = new int[edgeCapacity];
+            _edgeOffsets = new int[capacity];
         }
+    }
+
+    private static int GrowCapacity(int required)
+    {
+        var capacity = 4;
+        while (capacity < required)
+        {
+            capacity = checked(capacity + (capacity >> 1));
+        }
+
+        return capacity;
     }
 
     private void TryBuildPerTriangleEdge(

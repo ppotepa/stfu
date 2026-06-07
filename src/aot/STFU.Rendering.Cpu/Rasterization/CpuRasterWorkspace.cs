@@ -33,6 +33,8 @@ public sealed class CpuRasterWorkspace
 
     private readonly Dictionary<TileCacheKey, List<CpuTile>> _tileCache = new();
 
+    public CpuTileLayout TileLayout { get; private set; } = CpuTileLayout.Empty;
+
     public void ResetForFrame()
     {
         Segments.Clear();
@@ -89,6 +91,20 @@ public sealed class CpuRasterWorkspace
         }
 
         return SourceYMap;
+    }
+
+    public CpuTileLayout GetOrCreateTileLayout(int width, int height, int tileSize)
+    {
+        tileSize = RasterMath.ClampTileSize(tileSize);
+        if (TileLayout.Width == width &&
+            TileLayout.Height == height &&
+            TileLayout.TileSize == tileSize)
+        {
+            return TileLayout;
+        }
+
+        TileLayout = CpuTileLayout.Create(width, height, tileSize);
+        return TileLayout;
     }
 
     public IReadOnlyList<CpuTile> GetTiles(int width, int height, int tileSize)
