@@ -29,6 +29,7 @@ public sealed class EngineViewportControl : Control
     private bool _loggedPanInput;
     private bool _loggedFovInput;
     private bool _invalidateQueued;
+    private bool _presentQueued;
     private readonly DispatcherTimer _renderTimer;
 
     public EngineViewportControl(StfuEngine engine)
@@ -53,7 +54,7 @@ public sealed class EngineViewportControl : Control
         _renderBridge = new ViewportRenderBridge(
             session,
             _bitmapPresenter,
-            RequestInvalidate,
+            RequestPresent,
             directXPresenter);
 
         ApplyStartupOptions(startupOptions);
@@ -152,18 +153,37 @@ public sealed class EngineViewportControl : Control
         QueueInvalidate();
     }
 
-    private void QueueInvalidate()
+    private void RequestPresent()
     {
-        if (_invalidateQueued)
+        QueueInvalidate(isRenderCompletion: true);
+    }
+
+    private void QueueInvalidate(bool isRenderCompletion = false)
+    {
+        if (!isRenderCompletion && _invalidateQueued)
         {
             return;
         }
 
-        _invalidateQueued = true;
+        if (isRenderCompletion && _presentQueued)
+        {
+            return;
+        }
+
+        if (isRenderCompletion)
+        {
+            _presentQueued = true;
+        }
+        else
+        {
+            _invalidateQueued = true;
+        }
+
         Dispatcher.UIThread.Post(
             () =>
             {
                 _invalidateQueued = false;
+                _presentQueued = false;
                 InvalidateVisual();
             },
             DispatcherPriority.Render);
