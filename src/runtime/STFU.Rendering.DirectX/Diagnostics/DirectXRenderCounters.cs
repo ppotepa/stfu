@@ -29,4 +29,9 @@ public sealed class DirectXRenderCounters
     public int DebugOverlayPaths { get; set; }
 
     public long UploadedBytes { get; set; }
+
+    public long StrokeInstanceCapacity { get; set; }
+
+    public double StrokeInstanceUploadReuseRatio =>
+        StrokeInstanceUploads <= 0 ? 1d : 1d - (double)StrokeInstanceBufferRecreates / StrokeInstanceUploads;
 }

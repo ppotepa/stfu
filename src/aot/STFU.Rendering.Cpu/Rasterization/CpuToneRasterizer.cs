@@ -37,27 +37,6 @@ public sealed class CpuToneRasterizer
         var sourceYMap = sameSize ? null : GetSourceYMap(target.Height, tone.Height, workspace);
         var alphaLut = GetAlphaLut(opacity);
 
-        Action<int> drawRow = y =>
-        {
-            var sourceY = sameSize ? y : sourceYMap![y];
-            for (var x = 0; x < target.Width; x++)
-            {
-                var sourceX = sameSize ? x : sourceXMap![x];
-                var si = PixelMemoryMath.Bgra32LinearIndex(sourceX, sourceY, tone.Width) * PixelMemoryMath.Bgra32BytesPerPixel;
-
-                var alpha = alphaLut[tone.Rgba[si + 3]];
-                if (alpha == 0)
-                {
-                    continue;
-                }
-
-                var premulR = ColorBlendMath.Premultiply(tone.Rgba[si], alpha);
-                var premulG = ColorBlendMath.Premultiply(tone.Rgba[si + 1], alpha);
-                var premulB = ColorBlendMath.Premultiply(tone.Rgba[si + 2], alpha);
-                CpuPixelBlender.BlendSourceOverBgraPremultiplied(target, x, y, premulB, premulG, premulR, alpha);
-            }
-        };
-
         if (parallel)
         {
             DeterministicParallel.ForRanges(
@@ -68,25 +47,96 @@ public sealed class CpuToneRasterizer
                 (start, end, _, token) =>
                 {
                     token.ThrowIfCancellationRequested();
-                    for (var y = start; y < end; y++)
+                    if (sameSize)
                     {
-                        if ((y & 0x3FF) == 0)
-                        {
-                            token.ThrowIfCancellationRequested();
-                        }
-
-                        drawRow(y);
+                        DrawSameSizeRows(target, tone, alphaLut, start, end, token);
+                    }
+                    else
+                    {
+                        DrawMappedRows(target, tone, alphaLut, sourceXMap!, sourceYMap!, start, end, token);
                     }
                 },
                 minItemsPerRange: 16);
         }
+        else if (sameSize)
+        {
+            DrawSameSizeRows(target, tone, alphaLut, 0, target.Height, cancellationToken);
+        }
         else
         {
-            for (var y = 0; y < target.Height; y++)
+            DrawMappedRows(target, tone, alphaLut, sourceXMap!, sourceYMap!, 0, target.Height, cancellationToken);
+        }
+    }
+
+
+    private static void DrawSameSizeRows(
+        PixelSurface target,
+        NprToneSurface2D tone,
+        byte[] alphaLut,
+        int startY,
+        int endY,
+        CancellationToken cancellationToken)
+    {
+        for (var y = startY; y < endY; y++)
+        {
+            if ((y & 0x3FF) == 0)
             {
-                drawRow(y);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            var rowBase = PixelMemoryMath.Bgra32LinearIndex(0, y, tone.Width) * PixelMemoryMath.Bgra32BytesPerPixel;
+            for (var x = 0; x < target.Width; x++)
+            {
+                BlendTonePixel(target, tone.Rgba, alphaLut, rowBase + x * PixelMemoryMath.Bgra32BytesPerPixel, x, y);
             }
         }
+    }
+
+    private static void DrawMappedRows(
+        PixelSurface target,
+        NprToneSurface2D tone,
+        byte[] alphaLut,
+        int[] sourceXMap,
+        int[] sourceYMap,
+        int startY,
+        int endY,
+        CancellationToken cancellationToken)
+    {
+        for (var y = startY; y < endY; y++)
+        {
+            if ((y & 0x3FF) == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            var sourceY = sourceYMap[y];
+            for (var x = 0; x < target.Width; x++)
+            {
+                var sourceX = sourceXMap[x];
+                var sourceIndex = PixelMemoryMath.Bgra32LinearIndex(sourceX, sourceY, tone.Width) * PixelMemoryMath.Bgra32BytesPerPixel;
+                BlendTonePixel(target, tone.Rgba, alphaLut, sourceIndex, x, y);
+            }
+        }
+    }
+
+    private static void BlendTonePixel(
+        PixelSurface target,
+        byte[] rgba,
+        byte[] alphaLut,
+        int sourceIndex,
+        int x,
+        int y)
+    {
+        var alpha = alphaLut[rgba[sourceIndex + 3]];
+        if (alpha == 0)
+        {
+            return;
+        }
+
+        var premulR = ColorBlendMath.Premultiply(rgba[sourceIndex], alpha);
+        var premulG = ColorBlendMath.Premultiply(rgba[sourceIndex + 1], alpha);
+        var premulB = ColorBlendMath.Premultiply(rgba[sourceIndex + 2], alpha);
+        CpuPixelBlender.BlendSourceOverBgraPremultiplied(target, x, y, premulB, premulG, premulR, alpha);
     }
 
     private static int[] GetSourceXMap(int targetWidth, int sourceWidth, CpuRasterWorkspace workspace)

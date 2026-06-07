@@ -91,23 +91,16 @@ public sealed class CpuStrokeRasterizer
 
         if (!parallel || workerCount <= 1 || rangeCount <= 1)
         {
-            var tileSegmentIndices = workspace.RentSequentialTileSegmentIndices(segments.Count);
-            for (var i = 0; i < tileCount; i++)
-            {
-                var tileSegmentCount = CollectTileSegmentsSequential(
-                    segments,
-                    tiles[i],
-                    tileSegmentIndices);
-                DrawTile(
-                    target,
-                    tiles[i],
-                    segments,
-                    tileSegmentIndices,
-                    0,
-                    tileSegmentCount,
-                    quality);
-            }
-
+            DrawSegmentsSequentialWithTileBins(
+                target,
+                segments,
+                quality,
+                workspace,
+                tileSize,
+                tilesPerRow,
+                tileRows,
+                tileCount,
+                tiles);
             return;
         }
 
@@ -269,27 +262,118 @@ public sealed class CpuStrokeRasterizer
             minItemsPerRange: 1);
     }
 
-    private static int CollectTileSegmentsSequential(
+    private static void DrawSegmentsSequentialWithTileBins(
+        PixelSurface target,
         IReadOnlyList<CpuStrokeSegment> segments,
-        CpuTile tile,
-        int[] output)
+        NprQualityProfile quality,
+        CpuRasterWorkspace workspace,
+        int tileSize,
+        int tilesPerRow,
+        int tileRows,
+        int tileCount,
+        IReadOnlyList<CpuTile> tiles)
     {
-        var count = 0;
+        workspace.EnsureTileBinningCapacity(1, tileCount, segments.Count);
+        Array.Clear(workspace.TileCounts, 0, tileCount);
+        Array.Clear(workspace.TileOffsets, 0, tileCount);
+
         for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
         {
-            var segment = segments[segmentIndex];
-            if (segment.MaxX < tile.X ||
-                segment.MaxY < tile.Y ||
-                segment.MinX >= tile.Right ||
-                segment.MinY >= tile.Bottom)
+            if (!TryGetSegmentTileRange(
+                    target,
+                    segments[segmentIndex],
+                    tileSize,
+                    tilesPerRow,
+                    tileRows,
+                    out var minTileX,
+                    out var maxTileX,
+                    out var minTileY,
+                    out var maxTileY))
             {
                 continue;
             }
 
-            output[count++] = segmentIndex;
+            for (var ty = minTileY; ty <= maxTileY; ty++)
+            {
+                var tileRowBase = ty * tilesPerRow;
+                for (var tx = minTileX; tx <= maxTileX; tx++)
+                {
+                    workspace.TileCounts[tileRowBase + tx]++;
+                }
+            }
         }
 
-        return count;
+        var totalRefs = PrefixSums.ExclusiveFromCounts(
+            workspace.TileCounts.AsSpan(0, tileCount),
+            workspace.TileOffsets.AsSpan(0, tileCount));
+        workspace.EnsureTileBinningCapacity(1, tileCount, totalRefs);
+        Array.Copy(workspace.TileOffsets, workspace.TileWriteCursors, tileCount);
+
+        for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
+        {
+            if (!TryGetSegmentTileRange(
+                    target,
+                    segments[segmentIndex],
+                    tileSize,
+                    tilesPerRow,
+                    tileRows,
+                    out var minTileX,
+                    out var maxTileX,
+                    out var minTileY,
+                    out var maxTileY))
+            {
+                continue;
+            }
+
+            for (var ty = minTileY; ty <= maxTileY; ty++)
+            {
+                var tileRowBase = ty * tilesPerRow;
+                for (var tx = minTileX; tx <= maxTileX; tx++)
+                {
+                    var tileIndex = tileRowBase + tx;
+                    workspace.TileSegmentIndices[workspace.TileWriteCursors[tileIndex]++] = segmentIndex;
+                }
+            }
+        }
+
+        for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+        {
+            DrawTile(
+                target,
+                tiles[tileIndex],
+                segments,
+                workspace.TileSegmentIndices,
+                workspace.TileOffsets[tileIndex],
+                workspace.TileCounts[tileIndex],
+                quality);
+        }
+    }
+
+    private static bool TryGetSegmentTileRange(
+        PixelSurface target,
+        CpuStrokeSegment segment,
+        int tileSize,
+        int tilesPerRow,
+        int tileRows,
+        out int minTileX,
+        out int maxTileX,
+        out int minTileY,
+        out int maxTileY)
+    {
+        minTileX = maxTileX = minTileY = maxTileY = 0;
+        if (segment.MaxX < 0 ||
+            segment.MaxY < 0 ||
+            segment.MinX >= target.Width ||
+            segment.MinY >= target.Height)
+        {
+            return false;
+        }
+
+        minTileX = RasterMath.TileIndexFromCoordinate(segment.MinX, tileSize, tilesPerRow);
+        maxTileX = RasterMath.TileIndexFromCoordinate(segment.MaxX, tileSize, tilesPerRow);
+        minTileY = RasterMath.TileIndexFromCoordinate(segment.MinY, tileSize, tileRows);
+        maxTileY = RasterMath.TileIndexFromCoordinate(segment.MaxY, tileSize, tileRows);
+        return true;
     }
 
     private static CpuTile CreateTile(int index, int tilesPerRow, int tileSize, int targetWidth, int targetHeight)

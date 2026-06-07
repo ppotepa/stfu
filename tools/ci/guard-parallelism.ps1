@@ -38,6 +38,20 @@ if ($LASTEXITCODE -gt 1) {
     exit $LASTEXITCODE
 }
 
+$unexpectedThreadAudit = @(
+    $threadAudit | Where-Object {
+        $_ -and
+        ($_ -notmatch 'src[/\]aot[/\]STFU\.Parallelism[/\]') -and
+        ($_ -notmatch 'tests[/\]') -and
+        ($_ -notmatch 'tools[/\]')
+    }
+)
+
+if ($unexpectedThreadAudit.Count -gt 0) {
+    Write-Error ("Unexpected raw thread/task usage in renderer hot paths:`n" + ($unexpectedThreadAudit -join "`n"))
+    exit 1
+}
+
 if (-not [string]::IsNullOrWhiteSpace($threadAudit)) {
     Write-Host ""
     Write-Host "Thread/task audit:"

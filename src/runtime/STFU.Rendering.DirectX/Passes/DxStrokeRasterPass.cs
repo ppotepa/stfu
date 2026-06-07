@@ -122,6 +122,7 @@ public sealed class DxStrokeRasterPass : IDisposable
             {
                 var uploadWatch = Stopwatch.StartNew();
                 var bufferRecreated = EnsureInstanceBufferCapacity(instances.Count);
+                Counters.StrokeInstanceCapacity = _instanceCapacity;
                 UploadInstances(instances);
                 var uploadedBytes = instances.Count * DxStrokeInstance.SizeInBytes;
                 Counters.StrokeInstanceUploads++;
@@ -250,7 +251,7 @@ public sealed class DxStrokeRasterPass : IDisposable
         var capacity = 4;
         while (capacity < required)
         {
-            capacity <<= 1;
+            capacity = checked(capacity + Math.Max(capacity >> 1, 1));
         }
 
         return capacity;
