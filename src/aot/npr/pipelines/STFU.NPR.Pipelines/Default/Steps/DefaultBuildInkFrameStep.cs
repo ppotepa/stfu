@@ -11,14 +11,16 @@ namespace STFU.NPR.Pipeline.Default.Steps;
 
 public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 {
-    [ThreadStatic]
-    private static InkPathScratch? s_threadScratch;
-
     private readonly InkPathScratch _sequentialScratch = new();
     private StyledPathInfo[] _styledPaths = [];
     private int[] _pathSegmentCounts = [];
     private int[] _pathSegmentOffsets = [];
+    private int[] _pathEmitOffsets = [];
     private StrokeSegment2D[] _segmentScratch = [];
+    private byte[] _segmentEmitFlags = [];
+    private InkSegmentPlan[] _segmentPlans = [];
+    private Point2D[] _pathPrecomputedStartPoints = [];
+    private Point2D[] _pathPrecomputedEndPoints = [];
     private int[] _silhouetteSegmentIndices = [];
     private int[] _featureSegmentIndices = [];
     private int[] _boundarySegmentIndices = [];
@@ -47,6 +49,12 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearSilhouette", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearFeature", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.emitCandidateCount", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.emitFlagCapacity", _segmentEmitFlags.Length);
+            context.Counters.Set("DefaultBuildInkFrameStep.precomputedPointCapacity", _pathPrecomputedStartPoints.Length);
+            _previousSilhouetteIndexCount = 0;
+            _previousFeatureIndexCount = 0;
+            _previousBoundaryIndexCount = 0;
             return;
         }
 
@@ -56,12 +64,16 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         var featureStyle = CreateLineStyle(context, DefaultLineKind.Feature);
         var boundaryStyle = CreateLineStyle(context, DefaultLineKind.Boundary);
 
+        var styleName = drawing.StrokeStyle.ToString();
+        var passes = StrokeHumanizationMath.PassCount(styleName);
+
         var silhouettePathCount = 0;
         var featurePathCount = 0;
         var boundaryPathCount = 0;
         var silhouetteSegmentCount = 0;
         var featureSegmentCount = 0;
         var boundarySegmentCount = 0;
+        var emitOffset = 0;
 
         for (var pathIndex = 0; pathIndex < pathCount; pathIndex++)
         {
@@ -81,9 +93,17 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             };
 
             var seed = context.Settings.Seed + path.StableId * 17;
-            var passes = StrokeHumanizationMath.PassCount(drawing.StrokeStyle.ToString());
-            var count = CountStyledPathSegments(path, drawing, seed, drawing.StrokeStyle);
-            _styledPaths[pathIndex] = new StyledPathInfo(path, lineStyle, layerIndex, passes, drawing, seed, drawing.StrokeStyle);
+            var pathEmitOffset = emitOffset;
+            var count = CountStyledPathSegments(
+                path,
+                drawing,
+                seed,
+                styleName,
+                passes,
+                ref emitOffset,
+                _sequentialScratch);
+            _styledPaths[pathIndex] = new StyledPathInfo(path, lineStyle, layerIndex, passes, drawing, seed, styleName, drawing.StrokeStyle);
+            _pathEmitOffsets[pathIndex] = pathEmitOffset;
             _pathSegmentCounts[pathIndex] = count;
 
             switch (layerIndex)
@@ -132,8 +152,10 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                             continue;
                         }
 
-                        var scratch = s_threadScratch ??= new InkPathScratch();
-                        var written = WriteStyledPathSegments(info, _segmentScratch.AsSpan(offset, count), scratch);
+                        var written = WriteStyledPathSegments(
+                            info,
+                            _segmentScratch.AsSpan(offset, count),
+                            _pathEmitOffsets[pathIndex]);
                         if (written != count)
                         {
                             throw new InvalidOperationException($"Styled path write count mismatch for path {pathIndex}: expected {count}, actual {written}.");
@@ -154,12 +176,30 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                     continue;
                 }
 
-                var written = WriteStyledPathSegments(info, _segmentScratch.AsSpan(offset, count), _sequentialScratch);
+                var written = WriteStyledPathSegments(
+                    info,
+                    _segmentScratch.AsSpan(offset, count),
+                    _pathEmitOffsets[pathIndex]);
                 if (written != count)
                 {
                     throw new InvalidOperationException($"Styled path write count mismatch for path {pathIndex}: expected {count}, actual {written}.");
                 }
             }
+        }
+
+        if (_previousSilhouetteIndexCount > 0)
+        {
+            Array.Clear(_silhouetteSegmentIndices, 0, _previousSilhouetteIndexCount);
+        }
+
+        if (_previousFeatureIndexCount > 0)
+        {
+            Array.Clear(_featureSegmentIndices, 0, _previousFeatureIndexCount);
+        }
+
+        if (_previousBoundaryIndexCount > 0)
+        {
+            Array.Clear(_boundarySegmentIndices, 0, _previousBoundaryIndexCount);
         }
 
         BuildLayerIndices(pathCount);
@@ -192,36 +232,52 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearSilhouette", _previousSilhouetteIndexCount);
         context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearFeature", _previousFeatureIndexCount);
         context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", _previousBoundaryIndexCount);
+        context.Counters.Set("DefaultBuildInkFrameStep.emitCandidateCount", emitOffset);
+        context.Counters.Set("DefaultBuildInkFrameStep.emitFlagCapacity", _segmentEmitFlags.Length);
+        context.Counters.Set("DefaultBuildInkFrameStep.precomputedPointCapacity", _pathPrecomputedStartPoints.Length);
     }
 
     private void EnsureCapacity(int pathCount)
     {
+        var capacity = GrowCapacity(pathCount);
         if (_styledPaths.Length < pathCount)
         {
-            _styledPaths = new StyledPathInfo[pathCount];
+            _styledPaths = new StyledPathInfo[capacity];
         }
 
-        if (_pathSegmentCounts.Length < pathCount)
+        if (_pathSegmentCounts.Length < pathCount || _pathEmitOffsets.Length < pathCount)
         {
-            _pathSegmentCounts = new int[pathCount];
-            _pathSegmentOffsets = new int[pathCount];
+            _pathSegmentCounts = new int[capacity];
+            _pathSegmentOffsets = new int[capacity];
+            _pathEmitOffsets = new int[capacity];
         }
-
     }
 
     private void EnsureSegmentCapacity(int totalSegments)
     {
+        var capacity = GrowCapacity(totalSegments);
         if (_segmentScratch.Length < totalSegments)
         {
-            _segmentScratch = new StrokeSegment2D[totalSegments];
+            _segmentScratch = new StrokeSegment2D[capacity];
         }
 
         if (_silhouetteSegmentIndices.Length < totalSegments)
         {
-            _silhouetteSegmentIndices = new int[totalSegments];
-            _featureSegmentIndices = new int[totalSegments];
-            _boundarySegmentIndices = new int[totalSegments];
+            _silhouetteSegmentIndices = new int[capacity];
+            _featureSegmentIndices = new int[capacity];
+            _boundarySegmentIndices = new int[capacity];
         }
+    }
+
+    private static int GrowCapacity(int required)
+    {
+        var capacity = 4;
+        while (capacity < required)
+        {
+            capacity = checked(capacity + (capacity >> 1));
+        }
+
+        return capacity;
     }
 
     private void BuildLayerIndices(int pathCount)
@@ -274,40 +330,74 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         _previousBoundaryIndexCount = boundaryCursor;
     }
 
-    private static int CountStyledPathSegments(
+    private int CountStyledPathSegments(
         in DefaultProjectedPath path,
         DefaultDrawingSettings drawing,
         int seed,
-        DefaultStrokeStyle style)
+        string styleName,
+        int passes,
+        ref int emitOffset,
+        InkPathScratch scratch)
     {
-        if (path.Points.Count < 2)
+        var pointCount = path.Points.Count;
+        if (pointCount < 2)
         {
             return 0;
         }
 
-        var styleName = style.ToString();
-        var passes = StrokeHumanizationMath.PassCount(styleName);
+        var pathEmitOffset = emitOffset;
+        var candidateCapacity = (pointCount - 1) * passes;
+        EnsureEmitCapacity(emitOffset + candidateCapacity);
+
         var count = 0;
+        scratch.EnsureCapacity(pointCount);
+        var startPoints = scratch.StartPoints.AsSpan(0, pointCount);
+        var endPoints = scratch.EndPoints.AsSpan(0, pointCount);
+
         for (var pass = 0; pass < passes; pass++)
         {
-            for (var i = 1; i < path.Points.Count; i++)
+            var passStyle = StrokeHumanizationMath.Pass(styleName, path.Type == DefaultLineKind.Feature ? drawing.Jitter * 0.8f : drawing.Jitter, pass);
+            var jitter = passStyle.Jitter;
+
+            BuildJitteredPoints(path.Points, startPoints, jitter, seed + pass * 11, drawing.EnableFastNoise);
+            BuildJitteredPoints(path.Points, endPoints, jitter, seed + pass * 11 + 3, drawing.EnableFastNoise);
+
+            for (var i = 1; i < pointCount; i++)
             {
-                if (StrokeHumanizationMath.ShouldSkipSegment(styleName, i, seed, pass, drawing.EnableFastNoise))
+                var shouldKeep = !StrokeHumanizationMath.ShouldSkipSegment(styleName, i, seed, pass, drawing.EnableFastNoise);
+                _segmentEmitFlags[pathEmitOffset] = shouldKeep ? (byte)1 : (byte)0;
+                _pathPrecomputedStartPoints[pathEmitOffset] = startPoints[i - 1];
+                _pathPrecomputedEndPoints[pathEmitOffset] = endPoints[i];
+                if (shouldKeep)
                 {
-                    continue;
+                    count++;
                 }
 
-                count++;
+                pathEmitOffset++;
             }
         }
 
+        emitOffset = pathEmitOffset;
         return count;
     }
 
-    private static int WriteStyledPathSegments(
+    private void EnsureEmitCapacity(int required)
+    {
+        if (_segmentEmitFlags.Length >= required)
+        {
+            return;
+        }
+
+        var capacity = GrowCapacity(required);
+        Array.Resize(ref _segmentEmitFlags, capacity);
+        Array.Resize(ref _pathPrecomputedStartPoints, capacity);
+        Array.Resize(ref _pathPrecomputedEndPoints, capacity);
+    }
+
+    private int WriteStyledPathSegments(
         in StyledPathInfo info,
         Span<StrokeSegment2D> destination,
-        InkPathScratch scratch)
+        int pathEmitOffset)
     {
         var path = info.Path;
         if (path.Points.Count < 2)
@@ -315,37 +405,29 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             return 0;
         }
 
+        var pointCount = path.Points.Count;
         var drawing = info.Drawing;
-        var style = drawing.StrokeStyle;
-        var styleName = style.ToString();
-        var comic = style == DefaultStrokeStyle.ComicInk;
+        var styleName = info.StyleName;
+        var comic = info.StrokeStyle == DefaultStrokeStyle.ComicInk;
         var baseJitter = drawing.Jitter * (path.Type == DefaultLineKind.Feature ? 0.8f : 1f);
         var pressure = comic ? NumericMath.AtLeast((double)drawing.Pressure, 0.54d) : drawing.Pressure;
         var written = 0;
-        var pointCount = path.Points.Count;
-        scratch.EnsureCapacity(pointCount);
-        var startPoints = scratch.StartPoints.AsSpan(0, pointCount);
-        var endPoints = scratch.EndPoints.AsSpan(0, pointCount);
+        var candidateOffset = pathEmitOffset;
 
         for (var pass = 0; pass < info.Passes; pass++)
         {
             var passStyle = StrokeHumanizationMath.Pass(styleName, baseJitter, pass);
             var alpha = passStyle.Alpha;
-            var passJitter = passStyle.Jitter;
             var widthMultiplier = passStyle.WidthMultiplier;
-
-            BuildJitteredPoints(path.Points, startPoints, passJitter, info.Seed + pass * 11, drawing.EnableFastNoise);
-            BuildJitteredPoints(path.Points, endPoints, passJitter, info.Seed + pass * 11 + 3, drawing.EnableFastNoise);
 
             for (var i = 1; i < pointCount; i++)
             {
-                if (StrokeHumanizationMath.ShouldSkipSegment(styleName, i, info.Seed, pass, drawing.EnableFastNoise))
+                if (_segmentEmitFlags[candidateOffset] == 0)
                 {
+                    candidateOffset++;
                     continue;
                 }
 
-                var start = startPoints[i - 1];
-                var end = endPoints[i];
                 var t = i / (double)NumericMath.AtLeast(pointCount - 1, 1);
                 var pressureNoise = StrokeHumanizationMath.PressureNoise(pressure, t, info.Seed, pass, comic, drawing.EnableFastNoise);
                 var taper = StrokeHumanizationMath.Taper(t, comic);
@@ -353,8 +435,8 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 
                 var segmentStyle = new StrokeStyle2D((float)lineWidth, NumericMath.Clamp01(alpha * info.LineStyle.BaseOpacity), info.LineStyle.StrokeColor);
                 destination[written++] = new StrokeSegment2D(
-                    start,
-                    end,
+                    _pathPrecomputedStartPoints[candidateOffset],
+                    _pathPrecomputedEndPoints[candidateOffset],
                     segmentStyle,
                     new StrokeMetadata(
                         HashMath.StableSequence31(path.StableId, pass, i),
@@ -367,6 +449,8 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                         info.LineStyle.StyleId,
                         null,
                         info.LineStyle.LayerOrder));
+
+                candidateOffset++;
             }
         }
 
@@ -529,6 +613,7 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         int Passes,
         DefaultDrawingSettings Drawing,
         int Seed,
+        string StyleName,
         DefaultStrokeStyle StrokeStyle)
     {
     }

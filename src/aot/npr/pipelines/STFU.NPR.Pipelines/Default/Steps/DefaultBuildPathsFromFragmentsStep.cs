@@ -24,12 +24,25 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         var inputFragmentCount = context.Graph.DefaultFragments.Count;
         context.Graph.DefaultPaths.EnsureCapacity(inputFragmentCount);
 
+        if (inputFragmentCount == 0)
+        {
+            context.Counters.Set("DefaultBuildPathsFromFragmentsStep.inputFragments", 0);
+            context.Counters.Set("DefaultBuildPathsFromFragmentsStep.silhouetteFragments", 0);
+            context.Counters.Set("DefaultBuildPathsFromFragmentsStep.featureFragments", 0);
+            context.Counters.Set("DefaultBuildPathsFromFragmentsStep.boundaryFragments", 0);
+            context.Counters.Set("DefaultBuildPathsFromFragmentsStep.pathsOutput", 0);
+            context.Counters.Set("DefaultBuildPathsFromFragmentsStep.parallelBuild", 0);
+            context.Counters.Set("DefaultBuildPathsFromFragmentsStep.expectedKindCapacity", 0);
+            return;
+        }
+
         _silhouette.Clear();
         _feature.Clear();
         _boundary.Clear();
-        _silhouette.EnsureCapacity(inputFragmentCount);
-        _feature.EnsureCapacity(inputFragmentCount);
-        _boundary.EnsureCapacity(inputFragmentCount);
+        var expectedKindCapacity = Math.Max(4, inputFragmentCount / 3);
+        _silhouette.EnsureCapacity(expectedKindCapacity);
+        _feature.EnsureCapacity(expectedKindCapacity);
+        _boundary.EnsureCapacity(expectedKindCapacity);
 
         foreach (var fragment in context.Graph.DefaultFragments)
         {
@@ -50,6 +63,8 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         List<DefaultProjectedPath>? silhouettePaths = null;
         List<DefaultProjectedPath>? featurePaths = null;
         List<DefaultProjectedPath>? boundaryPaths = null;
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.expectedKindCapacity", expectedKindCapacity);
+
         var parallel = context.WorkerCount > 1 && context.Graph.DefaultFragments.Count >= 512;
 
         if (parallel)
@@ -67,13 +82,19 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
                         switch (i)
                         {
                             case 0:
-                                silhouettePaths = BuildPaths(_silhouette, DefaultLineKind.Silhouette, _silhouetteScratch);
+                                silhouettePaths = _silhouette.Count == 0
+                                    ? []
+                                    : BuildPaths(_silhouette, DefaultLineKind.Silhouette, _silhouetteScratch);
                                 break;
                             case 1:
-                                featurePaths = BuildPaths(_feature, DefaultLineKind.Feature, _featureScratch);
+                                featurePaths = _feature.Count == 0
+                                    ? []
+                                    : BuildPaths(_feature, DefaultLineKind.Feature, _featureScratch);
                                 break;
                             default:
-                                boundaryPaths = BuildPaths(_boundary, DefaultLineKind.Boundary, _boundaryScratch);
+                                boundaryPaths = _boundary.Count == 0
+                                    ? []
+                                    : BuildPaths(_boundary, DefaultLineKind.Boundary, _boundaryScratch);
                                 break;
                         }
                     }
@@ -82,9 +103,15 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         }
         else
         {
-            silhouettePaths = BuildPaths(_silhouette, DefaultLineKind.Silhouette, _silhouetteScratch);
-            featurePaths = BuildPaths(_feature, DefaultLineKind.Feature, _featureScratch);
-            boundaryPaths = BuildPaths(_boundary, DefaultLineKind.Boundary, _boundaryScratch);
+            silhouettePaths = _silhouette.Count == 0
+                ? []
+                : BuildPaths(_silhouette, DefaultLineKind.Silhouette, _silhouetteScratch);
+            featurePaths = _feature.Count == 0
+                ? []
+                : BuildPaths(_feature, DefaultLineKind.Feature, _featureScratch);
+            boundaryPaths = _boundary.Count == 0
+                ? []
+                : BuildPaths(_boundary, DefaultLineKind.Boundary, _boundaryScratch);
         }
 
         AppendRange(context.Graph.DefaultPaths, silhouettePaths);
@@ -96,6 +123,7 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         context.Counters.Set("DefaultBuildPathsFromFragmentsStep.featureFragments", _feature.Count);
         context.Counters.Set("DefaultBuildPathsFromFragmentsStep.boundaryFragments", _boundary.Count);
         context.Counters.Set("DefaultBuildPathsFromFragmentsStep.pathsOutput", context.Graph.DefaultPaths.Count);
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.parallelBuild", parallel ? 1 : 0);
     }
 
     private static void AppendRange(List<DefaultProjectedPath> output, List<DefaultProjectedPath>? paths)

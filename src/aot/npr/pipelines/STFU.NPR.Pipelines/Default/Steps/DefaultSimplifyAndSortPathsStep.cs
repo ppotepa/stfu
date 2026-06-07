@@ -10,8 +10,6 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
 {
     private static readonly Func<Point2D, float> GetX = static point => point.X;
     private static readonly Func<Point2D, float> GetY = static point => point.Y;
-    private static readonly Func<DefaultProjectedPath, IReadOnlyList<Point2D>> GetPathPoints = static path => path.Points;
-
     private SimplifyPartitionBuffer[] _partitions = [];
     private readonly List<SimplifiedPathInfo> _merged = [];
 
@@ -26,12 +24,12 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
             context.Counters.Set("DefaultSimplifyAndSortPathsStep.inputPointCount", 0);
             context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPointCount", 0);
             context.Counters.Set("DefaultSimplifyAndSortPathsStep.simplifySkipped", 0);
+            context.Counters.Set("DefaultSimplifyAndSortPathsStep.rangeCount", 0);
+            context.Counters.Set("DefaultSimplifyAndSortPathsStep.mergedPathCount", 0);
             return;
         }
 
         var epsilon = context.Settings.DefaultDrawing.PathSimplify;
-        var inputPointCount = PathSimplificationMath.CountPoints(context.Graph.DefaultPaths, GetPathPoints);
-        var simplifySkipped = PathSimplificationMath.CountSimplifySkipped(context.Graph.DefaultPaths, epsilon, GetPathPoints);
         var rangeCount = DeterministicParallel.GetRangeCount(pathCount, context.WorkerCount, minItemsPerRange: 64);
         EnsurePartitionCapacity(rangeCount);
 
@@ -56,9 +54,14 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
 
         _merged.Clear();
         _merged.EnsureCapacity(pathCount);
+        var simplifySkipped = 0;
+        var inputPointCount = 0;
+        var outputPointCount = 0;
         for (var partitionIndex = 0; partitionIndex < rangeCount; partitionIndex++)
         {
             var partition = _partitions[partitionIndex];
+            simplifySkipped += partition.SimplifySkipped;
+            inputPointCount += partition.InputPointCount;
             _merged.AddRange(partition.Items);
         }
 
@@ -82,14 +85,18 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
         context.Graph.DefaultPaths.Clear();
         for (var i = 0; i < _merged.Count; i++)
         {
-            context.Graph.DefaultPaths.Add(_merged[i].Path with { PathIndex = i });
+            var path = _merged[i].Path with { PathIndex = i };
+            outputPointCount += path.Points.Count;
+            context.Graph.DefaultPaths.Add(path);
         }
 
         context.Counters.Set("DefaultSimplifyAndSortPathsStep.inputPathCount", pathCount);
         context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPathCount", context.Graph.DefaultPaths.Count);
         context.Counters.Set("DefaultSimplifyAndSortPathsStep.inputPointCount", inputPointCount);
-        context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPointCount", PathSimplificationMath.CountPoints(context.Graph.DefaultPaths, GetPathPoints));
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.outputPointCount", outputPointCount);
         context.Counters.Set("DefaultSimplifyAndSortPathsStep.simplifySkipped", simplifySkipped);
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.rangeCount", rangeCount);
+        context.Counters.Set("DefaultSimplifyAndSortPathsStep.mergedPathCount", _merged.Count);
     }
 
     private static void SimplifyRange(
@@ -104,6 +111,7 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
         for (var pathIndex = startInclusive; pathIndex < endExclusive; pathIndex++)
         {
             var path = paths[pathIndex];
+            partition.InputPointCount += path.Points.Count;
             var points = PathSimplificationMath.SimplifyRamerDouglasPeucker(path.Points, epsilon, GetX, GetY, partition.Scratch);
             if (points.Count <= 1)
             {
@@ -118,6 +126,11 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
                 Points = points,
                 Length = length
             };
+            if (ReferenceEquals(points, path.Points))
+            {
+                partition.SimplifySkipped++;
+            }
+            partition.OutputPointCount += points.Count;
             partition.Items.Add(new SimplifiedPathInfo(simplifiedPath, PathSimplificationMath.AverageY(points, GetY), pathIndex));
         }
     }
@@ -146,11 +159,17 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
         public List<SimplifiedPathInfo> Items { get; } = [];
 
         public PathSimplificationScratch Scratch { get; } = new();
+        public int SimplifySkipped;
+        public int InputPointCount;
+        public int OutputPointCount;
 
         public void Reset(int capacity)
         {
             Items.Clear();
             Items.EnsureCapacity(capacity);
+            SimplifySkipped = 0;
+            InputPointCount = 0;
+            OutputPointCount = 0;
         }
     }
 

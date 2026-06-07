@@ -25,11 +25,21 @@ public sealed class CpuRasterWorkspace
 
     public int[] TileSegmentIndices { get; private set; } = [];
 
+    public int[] SequentialTileSegmentIndices { get; private set; } = [];
+
     public List<CpuStrokeSegment> GridSegments { get; } = [];
 
     public int[] SourceXMap { get; private set; } = [];
 
     public int[] SourceYMap { get; private set; } = [];
+
+    public int[] ToneSourceXMap { get; private set; } = [];
+
+    public int[] ToneSourceYMap { get; private set; } = [];
+
+    public byte[] ToneCoverageScratch { get; private set; } = [];
+
+    public byte[] ToneAlphaScratch { get; private set; } = [];
 
     private readonly Dictionary<TileCacheKey, List<CpuTile>> _tileCache = new();
 
@@ -93,6 +103,39 @@ public sealed class CpuRasterWorkspace
         return SourceYMap;
     }
 
+    public int[] RentToneSourceXMap(int width)
+    {
+        if (ToneSourceXMap.Length < width)
+        {
+            ToneSourceXMap = new int[width];
+        }
+
+        return ToneSourceXMap;
+    }
+
+    public int[] RentToneSourceYMap(int height)
+    {
+        if (ToneSourceYMap.Length < height)
+        {
+            ToneSourceYMap = new int[height];
+        }
+
+        return ToneSourceYMap;
+    }
+
+    public void EnsureToneScratchCapacity(int pixelCount)
+    {
+        if (ToneCoverageScratch.Length < pixelCount)
+        {
+            ToneCoverageScratch = new byte[pixelCount];
+        }
+
+        if (ToneAlphaScratch.Length < pixelCount)
+        {
+            ToneAlphaScratch = new byte[pixelCount];
+        }
+    }
+
     public CpuTileLayout GetOrCreateTileLayout(int width, int height, int tileSize)
     {
         tileSize = RasterMath.ClampTileSize(tileSize);
@@ -118,6 +161,16 @@ public sealed class CpuRasterWorkspace
         tiles = CpuTileScheduler.BuildTilesCore(width, height, key.TileSize);
         _tileCache[key] = tiles;
         return tiles;
+    }
+
+    public int[] RentSequentialTileSegmentIndices(int capacity)
+    {
+        if (SequentialTileSegmentIndices.Length < capacity)
+        {
+            SequentialTileSegmentIndices = new int[capacity];
+        }
+
+        return SequentialTileSegmentIndices;
     }
 
     public void EnsureTileBinningCapacity(int rangeCount, int tileCount, int totalRefsEstimate)

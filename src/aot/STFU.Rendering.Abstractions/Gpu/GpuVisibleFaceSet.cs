@@ -13,6 +13,22 @@ public sealed class GpuVisibleFaceSet
 
     public byte[] Bits { get; }
 
+    public int CountVisible()
+    {
+        var count = 0;
+        for (var byteIndex = 0; byteIndex < Bits.Length; byteIndex++)
+        {
+            var value = Bits[byteIndex];
+            while (value != 0)
+            {
+                count += value & 1;
+                value >>= 1;
+            }
+        }
+
+        return Math.Min(count, FaceCount);
+    }
+
     public bool IsVisible(int faceIndex)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(faceIndex);

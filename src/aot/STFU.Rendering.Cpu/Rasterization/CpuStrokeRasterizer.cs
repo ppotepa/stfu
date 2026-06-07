@@ -90,21 +90,23 @@ public sealed class CpuStrokeRasterizer
         var rangeCount = DeterministicParallel.GetRangeCount(segments.Count, workerCount, 64);
 
         if (!parallel || workerCount <= 1 || rangeCount <= 1)
+        {
+            var tileSegmentIndices = workspace.RentSequentialTileSegmentIndices(segments.Count);
+            for (var i = 0; i < tileCount; i++)
             {
-                for (var i = 0; i < tileCount; i++)
-                {
-                    var tileSegments = CollectTileSegmentsSequential(
-                        segments,
-                        tiles[i]);
-                    DrawTile(
-                        target,
-                        tiles[i],
-                        segments,
-                        tileSegments,
-                        0,
-                        tileSegments.Length,
-                        quality);
-                }
+                var tileSegmentCount = CollectTileSegmentsSequential(
+                    segments,
+                    tiles[i],
+                    tileSegmentIndices);
+                DrawTile(
+                    target,
+                    tiles[i],
+                    segments,
+                    tileSegmentIndices,
+                    0,
+                    tileSegmentCount,
+                    quality);
+            }
 
             return;
         }
@@ -267,11 +269,12 @@ public sealed class CpuStrokeRasterizer
             minItemsPerRange: 1);
     }
 
-    private static int[] CollectTileSegmentsSequential(
+    private static int CollectTileSegmentsSequential(
         IReadOnlyList<CpuStrokeSegment> segments,
-        CpuTile tile)
+        CpuTile tile,
+        int[] output)
     {
-        var indices = new List<int>();
+        var count = 0;
         for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
         {
             var segment = segments[segmentIndex];
@@ -283,10 +286,10 @@ public sealed class CpuStrokeRasterizer
                 continue;
             }
 
-            indices.Add(segmentIndex);
+            output[count++] = segmentIndex;
         }
 
-        return indices.ToArray();
+        return count;
     }
 
     private static CpuTile CreateTile(int index, int tilesPerRow, int tileSize, int targetWidth, int targetHeight)

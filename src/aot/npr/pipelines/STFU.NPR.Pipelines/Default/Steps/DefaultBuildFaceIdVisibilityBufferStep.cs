@@ -45,6 +45,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", triangleCount);
             return;
         }
 
@@ -59,6 +60,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", 0);
             return;
         }
 
@@ -91,6 +93,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", pixelTests);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", pixelWrites);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", CountVisibleFaces(buffer.FaceVisible));
             return;
         }
 
@@ -296,9 +299,24 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", maxRefsPerTile);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", totalPixelTests);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", totalPixelWrites);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", CountVisibleFaces(buffer.FaceVisible));
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheWidth", _lastWidth);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheHeight", _lastHeight);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheTiles", _lastTileCount);
+    }
+
+    private static int CountVisibleFaces(bool[] faceVisible)
+    {
+        var count = 0;
+        for (var i = 0; i < faceVisible.Length; i++)
+        {
+            if (faceVisible[i])
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private DefaultFaceIdVisibilityBuffer RentBuffer(int width, int height, int faceCount)
@@ -405,7 +423,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         var b = vertices[triangle.B];
         var c = vertices[triangle.C];
 
-                if (ClipSpaceMath.TriangleOutsideCanonicalClip(a.Ndc, b.Ndc, c.Ndc))
+        if (ClipSpaceMath.TriangleOutsideCanonicalClip(a.Ndc, b.Ndc, c.Ndc))
         {
             return default;
         }
@@ -436,6 +454,10 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         var stepX2 = by - ay;
         var stepY2 = -(bx - ax);
 
+        var xTileRange = RasterMath.TileRangeFromPixelRange(minX, maxX, tileSize, tilesPerRow);
+        var tileRows = RasterMath.TilesPerAxis(bufferHeight, tileSize);
+        var yTileRange = RasterMath.TileRangeFromPixelRange(minY, maxY, tileSize, tileRows);
+
         return new TriangleRasterInfo(
             true,
             triangleIndex,
@@ -461,10 +483,10 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             maxX,
             minY,
             maxY,
-            RasterMath.TileRangeFromPixelRange(minX, maxX, tileSize, tilesPerRow).MinTile,
-            RasterMath.TileRangeFromPixelRange(minX, maxX, tileSize, tilesPerRow).MaxTile,
-            RasterMath.TileRangeFromPixelRange(minY, maxY, tileSize, RasterMath.TilesPerAxis(bufferHeight, tileSize)).MinTile,
-            RasterMath.TileRangeFromPixelRange(minY, maxY, tileSize, RasterMath.TilesPerAxis(bufferHeight, tileSize)).MaxTile,
+            xTileRange.MinTile,
+            xTileRange.MaxTile,
+            yTileRange.MinTile,
+            yTileRange.MaxTile,
             a.Depth01,
             b.Depth01,
             c.Depth01);

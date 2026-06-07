@@ -25,6 +25,8 @@ public sealed class DxStrokeRasterPass : IDisposable
     private int _instanceCapacity;
     private bool _disposed;
 
+    public DirectXRenderCounters Counters { get; } = new();
+
     public DxStrokeRasterPass(DirectXDevice device)
     {
         _device = device;
@@ -74,54 +76,10 @@ public sealed class DxStrokeRasterPass : IDisposable
             _sortScratch,
             request.Quality.PreserveLayerOrdering);
         buildWatch.Stop();
+        Counters.StrokeInstancesBuilt += instances.Count;
         diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, source=paths");
 
-        if (instances.Count == 0 || target.RenderTargetView is null)
-        {
-            return;
-        }
-
-        using (_device.Lock())
-        {
-            unsafe
-            {
-                var uploadWatch = Stopwatch.StartNew();
-                var bufferRecreated = EnsureInstanceBufferCapacity(instances.Count);
-                UploadInstances(instances);
-                var uploadedBytes = instances.Count * DxStrokeInstance.SizeInBytes;
-
-                var constants = stackalloc float[8];
-                constants[0] = request.Width;
-                constants[1] = request.Height;
-                constants[2] = NumericMath.InverseAtLeast(request.Width);
-                constants[3] = NumericMath.InverseAtLeast(request.Height);
-                constants[4] = NumericMath.AtLeast(request.Quality.GpuStrokeCoverageSoftness, 0.25f);
-                _device.Context.UpdateSubresource(_frameConstants, 0, null, (IntPtr)constants, 0, 0);
-                uploadWatch.Stop();
-                diagnostics.AddTiming("GpuStrokeUpload", uploadWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, bytes={uploadedBytes}, recreated={(bufferRecreated ? 1 : 0)}");
-            }
-
-            using (new DirectXGpuTimer(_device, request.Budget.EnableGpuTiming).Measure(
-                       (milliseconds, mode) => diagnostics.AddTiming(
-                           "GpuStrokeDraw",
-                           milliseconds,
-                           $"instances={instances.Count}, mode={mode}")))
-            {
-                _device.Context.OMSetRenderTargets(target.RenderTargetView);
-                _device.Context.RSSetViewport(0, 0, request.Width, request.Height);
-                _device.Context.IASetPrimitiveTopology(Vortice.Direct3D.PrimitiveTopology.TriangleList);
-                _device.Context.IASetInputLayout(null);
-                _device.Context.VSSetShader(_vertexShader);
-                _device.Context.PSSetShader(_pixelShader);
-                _device.Context.VSSetConstantBuffer(0, _frameConstants);
-                _device.Context.VSSetShaderResource(0, _instanceBufferSrv);
-                _device.Context.OMSetBlendState(_states.PremultipliedAlphaBlend);
-                _device.Context.RSSetState(_states.NoCullRasterizer);
-                _device.Context.OMSetDepthStencilState(_states.DepthDisabled);
-                _device.Context.DrawInstanced(6, (uint)instances.Count, 0, 0);
-                _device.Context.VSSetShaderResource(0, null!);
-            }
-        }
+        RenderInstances(target, request, instances, diagnostics);
     }
 
     public void Execute(
@@ -141,8 +99,18 @@ public sealed class DxStrokeRasterPass : IDisposable
             opacityScale,
             _instances);
         buildWatch.Stop();
+        Counters.StrokeInstancesBuilt += instances.Count;
         diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, source=segments");
 
+        RenderInstances(target, request, instances, diagnostics);
+    }
+
+    private void RenderInstances(
+        DirectXTextureResource target,
+        NprRenderRequest request,
+        List<DxStrokeInstance> instances,
+        NprRenderDiagnostics diagnostics)
+    {
         if (instances.Count == 0 || target.RenderTargetView is null)
         {
             return;
@@ -156,6 +124,12 @@ public sealed class DxStrokeRasterPass : IDisposable
                 var bufferRecreated = EnsureInstanceBufferCapacity(instances.Count);
                 UploadInstances(instances);
                 var uploadedBytes = instances.Count * DxStrokeInstance.SizeInBytes;
+                Counters.StrokeInstanceUploads++;
+                Counters.UploadedBytes += uploadedBytes;
+                if (bufferRecreated)
+                {
+                    Counters.StrokeInstanceBufferRecreates++;
+                }
 
                 var constants = stackalloc float[8];
                 constants[0] = request.Width;

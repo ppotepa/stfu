@@ -14,6 +14,7 @@ public sealed record NprQualityProfile(
     bool UseGpuDebugOverlayRaster = true,
     bool UseGpuMeshWireframe = true,
     bool UseGpuVisibilityBuffer = false,
+    bool UseGpuEdgeClassification = false,
     GpuMeshWireframePath GpuMeshWireframePath = GpuMeshWireframePath.Native,
     float GpuStrokeCoverageSoftness = 1.0f,
     MeshWireframeTopologyMode MeshWireframeTopologyMode = MeshWireframeTopologyMode.Welded)

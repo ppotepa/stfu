@@ -128,7 +128,7 @@ public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
                         }
 
                         var job = _jobs[index];
-                        ProjectMeshVertices(projection, in job, _projectedVertices);
+                        ProjectMeshVerticesWithCache(context, projection, in job, _projectedVertices);
                     }
                 },
                 minItemsPerRange: 1);
@@ -140,6 +140,12 @@ public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
                 ProjectMeshVerticesWithCache(context, projection, in jobs[index], _projectedVertices);
             }
         }
+
+        context.Counters.Set("ProjectMeshStep.projectionCacheEntries", context.Analysis.ProjectionCache.Stats.Entries);
+        context.Counters.Set("ProjectMeshStep.projectionCacheHits", context.Analysis.ProjectionCache.Stats.Hits);
+        context.Counters.Set("ProjectMeshStep.projectionCacheMisses", context.Analysis.ProjectionCache.Stats.Misses);
+        context.Counters.Set("ProjectMeshStep.projectionCacheEvictions", context.Analysis.ProjectionCache.Stats.Evictions);
+        context.Counters.Set("ProjectMeshStep.projectedVertices", totalVertices);
 
         CollectionsMarshal.SetCount(context.Graph.Vertices, vertexOffset);
         var graphVertices = CollectionsMarshal.AsSpan(context.Graph.Vertices);
@@ -213,11 +219,6 @@ public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
             context.Analysis.ProjectionCache.Store(cacheKey, new ProjectedMeshFrame(cachedVertices, cachedVertices.Length));
         }
 
-        context.Counters.Set("ProjectMeshStep.projectionCacheEntries", context.Analysis.ProjectionCache.Stats.Entries);
-        context.Counters.Set("ProjectMeshStep.projectionCacheHits", context.Analysis.ProjectionCache.Stats.Hits);
-        context.Counters.Set("ProjectMeshStep.projectionCacheMisses", context.Analysis.ProjectionCache.Stats.Misses);
-        context.Counters.Set("ProjectMeshStep.projectionCacheEvictions", context.Analysis.ProjectionCache.Stats.Evictions);
-        context.Counters.Set("ProjectMeshStep.projectedVertices", job.Mesh.Vertices.Count);
     }
 
     private static void CopyCachedProjectedVertices(
@@ -243,78 +244,6 @@ public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
                 vertex.Ndc,
                 vertex.Depth01);
         }
-    }
-
-    private static void ProjectMeshVertices(
-        ProjectionInfo projection,
-        in MeshProjectionJob job,
-        ProjectedVertex[] output)
-    {
-        if (TryGetVertexSpan(job.Mesh.Vertices, out var vertices))
-        {
-            for (var vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
-            {
-                ProjectVertex(projection, job, vertices[vertexIndex], vertexIndex, output);
-            }
-
-            return;
-        }
-
-        for (var vertexIndex = 0; vertexIndex < job.Mesh.Vertices.Count; vertexIndex++)
-        {
-            ProjectVertex(projection, job, job.Mesh.Vertices[vertexIndex], vertexIndex, output);
-        }
-    }
-
-    private static bool TryGetVertexSpan(
-        IReadOnlyList<MeshVertex> source,
-        out ReadOnlySpan<MeshVertex> vertices)
-    {
-        switch (source)
-        {
-            case MeshVertex[] array:
-                vertices = array;
-                return true;
-            case List<MeshVertex> list:
-                vertices = CollectionsMarshal.AsSpan(list);
-                return true;
-            default:
-                vertices = default;
-                return false;
-        }
-    }
-
-    private static void ProjectVertex(
-        ProjectionInfo projection,
-        in MeshProjectionJob job,
-        MeshVertex vertex,
-        int vertexIndex,
-        ProjectedVertex[] output)
-    {
-        var worldPosition = Geometry3D.TransformPosition(
-            vertex.Position,
-            job.Transform.Scale,
-            job.Rotation,
-            job.Transform.Position,
-            job.HasRotation,
-            job.HasScale,
-            job.HasTranslation);
-        var isVisible = projection.TryProject(worldPosition, out var position, out var depth, out var ndc, out var depth01);
-
-        output[job.StagedVertexOffset + vertexIndex] = new ProjectedVertex(
-            job.VertexOffset + vertexIndex,
-            worldPosition,
-            vertex.Normal,
-            position,
-            depth,
-            isVisible,
-            0f,
-            0f,
-            0f,
-            0f,
-            Vector3.Zero,
-            ndc,
-            depth01);
     }
 
     private readonly record struct MeshProjectionJob(

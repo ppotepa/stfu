@@ -12,6 +12,8 @@ public sealed class DxReadbackPass
     private readonly DirectXDevice _device;
     private readonly PixelSurfacePool _surfacePool;
 
+    public DxReadbackCounters Counters { get; } = new();
+
     public DxReadbackPass(DirectXDevice device, PixelSurfacePool surfacePool)
     {
         _device = device;
@@ -47,6 +49,7 @@ public sealed class DxReadbackPass
                     Marshal.Copy(source, surface.Pixels, y * surface.Stride, rowBytes);
                 }
 
+                Counters.RecordReadback(surface.Height, rowBytes);
                 return lease;
             }
             finally
