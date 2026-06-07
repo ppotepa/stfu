@@ -16,6 +16,6 @@ public static class VisibilitySamplingMath
 
     public static bool TriangleOutsideClip(Vector3 a, Vector3 b, Vector3 c)
     {
-        return Geometry3D.TriangleOutsideClip(a, b, c);
+        return ClipSpaceMath.TriangleOutsideCanonicalClip(a, b, c);
     }
 }

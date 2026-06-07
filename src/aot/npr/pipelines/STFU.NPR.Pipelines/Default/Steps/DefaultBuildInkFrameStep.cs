@@ -1,3 +1,4 @@
+using STFU.Common.Collections;
 using STFU.Common.Math;
 using STFU.NPR.Composition;
 using STFU.NPR.Graph;

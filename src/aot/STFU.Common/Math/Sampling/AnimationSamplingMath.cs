@@ -62,13 +62,13 @@ public static class AnimationSamplingMath
         return samplePosition - lowerIndex <= upperIndex - samplePosition ? lowerIndex : upperIndex;
     }
 
-    public static Vector3 NormalizeOrDefault(Vector3 value, Vector3 fallback, float epsilonSquared = 1e-12f)
+    public static Vector3 NormalizeOrDefault(Vector3 value, Vector3 fallback, float epsilonSquared = VectorMath.StrictNormalizeEpsilonSquared)
     {
-        return value.LengthSquared() <= epsilonSquared ? fallback : Vector3.Normalize(value);
+        return VectorMath.NormalizeOrDefault(value, fallback, epsilonSquared);
     }
 
     public static Vector3 InterpolateNormal(Vector3 lower, Vector3 upper, float t, Vector3 fallback)
     {
-        return NormalizeOrDefault(Vector3.Lerp(lower, upper, t), fallback);
+        return VectorMath.NormalizeOrDefault(Vector3.Lerp(lower, upper, t), fallback, VectorMath.StrictNormalizeEpsilonSquared);
     }
 }

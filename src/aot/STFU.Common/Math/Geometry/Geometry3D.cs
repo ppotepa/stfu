@@ -11,7 +11,7 @@ public static class Geometry3D
         Vector3 fallback,
         float epsilonSquared = DefaultEpsilonSquared)
     {
-        return value.LengthSquared() <= epsilonSquared ? fallback : Vector3.Normalize(value);
+        return VectorMath.NormalizeOrDefault(value, fallback, epsilonSquared);
     }
 
     public static Vector3 TriangleNormal(
@@ -136,13 +136,7 @@ public static class Geometry3D
 
     public static bool TriangleOutsideClip(Vector3 a, Vector3 b, Vector3 c)
     {
-        if (a.X < -1f && b.X < -1f && c.X < -1f) return true;
-        if (a.X > 1f && b.X > 1f && c.X > 1f) return true;
-        if (a.Y < -1f && b.Y < -1f && c.Y < -1f) return true;
-        if (a.Y > 1f && b.Y > 1f && c.Y > 1f) return true;
-        if (a.Z < -1f && b.Z < -1f && c.Z < -1f) return true;
-        if (a.Z > 1f && b.Z > 1f && c.Z > 1f) return true;
-        return false;
+        return ClipSpaceMath.TriangleOutsideCanonicalClip(a, b, c);
     }
 
     public static float MaxComponent(Vector3 value)

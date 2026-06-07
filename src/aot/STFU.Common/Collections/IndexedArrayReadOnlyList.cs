@@ -1,6 +1,9 @@
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.Common.Collections;
 
-internal sealed class IndexedArrayReadOnlyList<T>(T[] items, int[] indices, int count) : IReadOnlyList<T>
+/// <summary>
+/// Exposes selected items from an array through an index array without allocating or copying the selected values.
+/// </summary>
+public sealed class IndexedArrayReadOnlyList<T>(T[] items, int[] indices, int count) : IReadOnlyList<T>
 {
     public int Count => count;
 
@@ -20,7 +23,10 @@ internal sealed class IndexedArrayReadOnlyList<T>(T[] items, int[] indices, int 
     }
 }
 
-internal sealed class ArraySliceReadOnlyList<T>(T[] items, int count) : IReadOnlyList<T>
+/// <summary>
+/// Exposes the first <paramref name="count" /> items of an array as a read-only list without allocating or copying.
+/// </summary>
+public sealed class ArraySliceReadOnlyList<T>(T[] items, int count) : IReadOnlyList<T>
 {
     public int Count => count;
 
