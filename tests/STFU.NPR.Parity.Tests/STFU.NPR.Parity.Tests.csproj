@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\src\aot\STFU.Strokes\STFU.Strokes.csproj" />
     <ProjectReference Include="..\..\src\aot\npr\pipelines\STFU.NPR.Pipelines\STFU.NPR.Pipelines.csproj" />
     <ProjectReference Include="..\..\src\aot\npr\presets\STFU.NPR.Presets\STFU.NPR.Presets.csproj" />
+    <ProjectReference Include="..\..\src\runtime\STFU.Rendering.DirectX\STFU.Rendering.DirectX.csproj" />
   </ItemGroup>
 
   <ItemGroup>

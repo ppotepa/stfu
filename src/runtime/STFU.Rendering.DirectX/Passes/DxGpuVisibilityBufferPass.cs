@@ -84,7 +84,7 @@ public sealed class DxGpuVisibilityBufferPass : IDisposable
         _rasterizerState = device.Device.CreateRasterizerState(RasterizerDescription.CullNone);
     }
 
-    public void Execute(
+    public VisibilityParityStats Execute(
         NprGraph graph,
         int viewportWidth,
         int viewportHeight,
@@ -101,7 +101,7 @@ public sealed class DxGpuVisibilityBufferPass : IDisposable
                 "GpuVisibilityBuffer",
                 0,
                 $"requested=1, skipped=1, reason={(cpuBuffer is null ? "missingCpuBuffer" : !_device.Support.SupportsCompute ? "computeUnsupported" : "emptyTriangles")}");
-            return;
+            return VisibilityParityStats.Empty;
         }
 
         var totalWatch = Stopwatch.StartNew();
@@ -114,7 +114,7 @@ public sealed class DxGpuVisibilityBufferPass : IDisposable
                 "GpuVisibilityBuffer",
                 0,
                 $"requested=1, skipped=1, reason=noRenderableTriangles, sourceTriangles={graph.Triangles.Count}, sourceVertices={graph.Vertices.Count}, faceCount={cpuBuffer.FaceVisible.Length}");
-            return;
+            return VisibilityParityStats.Empty;
         }
 
         var wordCount = NumericMath.AtLeast(NumericMath.CeilingDivide(cpuBuffer.FaceVisible.Length, 32), 1);
@@ -147,15 +147,23 @@ public sealed class DxGpuVisibilityBufferPass : IDisposable
             reduceWatch.Stop();
         }
 
-        var mismatchCount = CountMismatches(cpuBuffer.FaceVisible, wordCount);
+        var (matchingFaces, cpuOnlyFaces, gpuOnlyFaces) = CountVisibilityParities(cpuBuffer.FaceVisible, wordCount);
         var gpuVisibleCount = CountGpuVisible(cpuBuffer.FaceVisible.Length, wordCount);
         var cpuVisibleCount = CountCpuVisible(cpuBuffer.FaceVisible);
+        var visibility = VisibilityParityStats.FromCounts(
+            cpuVisibleCount,
+            gpuVisibleCount,
+            matchingFaces,
+            cpuOnlyFaces,
+            gpuOnlyFaces);
         totalWatch.Stop();
 
         diagnostics.AddTiming(
             "GpuVisibilityBuffer",
             totalWatch.Elapsed.TotalMilliseconds,
-            $"requested=1, cpuReferenceFallback=1, triangles={triangleCount}, pixels={cpuBuffer.Width * cpuBuffer.Height}, bitsetBytes={wordCount * 4}, cpuVisible={cpuVisibleCount}, gpuVisible={gpuVisibleCount}, mismatches={mismatchCount}, edgeSamples={edgeSampleStats.SampleCount}, edgeVisible={edgeSampleStats.VisibleCount}, edgeMismatches={edgeSampleStats.MismatchCount}, upload={uploadWatch.Elapsed.TotalMilliseconds:0.###}, draw={drawWatch.Elapsed.TotalMilliseconds:0.###}, edgeSampleReadback={edgeSampleWatch.Elapsed.TotalMilliseconds:0.###}, reduceReadback={reduceWatch.Elapsed.TotalMilliseconds:0.###}");
+            $"requested=1, cpuReferenceFallback=1, triangles={triangleCount}, pixels={cpuBuffer.Width * cpuBuffer.Height}, bitsetBytes={wordCount * 4}, cpuVisible={cpuVisibleCount}, gpuVisible={gpuVisibleCount}, mismatches={visibility.MismatchCount}, edgeSamples={edgeSampleStats.SampleCount}, edgeVisible={edgeSampleStats.VisibleCount}, edgeMismatches={edgeSampleStats.MismatchCount}, upload={uploadWatch.Elapsed.TotalMilliseconds:0.###}, draw={drawWatch.Elapsed.TotalMilliseconds:0.###}, edgeSampleReadback={edgeSampleWatch.Elapsed.TotalMilliseconds:0.###}, reduceReadback={reduceWatch.Elapsed.TotalMilliseconds:0.###}");
+
+        return visibility;
     }
 
     public void Dispose()
@@ -371,19 +379,34 @@ public sealed class DxGpuVisibilityBufferPass : IDisposable
         }
     }
 
-    private int CountMismatches(bool[] cpuVisible, int wordCount)
+    private (int Matching, int CpuOnly, int GpuOnly) CountVisibilityParities(bool[] cpuVisible, int wordCount)
     {
-        var mismatches = 0;
+        var matching = 0;
+        var cpuOnly = 0;
+        var gpuOnly = 0;
+        if (wordCount <= 0)
+        {
+            return (0, 0, 0);
+        }
+
         for (var i = 0; i < cpuVisible.Length; i++)
         {
             var gpuVisible = ((_visibleWords[i >> 5] >> (i & 31)) & 1u) != 0;
-            if (gpuVisible != cpuVisible[i])
+            if (cpuVisible[i] && gpuVisible)
             {
-                mismatches++;
+                matching++;
+            }
+            else if (cpuVisible[i])
+            {
+                cpuOnly++;
+            }
+            else if (gpuVisible)
+            {
+                gpuOnly++;
             }
         }
 
-        return mismatches;
+        return (matching, cpuOnly, gpuOnly);
     }
 
     private int CountGpuVisible(int faceCount, int wordCount)

@@ -13,7 +13,6 @@ using STFU.Rendering.Abstractions.Gpu;
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.Abstractions.Surfaces;
 using STFU.Rendering.DirectX.Device;
-using STFU.Rendering.DirectX.Diagnostics;
 using STFU.Rendering.DirectX.Passes;
 using STFU.Strokes;
 
@@ -67,7 +66,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
         NprBackendCapabilities.PixelSurfaceOutput,
         "CPU-driven NPR pipeline with Direct3D11 GPU rasterization and fallback-to-CPU integration scaffold.");
 
-    public ValueTask<NprRenderResult> RenderAsync(
+    public async ValueTask<NprRenderResult> RenderAsync(
         NprRenderRequest request,
         CancellationToken cancellationToken)
     {
@@ -82,7 +81,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 "FullCpuReference request routed to CPU fallback.",
                 StfuLogLevel.Debug,
                 new Dictionary<string, object?> { ["revision"] = request.Revision });
-            return _cpuFallback.RenderAsync(request, cancellationToken);
+            return await _cpuFallback.RenderAsync(request, cancellationToken);
         }
 
         if (request.ExecutionProfile != NprExecutionProfile.CpuDrivenGpuAccelerated)
@@ -102,7 +101,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
             {
                 ExecutionProfile = NprExecutionProfile.FullCpuReference
             };
-            return _cpuFallback.RenderAsync(cpuFallbackRequest, cancellationToken);
+            return await _cpuFallback.RenderAsync(cpuFallbackRequest, cancellationToken);
         }
 
         var diagnostics = new NprRenderDiagnostics
@@ -117,7 +116,6 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
 
         var total = Stopwatch.StartNew();
         var allocatedBefore = GC.GetTotalAllocatedBytes(false);
-        var counters = new DirectXRenderCounters();
         StrokeFrame strokeFrame = StrokeFrame.Empty;
         NprFrame nprFrame = NprFrame.Empty;
         NprDebugFrame debugFrame = NprDebugFrame.Empty;
@@ -189,12 +187,31 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 request.ContentKind == NprRenderContentKind.NprPipeline &&
                 pipelineGraph is not null)
             {
-                _visibilityPass.Execute(
+                var visibilityStats = _visibilityPass.Execute(
                     pipelineGraph,
                     request.Width,
                     request.Height,
                     diagnostics,
                     cancellationToken);
+
+                diagnostics.VisibilityParity = visibilityStats;
+                if (visibilityStats.ShouldFallback(request.Budget.GpuVisibilityRequiredMatchRatio))
+                {
+                    if (!request.Budget.AllowGpuVisibilityFallback)
+                    {
+                        throw new InvalidOperationException(
+                            $"GPU visibility mismatch ratio is {visibilityStats.MatchRatio:0.000} with {visibilityStats.MismatchCount} mismatches, and fallback is disabled.");
+                    }
+
+                    var fallbackReason = VisibilityParityStats.FallbackReasonMismatch;
+                    var fallbackReadback = await RenderWithCpuFallbackAsync(
+                        request,
+                        NprRenderOutputKind.PixelSurface,
+                        visibilityStats,
+                        fallbackReason,
+                        cancellationToken);
+                    return await ApplyFallbackTelemetryAsync(fallbackReadback, diagnostics, visibilityStats, fallbackReason);
+                }
             }
 
             _frameRenderer.Render(target, request, strokeFrame, nprFrame, debugFrame, diagnostics, cancellationToken);
@@ -211,8 +228,8 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 var pixelLease = _readbackPass.ReadToPixelSurface(gpuLease.Texture, cancellationToken);
                 readbackWatch.Stop();
                 var readbacks = _readbackPass.Counters.Readbacks - priorReadbacks;
-                counters.Readbacks += readbacks;
                 var readbackBytes = pixelLease.Surface.Stride * pixelLease.Surface.Height;
+                diagnostics.Readbacks += readbacks;
                 diagnostics.AddTiming(
                     "GpuReadback",
                     readbackWatch.Elapsed.TotalMilliseconds,
@@ -224,18 +241,18 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 diagnostics.AllocatedBytes = NumericMath.AtLeast(GC.GetTotalAllocatedBytes(false) - allocatedBefore, 0);
                 LogMemoryIfNeeded(request, diagnostics);
 
-                return ValueTask.FromResult(new NprRenderResult
-                {
-                    Revision = request.Revision,
-                    Status = NprRenderStatus.Completed,
-                    ExecutionProfile = request.ExecutionProfile,
-                    OutputKind = NprRenderOutputKind.PixelSurface,
-                    PixelSurfaceLease = pixelLease,
-                    StrokeFrame = strokeFrame,
-                    NprFrame = nprFrame,
-                    DebugFrame = debugFrame,
-                    Diagnostics = diagnostics
-                });
+            return new NprRenderResult
+            {
+                Revision = request.Revision,
+                Status = NprRenderStatus.Completed,
+                ExecutionProfile = request.ExecutionProfile,
+                OutputKind = NprRenderOutputKind.PixelSurface,
+                PixelSurfaceLease = pixelLease,
+                StrokeFrame = strokeFrame,
+                NprFrame = nprFrame,
+                DebugFrame = debugFrame,
+                Diagnostics = diagnostics
+            };
             }
 
             if (!request.Budget.PreferGpuPresentation && !request.Budget.AllowGpuReadback)
@@ -248,7 +265,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
             diagnostics.AllocatedBytes = NumericMath.AtLeast(GC.GetTotalAllocatedBytes(false) - allocatedBefore, 0);
             LogMemoryIfNeeded(request, diagnostics);
 
-            return ValueTask.FromResult(new NprRenderResult
+            return new NprRenderResult
             {
                 Revision = request.Revision,
                 Status = NprRenderStatus.Completed,
@@ -259,13 +276,75 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 NprFrame = nprFrame,
                 DebugFrame = debugFrame,
                 Diagnostics = diagnostics
-            });
+            };
         }
         catch
         {
             gpuLease.Dispose();
             throw;
         }
+    }
+
+    private async ValueTask<NprRenderResult> RenderWithCpuFallbackAsync(
+        NprRenderRequest request,
+        NprRenderOutputKind requestedOutput,
+        VisibilityParityStats visibilityStats,
+        string fallbackReason,
+        CancellationToken cancellationToken)
+    {
+        var cpuFallbackRequest = request with
+        {
+            ExecutionProfile = NprExecutionProfile.FullCpuReference,
+            Quality = request.Quality with
+            {
+                UseGpuVisibilityBuffer = false
+            },
+            Budget = request.Budget with
+            {
+                RequireGpuReadback = requestedOutput == NprRenderOutputKind.PixelSurface || request.Budget.RequireGpuReadback,
+                AllowGpuReadback = request.Budget.AllowGpuReadback,
+                PreferGpuPresentation = requestedOutput == NprRenderOutputKind.GpuTexture
+            }
+        };
+
+        StfuLog.Write(
+            StfuLogDomain.RenderGpu,
+            "visibility.fallback",
+            $"revision={request.Revision}, fallbackReason={fallbackReason}, requestedOutput={requestedOutput}");
+
+        var cpuResult = await _cpuFallback.RenderAsync(cpuFallbackRequest, cancellationToken);
+        return await ApplyFallbackTelemetryAsync(
+            cpuResult,
+            diagnostics: null,
+            visibilityStats,
+            fallbackReason);
+    }
+
+    private static async ValueTask<NprRenderResult> ApplyFallbackTelemetryAsync(
+        NprRenderResult result,
+        NprRenderDiagnostics? diagnostics,
+        VisibilityParityStats visibilityStats,
+        string fallbackReason)
+    {
+        var sourceDiagnostics = diagnostics ?? result.Diagnostics;
+        sourceDiagnostics.VisibilityParity = new VisibilityParityStats
+        {
+            CpuVisibleFaces = visibilityStats.CpuVisibleFaces,
+            GpuVisibleFaces = visibilityStats.GpuVisibleFaces,
+            MatchingFaces = visibilityStats.MatchingFaces,
+            CpuOnlyFaces = visibilityStats.CpuOnlyFaces,
+            GpuOnlyFaces = visibilityStats.GpuOnlyFaces,
+            FallbackUsed = true,
+            FallbackReason = fallbackReason,
+            MatchRatio = visibilityStats.MatchRatio,
+            Passed = false
+        };
+        sourceDiagnostics.Notes = string.IsNullOrWhiteSpace(sourceDiagnostics.Notes)
+            ? $"visibilityFallback={fallbackReason}"
+            : $"{sourceDiagnostics.Notes}; visibilityFallback={fallbackReason}";
+
+        await ValueTask.CompletedTask;
+        return result;
     }
 
     private void LogMemoryIfNeeded(NprRenderRequest request, NprRenderDiagnostics diagnostics)

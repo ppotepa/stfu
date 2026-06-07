@@ -13,8 +13,8 @@ public sealed class GpuVisibilityFallbackContractSourceTests
             repo,
             "src/runtime/STFU.Rendering.DirectX/Passes/DxGpuVisibilityBufferPass.cs",
             "VisibilityParityStats",
-            "cpuVisibleFaces",
-            "gpuVisibleFaces",
+            "cpuVisibleCount",
+            "gpuVisibleCount",
             "mismatches");
     }
 

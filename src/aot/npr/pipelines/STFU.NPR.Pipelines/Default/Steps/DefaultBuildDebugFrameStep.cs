@@ -59,12 +59,26 @@ public sealed class DefaultBuildDebugFrameStep : STFU.NPR.Pipeline.INprStep
             }
         }
 
+        var visibleSegmentCount = 0;
+        var hiddenSegmentCount = 0;
+        for (var i = 0; i < context.Graph.VisibilitySegments.Count; i++)
+        {
+            if (context.Graph.VisibilitySegments[i].State == VisibilityState.Visible)
+            {
+                visibleSegmentCount++;
+            }
+            else if (context.Graph.VisibilitySegments[i].State == VisibilityState.Hidden)
+            {
+                hiddenSegmentCount++;
+            }
+        }
+
         context.DebugFrame = new NprDebugFrame(
             lines,
             new NprDebugCounters(
                 context.Graph.Curves.Count,
-                context.Graph.VisibilitySegments.Count(segment => segment.State == VisibilityState.Visible),
-                context.Graph.VisibilitySegments.Count(segment => segment.State == VisibilityState.Hidden),
+                visibleSegmentCount,
+                hiddenSegmentCount,
                 context.Graph.Curves.Count,
                 context.Graph.DefaultFragments.Count,
                 context.Frame.Paths.Count,

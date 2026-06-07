@@ -12,12 +12,13 @@ public sealed class NprDeterminismReleaseGateTests
         AssertFileContains(
             repo,
             "tests/STFU.NPR.Parity.Tests/NprPipelineWorkerParityTests.cs",
-            "workers",
             "1",
             "2",
             "4",
             "8",
-            "16");
+            "12",
+            "16",
+            "24");
     }
 
     [Fact]

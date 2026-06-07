@@ -2,6 +2,9 @@ namespace STFU.Rendering.Abstractions.Diagnostics;
 
 public sealed class VisibilityParityStats
 {
+    public const string FallbackReasonMismatch = "GpuVisibilityMismatch";
+    public const string FallbackReasonReadbackFailed = "GpuVisibilityReadbackFailed";
+
     public int CpuVisibleFaces { get; init; }
     public int GpuVisibleFaces { get; init; }
     public int MatchingFaces { get; init; }

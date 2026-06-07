@@ -74,6 +74,12 @@ try {
         dotnet run --project src/runtime/STFU.App/STFU.App.csproj -c $Configuration -- --verify-render-parity default 320 240 3
     }
 
+    if (-not $SkipGpu) {
+        Invoke-Step "GPU visibility parity" {
+            dotnet run --project src/runtime/STFU.App/STFU.App.csproj -c $Configuration -- --verify-render-parity default 320 240 3 --gpu-visibility
+        }
+    }
+
     Invoke-Step "FBX UI load smoke" {
         dotnet run --project src/runtime/STFU.App/STFU.App.csproj -c $Configuration -- --smoke-fbx-ui-load $Asset
     }

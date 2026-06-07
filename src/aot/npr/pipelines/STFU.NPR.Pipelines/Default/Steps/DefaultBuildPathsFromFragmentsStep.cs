@@ -124,6 +124,10 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         context.Counters.Set("DefaultBuildPathsFromFragmentsStep.boundaryFragments", _boundary.Count);
         context.Counters.Set("DefaultBuildPathsFromFragmentsStep.pathsOutput", context.Graph.DefaultPaths.Count);
         context.Counters.Set("DefaultBuildPathsFromFragmentsStep.parallelBuild", parallel ? 1 : 0);
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.walkPointCopies",
+            _silhouetteScratch.WalkPointCopies + _featureScratch.WalkPointCopies + _boundaryScratch.WalkPointCopies);
+        context.Counters.Set("DefaultBuildPathsFromFragmentsStep.maxWalkPointCount",
+            NumericMath.AtLeast(_silhouetteScratch.MaxWalkPointCount, NumericMath.AtLeast(_featureScratch.MaxWalkPointCount, _boundaryScratch.MaxWalkPointCount)));
     }
 
     private static void AppendRange(List<DefaultProjectedPath> output, List<DefaultProjectedPath>? paths)
@@ -162,7 +166,7 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
 
         var pathIndex = 0;
 
-        Point2D[] Walk(int fragmentIndex, int end)
+        int Walk(int fragmentIndex, int end, List<Point2D> output)
         {
             walkPoints.Clear();
             var currentFragment = fragmentIndex;
@@ -196,9 +200,24 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
                 currentEnd = next.End;
             }
 
-            return walkPoints.ToArray();
+            scratch.WalkPointCopies++;
+            scratch.MaxWalkPointCount = NumericMath.AtLeast(scratch.MaxWalkPointCount, walkPoints.Count);
+            output.Clear();
+            if (walkPoints.Count == 0)
+            {
+                return 0;
+            }
+
+            output.EnsureCapacity(walkPoints.Count);
+            for (var i = 0; i < walkPoints.Count; i++)
+            {
+                output.Add(walkPoints[i]);
+            }
+
+            return walkPoints.Count;
         }
 
+        var pathPoints = new List<Point2D>();
         foreach (var pair in adjacency)
         {
             if (pair.Value.Count == 2)
@@ -213,7 +232,8 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
                     continue;
                 }
 
-                AddPath(output, lineKind, Walk(endpoint.FragmentIndex, endpoint.End), pathIndex++);
+                var pathLength = Walk(endpoint.FragmentIndex, endpoint.End, pathPoints);
+                AddPath(output, lineKind, pathPoints, pathLength, pathIndex++);
             }
         }
 
@@ -221,26 +241,48 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         {
             if (!visited[i])
             {
-                AddPath(output, lineKind, Walk(i, 0), pathIndex++);
+                var pathLength = Walk(i, 0, pathPoints);
+                AddPath(output, lineKind, pathPoints, pathLength, pathIndex++);
             }
         }
 
         return output;
     }
 
-    private static void AddPath(List<DefaultProjectedPath> paths, DefaultLineKind lineKind, IReadOnlyList<Point2D> points, int pathIndex)
+    private static void AddPath(
+        List<DefaultProjectedPath> paths,
+        DefaultLineKind lineKind,
+        List<Point2D> points,
+        int pathPointCount,
+        int pathIndex)
     {
-        if (points.Count <= 1)
+        if (pathPointCount <= 1)
         {
             return;
         }
 
-        var length = PathMath.PathLength(points, GetX, GetY);
+        var length = CalculatePathLength(points, pathPointCount, GetX, GetY);
         unchecked
         {
             var stableId = ((int)lineKind * 73856093) ^ (pathIndex * 19349663);
-            paths.Add(new DefaultProjectedPath(stableId, lineKind, points, pathIndex, length));
+            paths.Add(new DefaultProjectedPath(stableId, lineKind, points.GetRange(0, pathPointCount), pathIndex, length));
         }
+    }
+
+    private static float CalculatePathLength(List<Point2D> points, int pointCount, Func<Point2D, float> getX, Func<Point2D, float> getY)
+    {
+        if (pointCount <= 1)
+        {
+            return 0f;
+        }
+
+        var length = 0f;
+        for (var i = 0; i < pointCount - 1; i++)
+        {
+            length += PathMath.SegmentLength(points[i], points[i + 1], getX, getY);
+        }
+
+        return length;
     }
 
     private static bool TryGetNextEndpoint(
@@ -340,6 +382,8 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
         public bool[] Visited = [];
         public readonly Dictionary<EndpointKey, EndpointBucket> Adjacency = new();
         public readonly List<Point2D> WalkPoints = new(32);
+        public int WalkPointCopies;
+        public int MaxWalkPointCount;
 
         public void Reset(int fragmentCount)
         {
@@ -361,6 +405,8 @@ public sealed class DefaultBuildPathsFromFragmentsStep : STFU.NPR.Pipeline.INprS
             Array.Clear(Visited, 0, fragmentCount);
             Adjacency.Clear();
             WalkPoints.Clear();
+            WalkPointCopies = 0;
+            MaxWalkPointCount = 0;
             Adjacency.EnsureCapacity(fragmentCount * 2);
         }
     }

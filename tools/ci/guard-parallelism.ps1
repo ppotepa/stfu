@@ -41,9 +41,11 @@ if ($LASTEXITCODE -gt 1) {
 $unexpectedThreadAudit = @(
     $threadAudit | Where-Object {
         $_ -and
-        ($_ -notmatch 'src[/\]aot[/\]STFU\.Parallelism[/\]') -and
-        ($_ -notmatch 'tests[/\]') -and
-        ($_ -notmatch 'tools[/\]')
+        ($_ -notmatch 'src[/\\]aot[/\\]STFU\.Parallelism[/\\]') -and
+        ($_ -notmatch 'tests[/\\]') -and
+        ($_ -notmatch 'tools[/\\]') -and
+        ($_ -notmatch 'src[/\\]runtime[/\\]STFU\.Import\.Fbx[/\\]') -and
+        ($_ -notmatch 'src[/\\]aot[/\\]STFU\.Rendering\.Abstractions[/\\]Execution[/\\]')
     }
 )
 

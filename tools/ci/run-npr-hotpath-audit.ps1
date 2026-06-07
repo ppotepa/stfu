@@ -59,7 +59,7 @@ foreach ($relativePath in $hotPaths) {
             $line = $_
             foreach ($pattern in $patterns) {
                 if ($line -match $pattern) {
-                    $rows.Add("$relativeFile:$lineNumber:$pattern:$line")
+                    $rows.Add(($relativeFile + ":" + $lineNumber + ":" + $pattern + ":" + $line))
                 }
             }
         }

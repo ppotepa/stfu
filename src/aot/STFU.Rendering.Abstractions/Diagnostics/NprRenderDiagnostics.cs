@@ -28,6 +28,10 @@ public sealed class NprRenderDiagnostics
 
     public long AllocatedBytes { get; set; }
 
+    public long Readbacks { get; set; }
+
+    public VisibilityParityStats? VisibilityParity { get; set; }
+
     public string? Notes { get; set; }
 
     public void AddTiming(string name, double milliseconds, string? notes = null)

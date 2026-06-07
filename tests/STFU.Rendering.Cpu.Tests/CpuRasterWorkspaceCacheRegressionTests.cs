@@ -1,4 +1,5 @@
 using STFU.NPR.Rendering;
+using STFU.NPR.Composition;
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.Abstractions.Surfaces;
 using STFU.Rendering.Cpu.Rasterization;
@@ -56,11 +57,19 @@ public sealed class CpuRasterWorkspaceCacheRegressionTests
             rgba[i] = 255;
         }
 
-        var tone = new NprToneSurface2D(width, height, rgba, 1f);
+        var tone = new NprToneSurface2D(
+            "test",
+            "test-layer",
+            NprSceneRole.Foreground,
+            "tone",
+            width,
+            height,
+            rgba,
+            1f);
         var workspace = new CpuRasterWorkspace();
         var rasterizer = new CpuToneRasterizer();
 
-        rasterizer.DrawToneSurface(target, tone, 1f, NprFrameBudget.Default, workspace);
+        rasterizer.DrawToneSurface(target, tone, 1f, new NprFrameBudget(), workspace);
 
         Assert.True(workspace.Counters.TonePixels >= width * height);
         Assert.True(workspace.Counters.ToneSameSizeFastPath >= 1);
