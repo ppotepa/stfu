@@ -75,6 +75,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         var tileCount = tilesPerRow * tileRows;
         EnsureTileLayout(buffer.Width, buffer.Height, tileSize);
         var rangeCount = DeterministicParallel.GetRangeCount(triangleCount, context.WorkerCount, 64);
+        int visibleFaces;
 
         if (context.WorkerCount <= 1 || triangleCount < 256 || tileCount <= 1 || rangeCount <= 1)
         {
@@ -96,7 +97,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", pixelTests);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", pixelWrites);
-            var visibleFaces = CountVisibleFaces(buffer.FaceVisible);
+            visibleFaces = CountVisibleFaces(buffer.FaceVisible);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", visibleFaces);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.culledTriangles", triangleCount - visibleFaces);
             return;
@@ -304,7 +305,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", maxRefsPerTile);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", totalPixelTests);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", totalPixelWrites);
-        var visibleFaces = CountVisibleFaces(buffer.FaceVisible);
+        visibleFaces = CountVisibleFaces(buffer.FaceVisible);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", visibleFaces);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.culledTriangles", triangleCount - visibleFaces);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheWidth", _lastWidth);
