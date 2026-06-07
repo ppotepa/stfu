@@ -17,7 +17,7 @@ public static class DxStrokeInstanceBuilder
     {
         var instances = output;
         instances.Clear();
-        instances.EnsureCapacity(NumericMath.AtLeast(paths.Count, 4));
+        instances.EnsureCapacity(EstimatePathInstanceCapacity(paths));
         var order = 0;
 
         if (!preservePathOrder && RequiresSort(paths))
@@ -81,6 +81,27 @@ public static class DxStrokeInstanceBuilder
         }
 
         return output;
+    }
+
+    private static int EstimatePathInstanceCapacity(IReadOnlyList<StrokePath2D> paths)
+    {
+        var total = 0;
+        for (var i = 0; i < paths.Count; i++)
+        {
+            var path = paths[i];
+            if (path.TryGetSegment(out _, out _))
+            {
+                total++;
+                continue;
+            }
+
+            var pointCount = path.RichPoints is { Count: > 1 } richPoints
+                ? richPoints.Count
+                : path.Points.Count;
+            total += NumericMath.AtLeast(pointCount - 1, 0);
+        }
+
+        return NumericMath.AtLeast(total, 4);
     }
 
     private static bool RequiresSort(IReadOnlyList<StrokePath2D> paths)

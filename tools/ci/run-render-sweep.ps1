@@ -1,12 +1,12 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = "Release",
-    [string]$Asset = "assets\suzanne.obj",
-    [int]$Width = 800,
-    [int]$Height = 600,
+    [string[]]$Assets = @("assets\suzanne.obj", "assets\walking.fbx"),
+    [int[]]$Widths = @(320, 800, 1280, 1920),
+    [int[]]$Heights = @(240, 600, 720, 1080),
     [int]$Frames = 30,
     [int]$WarmupFrames = 3,
-    [string]$Mode = "default",
+    [string[]]$Modes = @("default", "mesh", "npr"),
     [int[]]$Workers = @(1, 2, 4, 8, 12, 16, 24),
     [int[]]$TileSizes = @(16, 32, 64, 128),
     [string]$Output = "artifacts\render-sweep.csv"
@@ -23,22 +23,30 @@ if (-not (Test-Path $outputDir)) {
 $rows = New-Object System.Collections.Generic.List[string]
 $rows.Add("asset,width,height,frames,warmupFrames,mode,workers,tileSize,exitCode")
 
-foreach ($worker in $Workers) {
-    foreach ($tileSize in $TileSizes) {
-        Write-Host "Render sweep: workers=$worker tileSize=$tileSize asset=$Asset"
-        & dotnet run --project (Join-Path $root "src\runtime\STFU.App\STFU.App.csproj") -c $Configuration -- `
-            --bench-render-profiles $Asset $Width $Height $Frames $Mode $WarmupFrames `
-            --workers $worker `
-            --tile-size $tileSize `
-            --worker-budget-mode benchmark `
-            --render-optimizer auto `
-            --animation off
+for ($resolutionIndex = 0; $resolutionIndex -lt $Widths.Count; $resolutionIndex++) {
+    $width = $Widths[$resolutionIndex]
+    $height = $Heights[$resolutionIndex]
+    foreach ($asset in $Assets) {
+        foreach ($mode in $Modes) {
+            foreach ($worker in $Workers) {
+                foreach ($tileSize in $TileSizes) {
+                    Write-Host "Render sweep: asset=$asset mode=$mode ${width}x$height workers=$worker tileSize=$tileSize"
+                    & dotnet run --project (Join-Path $root "src\runtime\STFU.App\STFU.App.csproj") -c $Configuration -- `
+                        --bench-render-profiles $asset $width $height $Frames $mode $WarmupFrames `
+                        --workers $worker `
+                        --tile-size $tileSize `
+                        --worker-budget-mode benchmark `
+                        --render-optimizer auto `
+                        --animation off
 
-        $exitCode = $LASTEXITCODE
-        $rows.Add("$Asset,$Width,$Height,$Frames,$WarmupFrames,$Mode,$worker,$tileSize,$exitCode")
-        if ($exitCode -ne 0) {
-            $rows | Set-Content -Path $outputPath -Encoding UTF8
-            throw "Render sweep failed for workers=$worker tileSize=$tileSize."
+                    $exitCode = $LASTEXITCODE
+                    $rows.Add("$asset,$width,$height,$Frames,$WarmupFrames,$mode,$worker,$tileSize,$exitCode")
+                    if ($exitCode -ne 0) {
+                        $rows | Set-Content -Path $outputPath -Encoding UTF8
+                        throw "Render sweep failed for asset=$asset mode=$mode workers=$worker tileSize=$tileSize."
+                    }
+                }
+            }
         }
     }
 }

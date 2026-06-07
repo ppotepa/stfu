@@ -16,6 +16,8 @@ public sealed record NprFrameBudget(
     bool PreferGpuPresentation = true,
     bool EnableGpuDebugLayer = false,
     bool EnableGpuTiming = true,
+    bool AllowGpuVisibilityFallback = true,
+    float GpuVisibilityRequiredMatchRatio = 0.995f,
     WorkerBudgetMode WorkerBudgetMode = WorkerBudgetMode.Performance)
 {
     public WorkerBudgetRequest ToWorkerBudgetRequest()

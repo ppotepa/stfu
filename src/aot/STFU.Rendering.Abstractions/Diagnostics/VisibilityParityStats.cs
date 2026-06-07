@@ -7,6 +7,8 @@ public sealed class VisibilityParityStats
     public int MatchingFaces { get; init; }
     public int CpuOnlyFaces { get; init; }
     public int GpuOnlyFaces { get; init; }
+    public int MissingOnGpu => CpuOnlyFaces;
+    public int ExtraOnGpu => GpuOnlyFaces;
     public int MismatchCount => CpuOnlyFaces + GpuOnlyFaces;
     public bool FallbackUsed { get; init; }
     public string FallbackReason { get; init; } = string.Empty;
@@ -38,6 +40,18 @@ public sealed class VisibilityParityStats
             FallbackReason = fallbackReason,
             MatchRatio = matchRatio,
             Passed = (cpuOnlyFaces == 0 && gpuOnlyFaces == 0) || matchRatio >= requiredMatchRatio
+        };
+    }
+
+    public static VisibilityParityStats Fallback(string reason, int cpuVisibleFaces = 0, int gpuVisibleFaces = 0)
+    {
+        return new VisibilityParityStats
+        {
+            CpuVisibleFaces = cpuVisibleFaces,
+            GpuVisibleFaces = gpuVisibleFaces,
+            FallbackUsed = true,
+            FallbackReason = reason,
+            Passed = false
         };
     }
 

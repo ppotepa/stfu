@@ -5,6 +5,8 @@ namespace STFU.Rendering.Cpu.Rasterization;
 
 public sealed class CpuRasterWorkspace
 {
+    public CpuRasterizationCounters Counters { get; } = new();
+
     public List<CpuStrokeSegment> Segments { get; } = [];
 
     public List<CpuStrokeSegmentBuilder.PathSortEntry> PathSortScratch { get; } = [];
@@ -55,6 +57,7 @@ public sealed class CpuRasterWorkspace
         Segments.Clear();
         PathSortScratch.Clear();
         GridSegments.Clear();
+        Counters.Reset();
     }
 
     public List<int>[] RentBins(int tileCount)
@@ -119,6 +122,7 @@ public sealed class CpuRasterWorkspace
 
         if (_toneSourceXTargetWidth != targetWidth || _toneSourceXSourceWidth != sourceWidth)
         {
+            Counters.ToneSourceCoordCacheMisses++;
             for (var x = 0; x < targetWidth; x++)
             {
                 ToneSourceXMap[x] = NumericMath.ScaleIndex(x, targetWidth, sourceWidth);
@@ -126,6 +130,10 @@ public sealed class CpuRasterWorkspace
 
             _toneSourceXTargetWidth = targetWidth;
             _toneSourceXSourceWidth = sourceWidth;
+        }
+        else
+        {
+            Counters.ToneSourceCoordCacheHits++;
         }
 
         return ToneSourceXMap;
@@ -142,6 +150,7 @@ public sealed class CpuRasterWorkspace
 
         if (_toneSourceYTargetHeight != targetHeight || _toneSourceYSourceHeight != sourceHeight)
         {
+            Counters.ToneSourceCoordCacheMisses++;
             for (var y = 0; y < targetHeight; y++)
             {
                 ToneSourceYMap[y] = NumericMath.ScaleIndex(y, targetHeight, sourceHeight);
@@ -149,6 +158,10 @@ public sealed class CpuRasterWorkspace
 
             _toneSourceYTargetHeight = targetHeight;
             _toneSourceYSourceHeight = sourceHeight;
+        }
+        else
+        {
+            Counters.ToneSourceCoordCacheHits++;
         }
 
         return ToneSourceYMap;
@@ -210,22 +223,14 @@ public sealed class CpuRasterWorkspace
         var key = new TileCacheKey(width, height, RasterMath.ClampTileSize(tileSize));
         if (_tileCache.TryGetValue(key, out var tiles))
         {
+            Counters.TileCacheHits++;
             return tiles;
         }
 
+        Counters.TileCacheMisses++;
         tiles = CpuTileScheduler.BuildTilesCore(width, height, key.TileSize);
         _tileCache[key] = tiles;
         return tiles;
-    }
-
-    public int[] RentSequentialTileSegmentIndices(int capacity)
-    {
-        if (SequentialTileSegmentIndices.Length < capacity)
-        {
-            SequentialTileSegmentIndices = new int[capacity];
-        }
-
-        return SequentialTileSegmentIndices;
     }
 
     public void EnsureTileBinningCapacity(int rangeCount, int tileCount, int totalRefsEstimate)
@@ -252,6 +257,8 @@ public sealed class CpuRasterWorkspace
         {
             TileSegmentIndices = new int[totalRefsEstimate];
         }
+
+        Counters.TileBinCapacity = NumericMath.AtLeast(Counters.TileBinCapacity, TileSegmentIndices.Length);
     }
 
     private readonly record struct TileCacheKey(int Width, int Height, int TileSize);

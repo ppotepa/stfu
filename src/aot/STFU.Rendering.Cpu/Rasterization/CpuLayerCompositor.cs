@@ -26,6 +26,12 @@ public sealed class CpuLayerCompositor
 
         if (quality.RasterizeToneSurfaces)
         {
+            if (layer.Tones.Count > 0)
+            {
+                workspace.EnsureToneScratchCapacity(target.Width * target.Height);
+                workspace.Counters.LayerScratchReused++;
+            }
+
             foreach (var tone in layer.Tones)
             {
                 _toneRasterizer.DrawToneSurface(target, tone, layerOpacity, budget, workspace, cancellationToken);

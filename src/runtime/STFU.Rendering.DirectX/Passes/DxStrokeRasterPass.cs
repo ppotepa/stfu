@@ -140,7 +140,7 @@ public sealed class DxStrokeRasterPass : IDisposable
                 constants[4] = NumericMath.AtLeast(request.Quality.GpuStrokeCoverageSoftness, 0.25f);
                 _device.Context.UpdateSubresource(_frameConstants, 0, null, (IntPtr)constants, 0, 0);
                 uploadWatch.Stop();
-                diagnostics.AddTiming("GpuStrokeUpload", uploadWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, bytes={uploadedBytes}, recreated={(bufferRecreated ? 1 : 0)}");
+                diagnostics.AddTiming("GpuStrokeUpload", uploadWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, bytes={uploadedBytes}, recreated={(bufferRecreated ? 1 : 0)}, capacity={_instanceCapacity}, reuseRatio={Counters.StrokeInstanceUploadReuseRatio:0.000}");
             }
 
             using (new DirectXGpuTimer(_device, request.Budget.EnableGpuTiming).Measure(

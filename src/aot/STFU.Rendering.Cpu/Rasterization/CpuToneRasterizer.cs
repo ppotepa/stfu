@@ -24,6 +24,8 @@ public sealed class CpuToneRasterizer
             return;
         }
 
+        workspace.Counters.TonePixels += (long)target.Width * target.Height;
+
         var opacity = ToneMath.EffectiveOpacity(tone.Opacity, layerOpacity);
         if (opacity <= 0f)
         {
@@ -33,6 +35,10 @@ public sealed class CpuToneRasterizer
         var workerCount = budget.ResolveWorkerCount();
         var parallel = budget.EnableTileParallelism && workerCount > 1;
         var sameSize = tone.Width == target.Width && tone.Height == target.Height;
+        if (sameSize)
+        {
+            workspace.Counters.ToneSameSizeFastPath++;
+        }
         var sourceXMap = sameSize ? null : GetSourceXMap(target.Width, tone.Width, workspace);
         var sourceYMap = sameSize ? null : GetSourceYMap(target.Height, tone.Height, workspace);
         var alphaLut = GetAlphaLut(opacity);

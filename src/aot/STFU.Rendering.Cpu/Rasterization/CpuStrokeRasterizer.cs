@@ -80,6 +80,8 @@ public sealed class CpuStrokeRasterizer
             return;
         }
 
+        workspace.Counters.StrokeSegmentsInput += segments.Count;
+
         var workerCount = budget.ResolveWorkerCount();
         var tileSize = RasterMath.ClampTileSize(budget.TileSize);
         var tilesPerRow = RasterMath.TilesPerAxis(target.Width, tileSize);
@@ -172,6 +174,8 @@ public sealed class CpuStrokeRasterizer
             workspace.TileCounts.AsSpan(0, tileCount),
             workspace.TileOffsets.AsSpan(0, tileCount));
         workspace.EnsureTileBinningCapacity(rangeCount, tileCount, totalRefs);
+        workspace.Counters.StrokeTileRefs += totalRefs;
+        workspace.Counters.StrokeTilesTouched += CountTouchedTiles(workspace.TileCounts, tileCount);
         Array.Clear(workspace.TileSegmentIndices, 0, totalRefs);
 
         for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
@@ -256,7 +260,8 @@ public sealed class CpuStrokeRasterizer
                         workspace.TileSegmentIndices,
                         workspace.TileOffsets[i],
                         workspace.TileCounts[i],
-                        quality);
+                        quality,
+                        workspace.Counters);
                 }
             },
             minItemsPerRange: 1);
@@ -307,6 +312,8 @@ public sealed class CpuStrokeRasterizer
             workspace.TileCounts.AsSpan(0, tileCount),
             workspace.TileOffsets.AsSpan(0, tileCount));
         workspace.EnsureTileBinningCapacity(1, tileCount, totalRefs);
+        workspace.Counters.StrokeTileRefs += totalRefs;
+        workspace.Counters.StrokeTilesTouched += CountTouchedTiles(workspace.TileCounts, tileCount);
         Array.Copy(workspace.TileOffsets, workspace.TileWriteCursors, tileCount);
 
         for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
@@ -345,7 +352,8 @@ public sealed class CpuStrokeRasterizer
                 workspace.TileSegmentIndices,
                 workspace.TileOffsets[tileIndex],
                 workspace.TileCounts[tileIndex],
-                quality);
+                quality,
+                workspace.Counters);
         }
     }
 
@@ -376,12 +384,6 @@ public sealed class CpuStrokeRasterizer
         return true;
     }
 
-    private static CpuTile CreateTile(int index, int tilesPerRow, int tileSize, int targetWidth, int targetHeight)
-    {
-        var bounds = RasterMath.TileBounds(index, tilesPerRow, tileSize, targetWidth, targetHeight);
-        return new CpuTile(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-    }
-
     private static void DrawTile(
         PixelSurface target,
         CpuTile tile,
@@ -389,11 +391,12 @@ public sealed class CpuStrokeRasterizer
         int[] segmentIndices,
         int segmentOffset,
         int segmentCount,
-        NprQualityProfile quality)
+        NprQualityProfile quality,
+        CpuRasterizationCounters counters)
     {
         for (var index = 0; index < segmentCount; index++)
         {
-            DrawSegmentInTile(target, tile, segments[segmentIndices[segmentOffset + index]], quality);
+            DrawSegmentInTile(target, tile, segments[segmentIndices[segmentOffset + index]], quality, counters);
         }
     }
 
@@ -401,7 +404,8 @@ public sealed class CpuStrokeRasterizer
         PixelSurface target,
         CpuTile tile,
         CpuStrokeSegment segment,
-        NprQualityProfile quality)
+        NprQualityProfile quality,
+        CpuRasterizationCounters counters)
     {
         var (minX, maxX) = RasterMath.ClampPixelRange(segment.MinX, segment.MaxX, tile.X, tile.Right);
         var (minY, maxY) = RasterMath.ClampPixelRange(segment.MinY, segment.MaxY, tile.Y, tile.Bottom);
@@ -424,12 +428,16 @@ public sealed class CpuStrokeRasterizer
         var maxDistance = quality.AntialiasLines ? radius + softness : radius;
         var maxDistanceSq = maxDistance * maxDistance;
 
+        long pixelTests = 0;
+        long pixelWrites = 0;
+
         for (var y = minY; y <= maxY; y++)
         {
             var py = y + 0.5f;
             for (var x = minX; x <= maxX; x++)
             {
                 var px = x + 0.5f;
+                pixelTests++;
                 if (!StrokeRasterCoverageMath.TryProjectPointToSegment(ax, ay, bx, by, px, py, out var projection) ||
                     projection.DistanceSquared >= maxDistanceSq)
                 {
@@ -448,7 +456,32 @@ public sealed class CpuStrokeRasterizer
                 }
 
                 CpuPixelBlender.BlendSourceOver(target, x, y, segment.Color, segment.Opacity * coverage);
+                pixelWrites++;
             }
         }
+
+        if (pixelTests > 0)
+        {
+            Interlocked.Add(ref counters.StrokePixelTests, pixelTests);
+        }
+
+        if (pixelWrites > 0)
+        {
+            Interlocked.Add(ref counters.StrokePixelWrites, pixelWrites);
+        }
+    }
+
+    private static int CountTouchedTiles(int[] tileCounts, int tileCount)
+    {
+        var touched = 0;
+        for (var i = 0; i < tileCount; i++)
+        {
+            if (tileCounts[i] > 0)
+            {
+                touched++;
+            }
+        }
+
+        return touched;
     }
 }

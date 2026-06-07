@@ -84,7 +84,7 @@ try {
 
     if ($RunSweep) {
         Invoke-Step "Worker/tile render sweep" {
-            powershell -NoProfile -ExecutionPolicy Bypass -File tools/ci/run-render-sweep.ps1 -Configuration $Configuration -Asset $SweepAsset
+            powershell -NoProfile -ExecutionPolicy Bypass -File tools/ci/run-render-sweep.ps1 -Configuration $Configuration -Assets @($SweepAsset, $Asset)
         }
     }
 }

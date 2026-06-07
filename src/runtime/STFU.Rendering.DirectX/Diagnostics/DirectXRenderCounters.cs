@@ -34,4 +34,11 @@ public sealed class DirectXRenderCounters
 
     public double StrokeInstanceUploadReuseRatio =>
         StrokeInstanceUploads <= 0 ? 1d : 1d - (double)StrokeInstanceBufferRecreates / StrokeInstanceUploads;
+
+    public bool DirectViewportReadbackFree => Readbacks == 0;
+
+    public string ToDiagnosticString()
+    {
+        return $"strokeInstances={StrokeInstancesBuilt}, uploads={StrokeInstanceUploads}, recreates={StrokeInstanceBufferRecreates}, capacity={StrokeInstanceCapacity}, uploadedBytes={UploadedBytes}, readbacks={Readbacks}, toneUploads={ToneSurfaceUploads}, toneCacheHits={ToneSurfaceCacheHits}, toneCacheMisses={ToneSurfaceCacheMisses}, meshUploads={MeshBufferUploads}, meshCacheHits={MeshBufferCacheHits}, reuseRatio={StrokeInstanceUploadReuseRatio:0.000}";
+    }
 }
