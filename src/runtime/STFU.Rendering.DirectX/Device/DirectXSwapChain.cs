@@ -24,6 +24,10 @@ public sealed class DirectXSwapChain : IDisposable
 
     public IntPtr CurrentHwnd => _hwnd;
 
+    public int Width => _width;
+
+    public int Height => _height;
+
     public void AttachOrResize(IntPtr hwnd, int width, int height)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

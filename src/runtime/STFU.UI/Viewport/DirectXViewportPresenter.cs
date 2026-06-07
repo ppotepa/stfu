@@ -1,6 +1,7 @@
 using STFU.Rendering.Abstractions.Requests;
 using STFU.Rendering.DirectX.Device;
 using STFU.UI.Bridge.Session;
+using STFU.Logging;
 
 namespace STFU.UI;
 
@@ -13,14 +14,16 @@ internal enum DirectXPresentAvailability
     DeviceDisposed,
     NotAttached,
     NotGpuTexture,
-    NullGpuTextureLease
+    NullGpuTextureLease,
+    SizeMismatch
 }
 
-internal sealed class DirectXViewportPresenter : IDisposable
+internal sealed class DirectXViewportPresenter : IViewportPresenter, IDisposable
 {
     private readonly DirectXDevice? _device;
     private readonly DirectXSwapChain? _swapChain;
     private bool _disposed;
+    private long _sizingCheckCounter;
 
     public DirectXViewportPresenter(UiEngineSession session)
     {
@@ -33,7 +36,13 @@ internal sealed class DirectXViewportPresenter : IDisposable
 
     public bool IsAvailable => OperatingSystem.IsWindows() && _device is not null && _swapChain is not null && !_device.IsDisposed;
 
+    public ViewportPresentationKind Kind => ViewportPresentationKind.DirectGpu;
+
     public bool IsAttached => _swapChain?.IsAttached == true;
+
+    public int SwapChainWidth => _swapChain?.Width ?? 0;
+
+    public int SwapChainHeight => _swapChain?.Height ?? 0;
 
     public void Attach(IntPtr hwnd, int width, int height)
     {
@@ -104,20 +113,107 @@ internal sealed class DirectXViewportPresenter : IDisposable
 
     public bool Present(NprRenderResult result)
     {
-        if (!CanPresent(result) || result.GpuTextureLease is null)
+        return TryPresent(result, out DirectXPresentAvailability _);
+    }
+
+    public bool TryPresent(NprRenderResult result, out string availability)
+    {
+        var presented = TryPresent(result, out DirectXPresentAvailability directAvailability);
+        availability = directAvailability.ToString();
+        return presented;
+    }
+
+    public bool TryPresent(
+        NprRenderResult result,
+        out DirectXPresentAvailability availability)
+    {
+        availability = GetAvailability(result);
+        if (availability != DirectXPresentAvailability.Ready)
         {
             return false;
         }
 
+        if (result.GpuTextureLease is null)
+        {
+            availability = DirectXPresentAvailability.NullGpuTextureLease;
+            return false;
+        }
+
+        var swapChain = _swapChain!;
         using var deviceLock = _device!.Lock();
         if (!_device.Resources.TryGetTexture(result.GpuTextureLease.Texture, out var source))
         {
-            throw new InvalidOperationException("GPU texture handle could not be resolved for direct presentation.");
+            availability = DirectXPresentAvailability.NullGpuTextureLease;
+            StfuLog.Write(
+                StfuLogDomain.Viewport,
+                "gpu_present.exception",
+                $"DirectX texture handle was invalid for revision {result.Revision}.",
+                StfuLogLevel.Warning,
+                new Dictionary<string, object?>
+                {
+                    ["revision"] = result.Revision,
+                    ["outputKind"] = result.OutputKind,
+                    ["resourceId"] = result.GpuTextureLease.Texture.ResourceId,
+                    ["sourceWidth"] = result.GpuTextureLease.Texture.Width,
+                    ["sourceHeight"] = result.GpuTextureLease.Texture.Height,
+                    ["swapChainWidth"] = swapChain.Width,
+                    ["swapChainHeight"] = swapChain.Height,
+                    ["availability"] = availability
+                });
+            return false;
         }
 
-        _swapChain!.AttachOrResize(_swapChain.CurrentHwnd, source.Handle.Width, source.Handle.Height);
-        _swapChain!.PresentTexture(source);
-        return true;
+        if (swapChain.Width != source.Handle.Width || swapChain.Height != source.Handle.Height)
+        {
+            availability = DirectXPresentAvailability.SizeMismatch;
+            return false;
+        }
+
+        if (_sizingCheckCounter++ % 60 == 0)
+        {
+            StfuLog.Write(
+                StfuLogDomain.Viewport,
+                "direct_present.sizing_check",
+                $"source={source.Handle.Width}x{source.Handle.Height} " +
+                $"swapchain={swapChain.Width}x{swapChain.Height}",
+                StfuLogLevel.Debug,
+                new Dictionary<string, object?>
+                {
+                    ["sourceWidth"] = source.Handle.Width,
+                    ["sourceHeight"] = source.Handle.Height,
+                    ["swapChainWidth"] = swapChain.Width,
+                    ["swapChainHeight"] = swapChain.Height,
+                    ["isAttached"] = IsAttached
+                });
+        }
+
+        try
+        {
+            swapChain.PresentTexture(source);
+            availability = DirectXPresentAvailability.Ready;
+            return true;
+        }
+        catch (Exception exception)
+        {
+            availability = DirectXPresentAvailability.DeviceUnavailable;
+            StfuLog.Write(
+                StfuLogDomain.Viewport,
+                "gpu_present.exception",
+                $"DirectX present failed: {exception.Message}",
+                StfuLogLevel.Warning,
+                new Dictionary<string, object?>
+                {
+                    ["revision"] = result.Revision,
+                    ["outputKind"] = result.OutputKind,
+                    ["sourceWidth"] = source.Handle.Width,
+                    ["sourceHeight"] = source.Handle.Height,
+                    ["swapChainWidth"] = swapChain.Width,
+                    ["swapChainHeight"] = swapChain.Height,
+                    ["availability"] = availability
+                },
+                exception);
+            return false;
+        }
     }
 
     public void Detach()

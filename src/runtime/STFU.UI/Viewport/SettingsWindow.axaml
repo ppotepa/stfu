@@ -43,6 +43,12 @@
                 <ComboBoxItem Content="Full CPU" />
                 <ComboBoxItem Content="CPU + GPU" />
               </ComboBox>
+              <TextBlock Text="{Binding GpuSettingsDisabledReason}"
+                         Foreground="{DynamicResource StfuMutedBrush}"
+                         TextWrapping="Wrap" />
+              <TextBlock Text="{Binding RequestedSummary}"
+                         Foreground="{DynamicResource StfuMutedBrush}"
+                         TextWrapping="Wrap" />
             </StackPanel>
           </Border>
 
@@ -55,11 +61,18 @@
             <StackPanel Spacing="10">
               <TextBlock Text="Presentation" FontWeight="SemiBold" />
               <ComboBox x:Name="PresentationCombo"
+                        IsEnabled="{Binding CanConfigurePresentation}"
                         SelectionChanged="OnPresentationSelectionChanged">
                 <ComboBoxItem Content="Auto" />
                 <ComboBoxItem Content="Direct GPU" />
                 <ComboBoxItem Content="GPU Readback" />
               </ComboBox>
+              <TextBlock Text="{Binding GpuSettingsDisabledReason}"
+                         Foreground="{DynamicResource StfuMutedBrush}"
+                         TextWrapping="Wrap" />
+              <TextBlock Text="This is the requested mode. Runtime Info below shows what is actually active."
+                         Foreground="{DynamicResource StfuMutedBrush}"
+                         TextWrapping="Wrap" />
             </StackPanel>
           </Border>
 
@@ -75,10 +88,12 @@
                 <RadioButton x:Name="ApiAutoButton"
                              GroupName="RendererApi"
                              Content="Auto"
+                             IsEnabled="{Binding CanConfigureGpu}"
                              Click="OnApiChecked" />
                 <RadioButton x:Name="ApiDirectX11Button"
                              GroupName="RendererApi"
                              Content="DirectX 11"
+                             IsEnabled="{Binding CanConfigureGpu}"
                              Click="OnApiChecked" />
                 <RadioButton Content="Vulkan"
                              IsEnabled="False" />
@@ -103,6 +118,7 @@
                         IsChecked="{Binding ShowRendererHud}" />
               <CheckBox x:Name="GpuTimingsCheckBox"
                         Content="Enable GPU timings"
+                        IsEnabled="{Binding CanConfigureGpuTimings}"
                         IsChecked="{Binding EnableGpuTimings}" />
             </StackPanel>
           </Border>
@@ -171,17 +187,21 @@
                   BorderThickness="1">
             <StackPanel Spacing="10">
               <TextBlock Text="Runtime Info" FontWeight="SemiBold" />
-              <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Backend" Foreground="{DynamicResource StfuMutedBrush}" />
-                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding EffectiveBackend}" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="API" Foreground="{DynamicResource StfuMutedBrush}" />
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding EffectiveApi}" />
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="Presentation" Foreground="{DynamicResource StfuMutedBrush}" />
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EffectivePresentation}" />
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="Adapter" Foreground="{DynamicResource StfuMutedBrush}" />
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding AdapterName}" TextWrapping="Wrap" />
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="Status" Foreground="{DynamicResource StfuMutedBrush}" />
-                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Requested mode" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RequestedSummary}" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Active runtime" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding StatusSummary}" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Backend" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding EffectiveBackend}" />
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="API" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding EffectiveApi}" />
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Presentation" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding EffectivePresentation}" />
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Adapter" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding AdapterName}" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="Status" Foreground="{DynamicResource StfuMutedBrush}" />
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
               </Grid>
             </StackPanel>
           </Border>

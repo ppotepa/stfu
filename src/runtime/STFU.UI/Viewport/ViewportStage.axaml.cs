@@ -11,6 +11,7 @@ public sealed partial class ViewportStage : UserControl
     private UiEngineSession? _session;
     private EngineViewportControl? _viewport;
     private DirectXViewportPresenter? _directXPresenter;
+    private ViewportRuntimeController? _runtimeController;
 
     public ViewportStage()
     {
@@ -19,6 +20,7 @@ public sealed partial class ViewportStage : UserControl
 
     internal void Attach(UiEngineSession session, StfuUiStartupOptions startupOptions)
     {
+        _runtimeController?.Dispose();
         _session = session;
         DataContext = session.Workspace;
         if (OperatingSystem.IsWindows() && session.HasGpuRenderer)
@@ -26,27 +28,32 @@ public sealed partial class ViewportStage : UserControl
             _directXPresenter = new DirectXViewportPresenter(session);
         }
 
-        _viewport = new EngineViewportControl(session, startupOptions, _directXPresenter);
+        var inputController = new ViewportInputController(session);
+        _viewport = new EngineViewportControl(session, startupOptions, _directXPresenter, inputController);
+        var viewport = _viewport;
+        _runtimeController = new ViewportRuntimeController(
+            viewport,
+            session.Workspace.Renderer,
+            session.HasGpuRenderer,
+            session.GpuRenderBackend?.Info.Name);
         if (_directXPresenter?.IsAvailable == true)
         {
             var hostGrid = new Grid();
-            var directXHost = new DirectXViewportHost(_directXPresenter, session, () => _viewport?.PumpDirectFrame());
-            var renderer = session.Workspace.Renderer;
-            directXHost.IsVisible = renderer.UseDirectViewportHost;
-            renderer.PropertyChanged += (_, args) =>
-            {
-                if (args.PropertyName is nameof(renderer.UseDirectViewportHost) or nameof(renderer.PresentationPreference))
-                {
-                    directXHost.IsVisible = renderer.UseDirectViewportHost;
-                }
-            };
+            var directXHost = new DirectXViewportHost(
+                _directXPresenter,
+                session,
+                viewport.RequestImmediateFrame,
+                inputController);
+            _runtimeController.AttachDirectHost(directXHost);
+            hostGrid.Children.Add(viewport);
             hostGrid.Children.Add(directXHost);
-            hostGrid.Children.Add(_viewport);
             GetViewportHost().Content = hostGrid;
+            _runtimeController.ApplyStartupState();
             return;
         }
 
-        GetViewportHost().Content = _viewport;
+        GetViewportHost().Content = viewport;
+        _runtimeController.ApplyStartupState();
     }
 
     public void FocusViewport()

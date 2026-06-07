@@ -141,11 +141,12 @@ public sealed class MeshAnalysisCacheStore
     public void InvalidateGeometry(MeshHandle handle)
     {
         _caches.Remove(handle);
+        _projectionCache.RemoveMesh(handle);
     }
 
     public void InvalidateTopology(MeshHandle handle)
     {
-        _caches.Remove(handle);
+        InvalidateGeometry(handle);
         foreach (var key in _wireframeTopologies.Keys.Where(key => key.Handle == handle).ToArray())
         {
             _wireframeTopologies.Remove(key);

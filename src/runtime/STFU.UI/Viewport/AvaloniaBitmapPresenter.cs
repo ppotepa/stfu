@@ -9,13 +9,28 @@ using STFU.Rendering.Abstractions.Surfaces;
 
 namespace STFU.UI;
 
-internal sealed class AvaloniaBitmapPresenter
+internal sealed class AvaloniaBitmapPresenter : IViewportPresenter
 {
     private WriteableBitmap? _bitmap;
     private int _width;
     private int _height;
 
+    public ViewportPresentationKind Kind => ViewportPresentationKind.Bitmap;
+
     public bool HasFrame => _bitmap is not null;
+
+    public bool TryPresent(NprRenderResult result, out string availability)
+    {
+        if (result.OutputKind != NprRenderOutputKind.PixelSurface || result.PixelSurfaceLease is null)
+        {
+            availability = result.OutputKind.ToString();
+            return false;
+        }
+
+        Present(result);
+        availability = "Ready";
+        return true;
+    }
 
     public void Present(NprRenderResult result)
     {

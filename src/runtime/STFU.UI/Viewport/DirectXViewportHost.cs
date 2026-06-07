@@ -13,8 +13,8 @@ namespace STFU.UI;
 internal sealed class DirectXViewportHost : NativeControlHost
 {
     private readonly DirectXViewportPresenter _presenter;
-    private readonly UiEngineSession _session;
-    private readonly Action _pumpViewportFrame;
+    private readonly ViewportInputController _inputController;
+    private readonly Action _requestFrame;
     private readonly WndProc _wndProc;
     private readonly DispatcherTimer _renderPump;
     private IntPtr _childHandle;
@@ -24,26 +24,24 @@ internal sealed class DirectXViewportHost : NativeControlHost
     private bool _loggedNativeInput;
     private bool _loggedAvaloniaInput;
     private int _requestRenderLogCounter;
+    private int _lastNativeWidth;
+    private int _lastNativeHeight;
+    private bool _renderQueued;
+    private bool _isPresentationPumpEnabled = true;
 
     public DirectXViewportHost(
         DirectXViewportPresenter presenter,
         UiEngineSession session,
-        Action pumpViewportFrame)
+        Action requestFrame,
+        ViewportInputController? inputController = null)
     {
         _presenter = presenter;
-        _session = session;
-        _pumpViewportFrame = pumpViewportFrame;
+        _inputController = inputController ?? new ViewportInputController(session);
+        _requestFrame = requestFrame;
         _wndProc = ChildWndProc;
         _renderPump = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(16)
-        };
-        _renderPump.Tick += (_, _) =>
-        {
-            if (IsVisible)
-            {
-                RequestRender();
-            }
         };
 
         IsHitTestVisible = true;
@@ -56,6 +54,25 @@ internal sealed class DirectXViewportHost : NativeControlHost
         AttachedToVisualTree += (_, _) => StartRenderPump();
         DetachedFromVisualTree += (_, _) => StopRenderPump();
     }
+
+    public bool IsPresentationPumpEnabled
+    {
+        get => _isPresentationPumpEnabled;
+        set
+        {
+            if (_isPresentationPumpEnabled == value)
+            {
+                return;
+            }
+
+            _isPresentationPumpEnabled = value;
+            UpdateNativeVisibility();
+        }
+    }
+
+    public int PixelWidth => NumericMath.AtLeast(_lastNativeWidth, 1);
+
+    public int PixelHeight => NumericMath.AtLeast(_lastNativeHeight, 1);
 
     protected override IPlatformHandle CreateNativeControlCore(IPlatformHandle parent)
     {
@@ -86,6 +103,9 @@ internal sealed class DirectXViewportHost : NativeControlHost
         }
 
         _childHandle = hwnd;
+        _lastNativeWidth = width;
+        _lastNativeHeight = height;
+        UpdateNativeVisibility();
         _presenter.Attach(hwnd, width, height);
         StfuLog.Write(
             StfuLogDomain.Viewport,
@@ -131,6 +151,16 @@ internal sealed class DirectXViewportHost : NativeControlHost
         }
     }
 
+    private void UpdateNativeVisibility()
+    {
+        if (_childHandle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        ShowWindow(_childHandle, _isPresentationPumpEnabled ? SwShow : SwHide);
+    }
+
     protected override Size ArrangeOverride(Size finalSize)
     {
         var arranged = base.ArrangeOverride(finalSize);
@@ -147,6 +177,13 @@ internal sealed class DirectXViewportHost : NativeControlHost
 
         var width = NumericMath.AtLeast((int)Bounds.Width, 1);
         var height = NumericMath.AtLeast((int)Bounds.Height, 1);
+        if (width == _lastNativeWidth && height == _lastNativeHeight)
+        {
+            return;
+        }
+
+        _lastNativeWidth = width;
+        _lastNativeHeight = height;
         MoveWindow(_childHandle, 0, 0, width, height, true);
         _presenter.Resize(width, height);
     }
@@ -232,39 +269,34 @@ internal sealed class DirectXViewportHost : NativeControlHost
             return;
         }
 
-        if (IsKeyDown(VkControl))
+        if (_inputController.MoveCamera(delta, IsKeyDown(VkControl)))
         {
-            const float panUnitsPerPixel = 0.005f;
-            _session.Workspace.Camera.Pan((float)-delta.X * panUnitsPerPixel, (float)delta.Y * panUnitsPerPixel);
+            RequestRender();
         }
-        else
-        {
-            const float radiansPerPixel = 0.01f;
-            _session.Workspace.Camera.Orbit((float)delta.X * radiansPerPixel, (float)-delta.Y * radiansPerPixel);
-        }
-
-        RequestRender();
     }
 
     private void ZoomCamera(int wheelDelta)
     {
-        if (wheelDelta == 0)
+        if (_inputController.ZoomCamera(wheelDelta / 120d))
         {
-            return;
+            RequestRender();
         }
-
-        const float degreesPerWheelStep = 3f;
-        _session.Workspace.Camera.AdjustFieldOfView(-(wheelDelta / 120f) * degreesPerWheelStep);
-        RequestRender();
     }
 
     private void RequestRender()
     {
+        if (_renderQueued)
+        {
+            return;
+        }
+
+        _renderQueued = true;
         _requestRenderLogCounter++;
         var shouldLogRenderRequest = _requestRenderLogCounter % 120 == 0;
 
         if (Dispatcher.UIThread.CheckAccess())
         {
+            _renderQueued = false;
             if (shouldLogRenderRequest)
             {
                 StfuLog.Write(
@@ -281,12 +313,13 @@ internal sealed class DirectXViewportHost : NativeControlHost
                     });
             }
 
-            _pumpViewportFrame();
+            _requestFrame();
             return;
         }
 
         Dispatcher.UIThread.Post(() =>
         {
+            _renderQueued = false;
             if (shouldLogRenderRequest)
             {
                 StfuLog.Write(
@@ -303,8 +336,8 @@ internal sealed class DirectXViewportHost : NativeControlHost
                     });
             }
 
-            _pumpViewportFrame();
-        });
+            _requestFrame();
+        }, DispatcherPriority.Render);
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -359,15 +392,11 @@ internal sealed class DirectXViewportHost : NativeControlHost
 
     private void StartRenderPump()
     {
-        if (!_renderPump.IsEnabled)
-        {
-            _renderPump.Start();
-            StfuLog.Write(
-                StfuLogDomain.Viewport,
-                "direct_host.pump_start",
-                "Direct GPU viewport render pump started.",
-                StfuLogLevel.Debug);
-        }
+        StfuLog.Write(
+            StfuLogDomain.Viewport,
+            "direct_host.shared_loop",
+            "Direct GPU viewport host is attached; shared viewport frame loop owns pumping.",
+            StfuLogLevel.Debug);
     }
 
     private void StopRenderPump()
@@ -450,6 +479,8 @@ internal sealed class DirectXViewportHost : NativeControlHost
     private const int MaActivate = 1;
     private const int MkLButton = 0x0001;
     private const int VkControl = 0x11;
+    private const int SwHide = 0;
+    private const int SwShow = 5;
 
     private delegate IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
 
@@ -475,6 +506,10 @@ internal sealed class DirectXViewportHost : NativeControlHost
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool MoveWindow(IntPtr hwnd, int x, int y, int width, int height, [MarshalAs(UnmanagedType.Bool)] bool repaint);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hwnd, int command);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SetWindowLongPtrW(IntPtr hwnd, int index, IntPtr newLong);

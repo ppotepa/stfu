@@ -23,14 +23,15 @@ public sealed class EngineViewportControl : Control
     private readonly AvaloniaBitmapPresenter _bitmapPresenter = new();
     private readonly DirectXViewportPresenter? _directXPresenter;
     private readonly ViewportRenderBridge _renderBridge;
+    private readonly ViewportInputController _inputController;
+    private readonly ViewportSurfaceRouter _surfaceRouter;
+    private readonly ViewportFrameLoop _frameLoop;
     private Point _lastPointerPosition;
     private bool _isOrbiting;
-    private bool _loggedOrbitInput;
-    private bool _loggedPanInput;
-    private bool _loggedFovInput;
     private bool _invalidateQueued;
     private bool _presentQueued;
-    private readonly DispatcherTimer _renderTimer;
+    private bool _lastDirectPresentationSuppressed;
+    private bool _lastDirectGpuPresenting;
 
     public EngineViewportControl(StfuEngine engine)
         : this(new UiEngineSession(engine), StfuUiStartupOptions.Default)
@@ -45,17 +46,22 @@ public sealed class EngineViewportControl : Control
     internal EngineViewportControl(
         UiEngineSession session,
         StfuUiStartupOptions startupOptions,
-        DirectXViewportPresenter? directXPresenter)
+        DirectXViewportPresenter? directXPresenter,
+        ViewportInputController? inputController = null)
     {
         _session = session;
         _activeNprPreset = session.ActivePreset;
         _viewport = session.Viewport;
         _directXPresenter = directXPresenter;
+        _inputController = inputController ?? new ViewportInputController(session);
         _renderBridge = new ViewportRenderBridge(
             session,
             _bitmapPresenter,
             RequestPresent,
+            RequestDeferredFrame,
             directXPresenter);
+        _surfaceRouter = new ViewportSurfaceRouter(GetAvaloniaRenderSize);
+        _frameLoop = new ViewportFrameLoop(TickFrame);
 
         ApplyStartupOptions(startupOptions);
 
@@ -66,29 +72,64 @@ public sealed class EngineViewportControl : Control
         PointerCaptureLost += OnPointerCaptureLost;
         PointerWheelChanged += OnPointerWheelChanged;
 
-        _renderTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(16)
-        };
-        _renderTimer.Tick += (_, _) => RequestInvalidate();
-
         AttachedToVisualTree += (_, _) =>
         {
-            if (!_renderTimer.IsEnabled)
+            if (!_frameLoop.IsRunning)
             {
-                _renderTimer.Start();
+                _frameLoop.Start();
                 StfuUiLog.Write("Viewport render loop started.");
             }
         };
 
         DetachedFromVisualTree += (_, _) =>
         {
-            if (_renderTimer.IsEnabled)
+            if (_frameLoop.IsRunning)
             {
-                _renderTimer.Stop();
+                _frameLoop.Stop();
                 StfuUiLog.Write("Viewport render loop stopped.");
             }
         };
+    }
+
+    internal event Action<bool>? DirectPresentationSuppressionChanged;
+
+    internal event Action? PresentationStateChanged;
+
+    internal bool IsDirectPresentationSuppressed => _renderBridge.IsDirectPresentationSuppressed;
+
+    internal ViewportSurfaceMode SurfaceMode => _surfaceRouter.Mode;
+
+    internal bool ShouldShowDirectHost => _surfaceRouter.ShowDirectHost;
+
+    internal bool IsDirectGpuPresenting => _renderBridge.IsDirectGpuPresenting;
+
+    internal void ApplyRuntimePlan(RendererRuntimePlan plan)
+    {
+        var previousMode = _surfaceRouter.Mode;
+        _surfaceRouter.ApplyPlan(plan);
+
+        if (_surfaceRouter.Mode != previousMode)
+        {
+            PresentationStateChanged?.Invoke();
+            QueueInvalidate();
+        }
+    }
+
+    internal void SetDirectSurfaceSizeProvider(Func<(int Width, int Height)> sizeProvider)
+    {
+        _surfaceRouter.SetDirectSizeProvider(sizeProvider);
+    }
+
+    internal void RequestImmediateFrame()
+    {
+        _frameLoop.RequestImmediateTick();
+        QueueInvalidate();
+    }
+
+    internal void ResetDirectPresentationFallback()
+    {
+        _renderBridge.ResetDirectPresentationFallback();
+        PublishPresentationStateIfChanged();
     }
 
     private void ApplyStartupOptions(StfuUiStartupOptions startupOptions)
@@ -112,12 +153,8 @@ public sealed class EngineViewportControl : Control
         base.Render(context);
 
         var bounds = Bounds;
-        var width = NumericMath.AtLeast((int)bounds.Width, 1);
-        var height = NumericMath.AtLeast((int)bounds.Height, 1);
 
-        ProcessFrame(width, height);
-
-        if (!_renderBridge.IsDirectGpuPresenting)
+        if (_surfaceRouter.DrawBitmap)
         {
             _bitmapPresenter.Draw(context, bounds, ViewportPaperColor());
             DrawDebugOverlay(context, _viewport.Snapshot.DebugFrame, _viewport.DebugOverlay);
@@ -126,9 +163,17 @@ public sealed class EngineViewportControl : Control
 
     internal void PumpDirectFrame()
     {
-        var bounds = Bounds;
-        var width = NumericMath.AtLeast((int)bounds.Width, 1);
-        var height = NumericMath.AtLeast((int)bounds.Height, 1);
+        RequestImmediateFrame();
+    }
+
+    internal void PumpDirectFrame(int width, int height)
+    {
+        RequestImmediateFrame();
+    }
+
+    private void TickFrame()
+    {
+        var (width, height) = _surfaceRouter.ResolveRenderSize(_renderBridge.IsDirectPresentationSuppressed);
         ProcessFrame(width, height);
     }
 
@@ -146,16 +191,55 @@ public sealed class EngineViewportControl : Control
         }
 
         _renderBridge.RequestFrame(width, height, _viewport.RenderMode);
+        PublishPresentationStateIfChanged();
+
+        if (presentedFrame)
+        {
+            QueueInvalidate(isRenderCompletion: true);
+        }
+    }
+
+    private (int Width, int Height) GetAvaloniaRenderSize()
+    {
+        var bounds = Bounds;
+        return (
+            NumericMath.AtLeast((int)bounds.Width, 1),
+            NumericMath.AtLeast((int)bounds.Height, 1));
+    }
+
+    private void PublishPresentationStateIfChanged()
+    {
+        var suppressed = _renderBridge.IsDirectPresentationSuppressed;
+        var directPresenting = _renderBridge.IsDirectGpuPresenting;
+        var modeBefore = _surfaceRouter.Mode;
+
+        if (suppressed == _lastDirectPresentationSuppressed &&
+            directPresenting == _lastDirectGpuPresenting &&
+            modeBefore == _surfaceRouter.Mode)
+        {
+            return;
+        }
+
+        _lastDirectPresentationSuppressed = suppressed;
+        _lastDirectGpuPresenting = directPresenting;
+        DirectPresentationSuppressionChanged?.Invoke(suppressed);
+        PresentationStateChanged?.Invoke();
     }
 
     private void RequestInvalidate()
     {
+        _frameLoop.RequestImmediateTick();
         QueueInvalidate();
     }
 
     private void RequestPresent()
     {
         QueueInvalidate(isRenderCompletion: true);
+    }
+
+    private void RequestDeferredFrame()
+    {
+        _frameLoop.RequestImmediateTick();
     }
 
     private void QueueInvalidate(bool isRenderCompletion = false)
@@ -317,30 +401,11 @@ public sealed class EngineViewportControl : Control
         var delta = position - _lastPointerPosition;
         _lastPointerPosition = position;
 
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (_inputController.MoveCamera(delta, e.KeyModifiers.HasFlag(KeyModifiers.Control)))
         {
-            const float panUnitsPerPixel = 0.005f;
-            _session.Workspace.Camera.Pan((float)-delta.X * panUnitsPerPixel, (float)delta.Y * panUnitsPerPixel);
-
-            if (!_loggedPanInput)
-            {
-                StfuUiLog.Write("Viewport pan input active: Ctrl + left mouse drag.");
-                _loggedPanInput = true;
-            }
-        }
-        else
-        {
-            const float radiansPerPixel = 0.01f;
-            _session.Workspace.Camera.Orbit((float)delta.X * radiansPerPixel, (float)-delta.Y * radiansPerPixel);
-
-            if (!_loggedOrbitInput)
-            {
-                StfuUiLog.Write("Viewport orbit input active: left mouse drag.");
-                _loggedOrbitInput = true;
-            }
+            RequestInvalidate();
         }
 
-        RequestInvalidate();
         e.Handled = true;
     }
 
@@ -356,16 +421,11 @@ public sealed class EngineViewportControl : Control
 
     private void OnPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        const float degreesPerWheelStep = 3f;
-        _session.Workspace.Camera.AdjustFieldOfView((float)-e.Delta.Y * degreesPerWheelStep);
-
-        if (!_loggedFovInput)
+        if (_inputController.ZoomCamera(e.Delta.Y))
         {
-            StfuUiLog.Write("Viewport FOV input active: mouse wheel.");
-            _loggedFovInput = true;
+            RequestInvalidate();
         }
 
-        RequestInvalidate();
         e.Handled = true;
     }
 

@@ -121,6 +121,11 @@ public sealed partial class SettingsWindow : Window
             or nameof(RendererSettingsViewModel.StatusMessage)
             or nameof(RendererSettingsViewModel.IsGpuAvailable)
             or nameof(RendererSettingsViewModel.IsDirectX11Available)
+            or nameof(RendererSettingsViewModel.CanConfigureGpu)
+            or nameof(RendererSettingsViewModel.CanConfigurePresentation)
+            or nameof(RendererSettingsViewModel.CanConfigureGpuTimings)
+            or nameof(RendererSettingsViewModel.CanUseDirectPresentation)
+            or nameof(RendererSettingsViewModel.GpuSettingsDisabledReason)
             or nameof(RendererSettingsViewModel.UseDirectViewportHost))
         {
             _draft.SyncRuntimeFrom(_renderer);
@@ -242,7 +247,13 @@ public sealed partial class SettingsWindow : Window
         public RendererBackendPreference BackendPreference
         {
             get => _backendPreference;
-            set => SetProperty(ref _backendPreference, value);
+            set
+            {
+                if (SetProperty(ref _backendPreference, value))
+                {
+                    OnGpuSettingAvailabilityChanged();
+                }
+            }
         }
 
         public RendererApiPreference ApiPreference
@@ -259,6 +270,7 @@ public sealed partial class SettingsWindow : Window
                 if (SetProperty(ref _presentationPreference, value))
                 {
                     OnPropertyChanged(nameof(UseDirectViewportHost));
+                    OnGpuSettingAvailabilityChanged();
                 }
             }
         }
@@ -332,7 +344,21 @@ public sealed partial class SettingsWindow : Window
             private set => SetProperty(ref _isDirectX11Available, value);
         }
 
-        public bool UseDirectViewportHost => IsGpuAvailable
+        public bool CanConfigureGpu => IsGpuAvailable && BackendPreference != RendererBackendPreference.FullCpu;
+
+        public bool CanConfigurePresentation => CanConfigureGpu;
+
+        public bool CanConfigureGpuTimings => CanConfigureGpu;
+
+        public bool CanUseDirectPresentation => CanConfigureGpu;
+
+        public string GpuSettingsDisabledReason => CanConfigureGpu
+            ? string.Empty
+            : BackendPreference == RendererBackendPreference.FullCpu
+                ? "GPU settings are disabled for Full CPU backend."
+                : "GPU backend is unavailable.";
+
+        public bool UseDirectViewportHost => CanConfigureGpu
             && PresentationPreference == RendererPresentationPreference.Direct;
 
         public string EffectiveBackend
@@ -391,6 +417,8 @@ public sealed partial class SettingsWindow : Window
 
         public string StatusSummary => $"{EffectiveBackend} | {EffectiveApi} | {EffectivePresentation}";
 
+        public string RequestedSummary => $"{BackendPreference} | {ApiPreference} | {PresentationPreference}";
+
         public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
 
         public void SyncRuntimeFrom(RendererSettingsViewModel renderer)
@@ -402,12 +430,24 @@ public sealed partial class SettingsWindow : Window
             EffectivePresentation = renderer.EffectivePresentation;
             AdapterName = renderer.AdapterName;
             StatusMessage = renderer.StatusMessage;
+            OnGpuSettingAvailabilityChanged();
         }
 
         private void OnParallelismChanged()
         {
             OnPropertyChanged(nameof(ResolvedRenderWorkerCount));
             OnPropertyChanged(nameof(ParallelismSummary));
+        }
+
+        private void OnGpuSettingAvailabilityChanged()
+        {
+            OnPropertyChanged(nameof(RequestedSummary));
+            OnPropertyChanged(nameof(CanConfigureGpu));
+            OnPropertyChanged(nameof(CanConfigurePresentation));
+            OnPropertyChanged(nameof(CanConfigureGpuTimings));
+            OnPropertyChanged(nameof(CanUseDirectPresentation));
+            OnPropertyChanged(nameof(GpuSettingsDisabledReason));
+            OnPropertyChanged(nameof(UseDirectViewportHost));
         }
 
         private static int NormalizeMaxRenderWorkers(int value)

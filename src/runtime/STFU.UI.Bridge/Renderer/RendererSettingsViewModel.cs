@@ -62,6 +62,7 @@ public sealed class RendererSettingsViewModel : BindableObject
                 return;
             }
 
+            OnGpuSettingAvailabilityChanged();
             LogPreferenceChanged("backend", value);
             PersistIfNeeded();
         }
@@ -92,7 +93,7 @@ public sealed class RendererSettingsViewModel : BindableObject
                 return;
             }
 
-            OnPropertyChanged(nameof(UseDirectViewportHost));
+            OnGpuSettingAvailabilityChanged();
             LogPreferenceChanged("presentation", value);
             PersistIfNeeded();
         }
@@ -186,9 +187,23 @@ public sealed class RendererSettingsViewModel : BindableObject
 
     public bool IsGpuAvailable => _session.HasGpuRenderer;
 
-    public bool IsDirectX11Available => _session.HasGpuRenderer;
+    public bool IsDirectX11Available => CanConfigureGpu;
 
-    public bool UseDirectViewportHost => IsGpuAvailable && PresentationPreference == RendererPresentationPreference.Direct;
+    public bool CanConfigureGpu => IsGpuAvailable && BackendPreference != RendererBackendPreference.FullCpu;
+
+    public bool CanConfigurePresentation => CanConfigureGpu;
+
+    public bool CanConfigureGpuTimings => CanConfigureGpu;
+
+    public bool CanUseDirectPresentation => CanConfigureGpu;
+
+    public string GpuSettingsDisabledReason => CanConfigureGpu
+        ? string.Empty
+        : BackendPreference == RendererBackendPreference.FullCpu
+            ? "GPU settings are disabled for Full CPU backend."
+            : "GPU backend is unavailable.";
+
+    public bool UseDirectViewportHost => CanConfigureGpu && PresentationPreference == RendererPresentationPreference.Direct;
 
     public string EffectiveBackend
     {
@@ -246,6 +261,8 @@ public sealed class RendererSettingsViewModel : BindableObject
 
     public string StatusSummary => $"{EffectiveBackend} | {EffectiveApi} | {EffectivePresentation}";
 
+    public string RequestedSummary => $"{BackendPreference} | {ApiPreference} | {PresentationPreference}";
+
     public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
 
     public void ApplyLaunchOverrides(
@@ -259,6 +276,7 @@ public sealed class RendererSettingsViewModel : BindableObject
         {
             _backendPreference = backendValue;
             OnPropertyChanged(nameof(BackendPreference));
+            OnGpuSettingAvailabilityChanged();
         }
 
         if (api is { } apiValue)
@@ -271,7 +289,7 @@ public sealed class RendererSettingsViewModel : BindableObject
         {
             _presentationPreference = presentationValue;
             OnPropertyChanged(nameof(PresentationPreference));
-            OnPropertyChanged(nameof(UseDirectViewportHost));
+            OnGpuSettingAvailabilityChanged();
         }
 
         _suspendPersistence = false;
@@ -289,8 +307,20 @@ public sealed class RendererSettingsViewModel : BindableObject
         EffectivePresentation = effectivePresentation;
         AdapterName = string.IsNullOrWhiteSpace(adapterName) ? "Unavailable" : adapterName;
         StatusMessage = statusMessage;
+        OnPropertyChanged(nameof(RequestedSummary));
         OnPropertyChanged(nameof(IsGpuAvailable));
         OnPropertyChanged(nameof(IsDirectX11Available));
+        OnGpuSettingAvailabilityChanged();
+    }
+
+    private void OnGpuSettingAvailabilityChanged()
+    {
+        OnPropertyChanged(nameof(IsDirectX11Available));
+        OnPropertyChanged(nameof(CanConfigureGpu));
+        OnPropertyChanged(nameof(CanConfigurePresentation));
+        OnPropertyChanged(nameof(CanConfigureGpuTimings));
+        OnPropertyChanged(nameof(CanUseDirectPresentation));
+        OnPropertyChanged(nameof(GpuSettingsDisabledReason));
         OnPropertyChanged(nameof(UseDirectViewportHost));
     }
 

@@ -1,3 +1,5 @@
+using STFU.Common.Primitives;
+
 namespace STFU.NPR.Analysis;
 
 public sealed class FrameProjectionCache
@@ -55,6 +57,19 @@ public sealed class FrameProjectionCache
             _entries.Clear();
             _clock = 0;
             Stats.Clear();
+        }
+    }
+
+    public void RemoveMesh(MeshHandle mesh)
+    {
+        lock (_gate)
+        {
+            foreach (var key in _entries.Keys.Where(key => key.Mesh == mesh).ToArray())
+            {
+                _entries.Remove(key);
+            }
+
+            Stats.Entries = _entries.Count;
         }
     }
 

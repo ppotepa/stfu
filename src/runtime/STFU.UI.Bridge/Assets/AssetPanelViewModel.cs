@@ -42,6 +42,8 @@ public sealed class AssetPanelViewModel : BindableObject
     private double _animatedTimeSeconds;
     private double _animatedDurationSeconds;
     private long _lastAnimationTick = Stopwatch.GetTimestamp();
+    private bool _isAnimationPlaying;
+    private string? _selectedAnimationName;
     private bool _syncingSelection;
 
     public AssetPanelViewModel(UiEngineSession session, ScenePanelViewModel scene)
@@ -75,6 +77,9 @@ public sealed class AssetPanelViewModel : BindableObject
         LoadAssetCommand = new RelayCommand(LoadAsset);
         ReloadAssetCommand = new RelayCommand(ReloadSelectedAsset, () => SelectedAsset is not null);
         AssignMeshCommand = new RelayCommand(AssignSelectedMesh, () => SelectedAsset is not null && _scene.SelectedEntity is not null);
+        PlayAnimationCommand = new RelayCommand(PlayAnimation, () => HasAnimations && !IsAnimationPlaying);
+        PauseAnimationCommand = new RelayCommand(PauseAnimation, () => HasAnimations && IsAnimationPlaying);
+        StopAnimationCommand = new RelayCommand(StopAnimationPlayback, () => HasAnimations);
         SelectedSource = SourceOptions[0];
         SelectedRecent = Recents[0];
         RefreshFromEngine();
@@ -85,6 +90,8 @@ public sealed class AssetPanelViewModel : BindableObject
     public ObservableCollection<AssetRecentItem> Recents { get; }
 
     public ObservableCollection<AssetListItem> Assets { get; } = [];
+
+    public ObservableCollection<string> AnimationNames { get; } = [];
 
     public AssetSourceOption? SelectedSource
     {
@@ -204,6 +211,42 @@ public sealed class AssetPanelViewModel : BindableObject
         set => SetProperty(ref _loadAnimations, value);
     }
 
+    public bool HasAnimations => AnimationNames.Count > 0;
+
+    public bool IsAnimationPlaying
+    {
+        get => _isAnimationPlaying;
+        private set
+        {
+            if (!SetProperty(ref _isAnimationPlaying, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(AnimationPlaybackLabel));
+            NotifyAnimationCommandsChanged();
+        }
+    }
+
+    public string AnimationPlaybackLabel => HasAnimations
+        ? IsAnimationPlaying ? "Playing" : "Paused"
+        : "No animation";
+
+    public string? SelectedAnimationName
+    {
+        get => _selectedAnimationName;
+        set
+        {
+            if (!SetProperty(ref _selectedAnimationName, value))
+            {
+                return;
+            }
+
+            SelectAnimationByName(value);
+            OnPropertyChanged(nameof(AnimationPlaybackLabel));
+        }
+    }
+
     public ICommand SelectSourceCommand { get; }
 
     public ICommand SelectRecentCommand { get; }
@@ -213,6 +256,12 @@ public sealed class AssetPanelViewModel : BindableObject
     public ICommand ReloadAssetCommand { get; }
 
     public ICommand AssignMeshCommand { get; }
+
+    public ICommand PlayAnimationCommand { get; }
+
+    public ICommand PauseAnimationCommand { get; }
+
+    public ICommand StopAnimationCommand { get; }
 
     public void RefreshFromEngine()
     {
@@ -271,18 +320,21 @@ public sealed class AssetPanelViewModel : BindableObject
         }
     }
 
-    public void TickAnimation()
+    public bool TickAnimation()
     {
-        if (_fbxAnimation is null || _animatedMeshHandle.Value == 0 || _animatedDurationSeconds <= 0)
+        if (!IsAnimationPlaying ||
+            _fbxAnimation is null ||
+            _animatedMeshHandle.Value == 0 ||
+            _animatedDurationSeconds <= 0)
         {
-            return;
+            return false;
         }
 
         var now = Stopwatch.GetTimestamp();
         var deltaSeconds = (now - _lastAnimationTick) / (double)Stopwatch.Frequency;
         if (deltaSeconds < AnimationBakeIntervalSeconds)
         {
-            return;
+            return false;
         }
 
         deltaSeconds = NumericMath.AtMost(deltaSeconds, 0.1d);
@@ -292,10 +344,11 @@ public sealed class AssetPanelViewModel : BindableObject
         try
         {
             BakeOrApplyAnimation(_animatedTimeSeconds);
+            return true;
         }
         catch (Exception exception)
         {
-            StopFbxAnimation();
+            DisposeFbxAnimation();
             _session.Commands.Record($"FBX animation stopped: {exception.Message}");
             StfuLog.Write(
                 StfuLogDomain.Assets,
@@ -303,6 +356,7 @@ public sealed class AssetPanelViewModel : BindableObject
                 exception.Message,
                 StfuLogLevel.Warning,
                 exception: exception);
+            return false;
         }
     }
 
@@ -324,7 +378,7 @@ public sealed class AssetPanelViewModel : BindableObject
         }
         catch (Exception exception)
         {
-            StopFbxAnimation();
+            DisposeFbxAnimation();
             _session.Commands.Record($"FBX animation stopped: {exception.Message}");
             StfuLog.Write(
                 StfuLogDomain.Assets,
@@ -440,7 +494,7 @@ public sealed class AssetPanelViewModel : BindableObject
 
     private MeshHandle LoadFbxMesh(string fullPath, string commandName)
     {
-        StopFbxAnimation();
+        DisposeFbxAnimation();
 
         FbxBakedAnimationSampler sampler;
         try
@@ -531,6 +585,16 @@ public sealed class AssetPanelViewModel : BindableObject
         _animatedTimeSeconds = 0;
         _animatedDurationSeconds = NumericMath.AtLeast(clip.DurationSeconds, 0.001d);
         _lastAnimationTick = Stopwatch.GetTimestamp();
+        AnimationNames.Clear();
+        foreach (var animation in sampler.Animations)
+        {
+            AnimationNames.Add(animation.Name);
+        }
+
+        _selectedAnimationName = clip.Name;
+        OnPropertyChanged(nameof(SelectedAnimationName));
+        OnAnimationAvailabilityChanged();
+        IsAnimationPlaying = true;
 
         if (_animatedVertices is not null)
         {
@@ -566,6 +630,102 @@ public sealed class AssetPanelViewModel : BindableObject
                 ["handle"] = handle.Value,
                 ["durationSeconds"] = _animatedDurationSeconds
             });
+    }
+
+    private void PlayAnimation()
+    {
+        if (!HasAnimations || _fbxAnimation is null)
+        {
+            return;
+        }
+
+        _lastAnimationTick = Stopwatch.GetTimestamp();
+        IsAnimationPlaying = true;
+        RequestFreshFrame();
+        _session.Commands.Record($"FBX animation play: {SelectedAnimationName ?? "animation"}");
+    }
+
+    private void PauseAnimation()
+    {
+        if (!HasAnimations)
+        {
+            return;
+        }
+
+        IsAnimationPlaying = false;
+        RequestFreshFrame();
+        _session.Commands.Record($"FBX animation pause: {SelectedAnimationName ?? "animation"}");
+    }
+
+    private void StopAnimationPlayback()
+    {
+        if (!HasAnimations)
+        {
+            return;
+        }
+
+        IsAnimationPlaying = false;
+        BakeAnimationAtTime(0);
+        RequestFreshFrame();
+        _session.Commands.Record($"FBX animation stop: {SelectedAnimationName ?? "animation"}");
+    }
+
+    private void SelectAnimationByName(string? animationName)
+    {
+        if (_fbxAnimation is null || string.IsNullOrWhiteSpace(animationName))
+        {
+            return;
+        }
+
+        var index = -1;
+        for (var i = 0; i < _fbxAnimation.Animations.Count; i++)
+        {
+            if (string.Equals(_fbxAnimation.Animations[i].Name, animationName, StringComparison.Ordinal))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0 || index == _animatedClipIndex)
+        {
+            return;
+        }
+
+        _fbxAnimationCache?.Dispose();
+        _fbxAnimationCache = null;
+        _animatedClipIndex = index;
+        _animatedTimeSeconds = 0;
+        _animatedDurationSeconds = NumericMath.AtLeast(_fbxAnimation.Animations[index].DurationSeconds, 0.001d);
+        _lastAnimationTick = Stopwatch.GetTimestamp();
+        if (_animatedVertices is not null)
+        {
+            try
+            {
+                _fbxAnimationCache = FbxAnimationPrebakeCache.Start(
+                    _fbxAnimation.SourcePath,
+                    _animatedClipIndex,
+                    _animatedDurationSeconds,
+                    _animatedVertices.Length);
+                _fbxAnimationCache.Seed(0, _animatedVertices);
+            }
+            catch (Exception exception)
+            {
+                _fbxAnimationCache?.Dispose();
+                _fbxAnimationCache = null;
+                StfuLog.Write(
+                    StfuLogDomain.Assets,
+                    "fbx.animation.cache.disabled",
+                    exception.Message,
+                    StfuLogLevel.Warning,
+                    exception: exception);
+            }
+        }
+
+        BakeAnimationAtTime(0);
+        IsAnimationPlaying = true;
+        RequestFreshFrame();
+        _session.Commands.Record($"FBX animation selected: {animationName}");
     }
 
     public bool WaitForAnimationCache(TimeSpan timeout)
@@ -620,7 +780,7 @@ public sealed class AssetPanelViewModel : BindableObject
         }
     }
 
-    private void StopFbxAnimation()
+    private void DisposeFbxAnimation()
     {
         _fbxAnimationCache?.Dispose();
         _fbxAnimationCache = null;
@@ -632,6 +792,36 @@ public sealed class AssetPanelViewModel : BindableObject
         _animatedClipIndex = 0;
         _animatedTimeSeconds = 0;
         _animatedDurationSeconds = 0;
+        IsAnimationPlaying = false;
+        AnimationNames.Clear();
+        _selectedAnimationName = null;
+        OnPropertyChanged(nameof(SelectedAnimationName));
+        OnAnimationAvailabilityChanged();
+    }
+
+    private void OnAnimationAvailabilityChanged()
+    {
+        OnPropertyChanged(nameof(HasAnimations));
+        OnPropertyChanged(nameof(AnimationPlaybackLabel));
+        NotifyAnimationCommandsChanged();
+    }
+
+    private void NotifyAnimationCommandsChanged()
+    {
+        if (PlayAnimationCommand is RelayCommand play)
+        {
+            play.NotifyCanExecuteChanged();
+        }
+
+        if (PauseAnimationCommand is RelayCommand pause)
+        {
+            pause.NotifyCanExecuteChanged();
+        }
+
+        if (StopAnimationCommand is RelayCommand stop)
+        {
+            stop.NotifyCanExecuteChanged();
+        }
     }
 
     private void ApplyImportTransform(EntityId entityId, MeshHandle handle)
