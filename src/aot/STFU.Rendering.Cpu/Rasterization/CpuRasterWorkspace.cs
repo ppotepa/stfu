@@ -41,6 +41,11 @@ public sealed class CpuRasterWorkspace
 
     public byte[] ToneAlphaScratch { get; private set; } = [];
 
+    private int _toneSourceXTargetWidth;
+    private int _toneSourceXSourceWidth;
+    private int _toneSourceYTargetHeight;
+    private int _toneSourceYSourceHeight;
+
     private readonly Dictionary<TileCacheKey, List<CpuTile>> _tileCache = new();
 
     public CpuTileLayout TileLayout { get; private set; } = CpuTileLayout.Empty;
@@ -103,11 +108,59 @@ public sealed class CpuRasterWorkspace
         return SourceYMap;
     }
 
+    public int[] GetToneSourceXMap(int targetWidth, int sourceWidth)
+    {
+        if (ToneSourceXMap.Length < targetWidth)
+        {
+            ToneSourceXMap = new int[targetWidth];
+            _toneSourceXTargetWidth = 0;
+            _toneSourceXSourceWidth = 0;
+        }
+
+        if (_toneSourceXTargetWidth != targetWidth || _toneSourceXSourceWidth != sourceWidth)
+        {
+            for (var x = 0; x < targetWidth; x++)
+            {
+                ToneSourceXMap[x] = NumericMath.ScaleIndex(x, targetWidth, sourceWidth);
+            }
+
+            _toneSourceXTargetWidth = targetWidth;
+            _toneSourceXSourceWidth = sourceWidth;
+        }
+
+        return ToneSourceXMap;
+    }
+
+    public int[] GetToneSourceYMap(int targetHeight, int sourceHeight)
+    {
+        if (ToneSourceYMap.Length < targetHeight)
+        {
+            ToneSourceYMap = new int[targetHeight];
+            _toneSourceYTargetHeight = 0;
+            _toneSourceYSourceHeight = 0;
+        }
+
+        if (_toneSourceYTargetHeight != targetHeight || _toneSourceYSourceHeight != sourceHeight)
+        {
+            for (var y = 0; y < targetHeight; y++)
+            {
+                ToneSourceYMap[y] = NumericMath.ScaleIndex(y, targetHeight, sourceHeight);
+            }
+
+            _toneSourceYTargetHeight = targetHeight;
+            _toneSourceYSourceHeight = sourceHeight;
+        }
+
+        return ToneSourceYMap;
+    }
+
     public int[] RentToneSourceXMap(int width)
     {
         if (ToneSourceXMap.Length < width)
         {
             ToneSourceXMap = new int[width];
+            _toneSourceXTargetWidth = 0;
+            _toneSourceXSourceWidth = 0;
         }
 
         return ToneSourceXMap;
@@ -118,6 +171,8 @@ public sealed class CpuRasterWorkspace
         if (ToneSourceYMap.Length < height)
         {
             ToneSourceYMap = new int[height];
+            _toneSourceYTargetHeight = 0;
+            _toneSourceYSourceHeight = 0;
         }
 
         return ToneSourceYMap;

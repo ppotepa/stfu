@@ -2,29 +2,29 @@ namespace STFU.Rendering.DirectX.Diagnostics;
 
 public sealed class DirectXRenderCounters
 {
-    public int StrokeInstances { get; set; }
+    public long StrokeInstances { get; set; }
 
-    public int StrokeInstancesBuilt
+    public long StrokeInstancesBuilt
     {
         get => StrokeInstances;
         set => StrokeInstances = value;
     }
 
-    public int StrokeInstanceUploads { get; set; }
+    public long StrokeInstanceUploads { get; set; }
 
-    public int StrokeInstanceBufferRecreates { get; set; }
+    public long StrokeInstanceBufferRecreates { get; set; }
 
-    public int ToneSurfaceUploads { get; set; }
+    public long ToneSurfaceUploads { get; set; }
 
-    public int ToneSurfaceCacheHits { get; set; }
+    public long ToneSurfaceCacheHits { get; set; }
 
-    public int ToneSurfaceCacheMisses { get; set; }
+    public long ToneSurfaceCacheMisses { get; set; }
 
-    public int MeshBufferUploads { get; set; }
+    public long MeshBufferUploads { get; set; }
 
-    public int MeshBufferCacheHits { get; set; }
+    public long MeshBufferCacheHits { get; set; }
 
-    public int Readbacks { get; set; }
+    public long Readbacks { get; set; }
 
     public int DebugOverlayPaths { get; set; }
 

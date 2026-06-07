@@ -7,6 +7,9 @@ public sealed class VisibilityParityStats
     public int MatchingFaces { get; init; }
     public int CpuOnlyFaces { get; init; }
     public int GpuOnlyFaces { get; init; }
+    public int MismatchCount => CpuOnlyFaces + GpuOnlyFaces;
+    public bool FallbackUsed { get; init; }
+    public string FallbackReason { get; init; } = string.Empty;
     public float MatchRatio { get; init; }
     public bool Passed { get; init; }
 
@@ -14,6 +17,6 @@ public sealed class VisibilityParityStats
 
     public string ToDiagnosticString()
     {
-        return $"cpuFaces={CpuVisibleFaces}, gpuFaces={GpuVisibleFaces}, matching={MatchingFaces}, cpuOnly={CpuOnlyFaces}, gpuOnly={GpuOnlyFaces}, matchRatio={MatchRatio:0.000}, passed={Passed}";
+        return $"cpuFaces={CpuVisibleFaces}, gpuFaces={GpuVisibleFaces}, matching={MatchingFaces}, cpuOnly={CpuOnlyFaces}, gpuOnly={GpuOnlyFaces}, mismatches={MismatchCount}, matchRatio={MatchRatio:0.000}, passed={Passed}, fallback={FallbackUsed}, fallbackReason={FallbackReason}";
     }
 }

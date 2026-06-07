@@ -87,7 +87,6 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
         for (var i = 0; i < _merged.Count; i++)
         {
             var path = _merged[i].Path with { PathIndex = i };
-            outputPointCount += path.Points.Count;
             context.Graph.DefaultPaths.Add(path);
         }
 

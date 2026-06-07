@@ -91,26 +91,12 @@ public sealed class CpuToneRasterizer
 
     private static int[] GetSourceXMap(int targetWidth, int sourceWidth, CpuRasterWorkspace workspace)
     {
-        var sourceXMap = workspace.RentSourceXMap(targetWidth);
-
-        for (var x = 0; x < targetWidth; x++)
-        {
-            sourceXMap[x] = NumericMath.ScaleIndex(x, targetWidth, sourceWidth);
-        }
-
-        return sourceXMap;
+        return workspace.GetToneSourceXMap(targetWidth, sourceWidth);
     }
 
     private static int[] GetSourceYMap(int targetHeight, int sourceHeight, CpuRasterWorkspace workspace)
     {
-        var sourceYMap = workspace.RentSourceYMap(targetHeight);
-
-        for (var y = 0; y < targetHeight; y++)
-        {
-            sourceYMap[y] = NumericMath.ScaleIndex(y, targetHeight, sourceHeight);
-        }
-
-        return sourceYMap;
+        return workspace.GetToneSourceYMap(targetHeight, sourceHeight);
     }
 
     private byte[] GetAlphaLut(float opacity)

@@ -51,6 +51,7 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.emitCandidateCount", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.emitFlagCapacity", _segmentEmitFlags.Length);
+            context.Counters.Set("DefaultBuildInkFrameStep.segmentPlanCapacity", _segmentPlans.Length);
             context.Counters.Set("DefaultBuildInkFrameStep.precomputedPointCapacity", _pathPrecomputedStartPoints.Length);
             _previousSilhouetteIndexCount = 0;
             _previousFeatureIndexCount = 0;
@@ -96,6 +97,8 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             var pathEmitOffset = emitOffset;
             var count = CountStyledPathSegments(
                 path,
+                pathIndex,
+                layerIndex,
                 drawing,
                 seed,
                 styleName,
@@ -234,6 +237,7 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", _previousBoundaryIndexCount);
         context.Counters.Set("DefaultBuildInkFrameStep.emitCandidateCount", emitOffset);
         context.Counters.Set("DefaultBuildInkFrameStep.emitFlagCapacity", _segmentEmitFlags.Length);
+        context.Counters.Set("DefaultBuildInkFrameStep.segmentPlanCapacity", _segmentPlans.Length);
         context.Counters.Set("DefaultBuildInkFrameStep.precomputedPointCapacity", _pathPrecomputedStartPoints.Length);
     }
 
@@ -332,6 +336,8 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 
     private int CountStyledPathSegments(
         in DefaultProjectedPath path,
+        int pathIndex,
+        int layerIndex,
         DefaultDrawingSettings drawing,
         int seed,
         string styleName,
@@ -366,6 +372,9 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             {
                 var shouldKeep = !StrokeHumanizationMath.ShouldSkipSegment(styleName, i, seed, pass, drawing.EnableFastNoise);
                 _segmentEmitFlags[pathEmitOffset] = shouldKeep ? (byte)1 : (byte)0;
+                _segmentPlans[pathEmitOffset] = shouldKeep
+                    ? InkSegmentPlan.Emitted(pathIndex, i, pass, layerIndex, seed)
+                    : InkSegmentPlan.Skipped(pathIndex, i, pass, layerIndex, seed);
                 _pathPrecomputedStartPoints[pathEmitOffset] = startPoints[i - 1];
                 _pathPrecomputedEndPoints[pathEmitOffset] = endPoints[i];
                 if (shouldKeep)
@@ -390,6 +399,7 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 
         var capacity = GrowCapacity(required);
         Array.Resize(ref _segmentEmitFlags, capacity);
+        Array.Resize(ref _segmentPlans, capacity);
         Array.Resize(ref _pathPrecomputedStartPoints, capacity);
         Array.Resize(ref _pathPrecomputedEndPoints, capacity);
     }
@@ -422,7 +432,8 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 
             for (var i = 1; i < pointCount; i++)
             {
-                if (_segmentEmitFlags[candidateOffset] == 0)
+                var plan = _segmentPlans[candidateOffset];
+                if (_segmentEmitFlags[candidateOffset] == 0 || !plan.Emit)
                 {
                     candidateOffset++;
                     continue;
@@ -439,12 +450,12 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
                     _pathPrecomputedEndPoints[candidateOffset],
                     segmentStyle,
                     new StrokeMetadata(
-                        HashMath.StableSequence31(path.StableId, pass, i),
+                        HashMath.StableSequence31(path.StableId, plan.PassIndex, plan.SourcePointIndex),
                         info.LineStyle.LayerName,
                         "DefaultInkSegment",
                         info.LineStyle.IntentText,
                         path.StableId,
-                        i,
+                        plan.SourcePointIndex,
                         "Visible",
                         info.LineStyle.StyleId,
                         null,

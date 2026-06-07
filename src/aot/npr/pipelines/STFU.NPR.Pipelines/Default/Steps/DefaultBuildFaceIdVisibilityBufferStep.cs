@@ -34,6 +34,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         context.Graph.DefaultFaceIdVisibility = buffer;
         var triangleCount = context.Graph.Triangles.Count;
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.sourceTriangles", triangleCount);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.outputTriangles", triangleCount);
 
         if (!drawing.OcclusionCulling)
         {
@@ -46,6 +47,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", triangleCount);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.culledTriangles", 0);
             return;
         }
 
@@ -61,6 +63,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", 0);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.culledTriangles", 0);
             return;
         }
 
@@ -93,7 +96,9 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", 0);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", pixelTests);
             context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", pixelWrites);
-            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", CountVisibleFaces(buffer.FaceVisible));
+            var visibleFaces = CountVisibleFaces(buffer.FaceVisible);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", visibleFaces);
+            context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.culledTriangles", triangleCount - visibleFaces);
             return;
         }
 
@@ -299,7 +304,9 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", maxRefsPerTile);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", totalPixelTests);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", totalPixelWrites);
-        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", CountVisibleFaces(buffer.FaceVisible));
+        var visibleFaces = CountVisibleFaces(buffer.FaceVisible);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.visibleFaces", visibleFaces);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.culledTriangles", triangleCount - visibleFaces);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheWidth", _lastWidth);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheHeight", _lastHeight);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.tileLayoutCacheTiles", _lastTileCount);
