@@ -1,4 +1,4 @@
-using STFU.Mesh;
+using STFU.Common.Primitives;
 
 namespace STFU.NPR.Analysis;
 

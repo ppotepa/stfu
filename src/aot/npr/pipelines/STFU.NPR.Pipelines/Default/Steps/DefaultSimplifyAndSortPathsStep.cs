@@ -62,6 +62,7 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
             var partition = _partitions[partitionIndex];
             simplifySkipped += partition.SimplifySkipped;
             inputPointCount += partition.InputPointCount;
+            outputPointCount += partition.OutputPointCount;
             _merged.AddRange(partition.Items);
         }
 
