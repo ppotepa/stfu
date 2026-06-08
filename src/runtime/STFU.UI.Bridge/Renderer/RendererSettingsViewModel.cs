@@ -1,5 +1,6 @@
 using STFU.Common.Math;
 using STFU.Logging;
+using STFU.NPR.Pipelines.Abstractions;
 using STFU.Parallelism;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Session;
@@ -34,6 +35,7 @@ public sealed class RendererSettingsViewModel : BindableObject
     private bool _allowGpuReadback;
     private bool _showDirectHost;
     private bool _drawBitmap;
+    private FramePipelineStrategy _pipelineStrategy;
 
     public RendererSettingsViewModel(
         UiEngineSession session,
@@ -47,12 +49,14 @@ public sealed class RendererSettingsViewModel : BindableObject
         _backendPreference = snapshot.Backend;
         _apiPreference = snapshot.Api;
         _presentationPreference = snapshot.Presentation;
+        _pipelineStrategy = snapshot.PipelineStrategy;
         _showRendererHud = snapshot.ShowRendererHud;
         _enableGpuTimings = snapshot.EnableGpuTimings;
         _workerBudgetMode = snapshot.WorkerBudgetMode;
         _maxRenderWorkers = NormalizeMaxRenderWorkers(snapshot.MaxRenderWorkers);
         _enableTileParallelism = snapshot.EnableTileParallelism;
         _suspendPersistence = false;
+        // ...
 
         UpdateRuntimeStatus(
             effectiveBackend: session.HasGpuRenderer ? "CPU+GPU" : "CPU",
@@ -70,6 +74,21 @@ public sealed class RendererSettingsViewModel : BindableObject
             statusMessage: session.HasGpuRenderer ? string.Empty : "GPU backend unavailable; using Full CPU.",
             lastOutputKind: string.Empty,
             gpuReadbackMs: 0f);
+    }
+
+    public FramePipelineStrategy PipelineStrategy
+    {
+        get => _pipelineStrategy;
+        set
+        {
+            if (!SetProperty(ref _pipelineStrategy, value))
+            {
+                return;
+            }
+
+            LogPreferenceChanged("pipelineStrategy", value);
+            PersistIfNeeded();
+        }
     }
 
     public RendererBackendPreference BackendPreference
@@ -439,7 +458,8 @@ public sealed class RendererSettingsViewModel : BindableObject
             EnableGpuTimings: EnableGpuTimings,
             WorkerBudgetMode: WorkerBudgetMode,
             MaxRenderWorkers: MaxRenderWorkers,
-            EnableTileParallelism: EnableTileParallelism));
+            EnableTileParallelism: EnableTileParallelism,
+            PipelineStrategy: PipelineStrategy));
     }
 
     private static int NormalizeMaxRenderWorkers(int value)

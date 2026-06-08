@@ -1,5 +1,6 @@
 using STFU.NPR.Composition;
 using STFU.NPR.Pipeline.ReferenceQuality;
+using STFU.NPR.Pipelines.Abstractions;
 
 namespace STFU.NPR.Pipeline.Default;
 
@@ -16,6 +17,6 @@ public sealed class DefaultPipelineProvider : INprPipelineProvider
 
     public STFU.NPR.Pipeline.INprPipeline CreatePipeline()
     {
-        return _inner.CreatePipeline();
+        return _inner.CreatePipeline(FramePipelineStrategyOptions.Default);
     }
 }

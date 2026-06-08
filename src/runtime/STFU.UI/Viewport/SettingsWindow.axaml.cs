@@ -4,9 +4,11 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using System.ComponentModel;
 using STFU.Common.Math;
+using STFU.NPR.Pipelines.Abstractions;
 using STFU.Parallelism;
 using STFU.UI.Bridge.Binding;
 using STFU.UI.Bridge.Renderer;
+using STFU.UI.Viewport;
 
 namespace STFU.UI;
 
@@ -97,6 +99,22 @@ public sealed partial class SettingsWindow : Window
         };
     }
 
+    private void OnPipelineStrategySelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+
+        _draft.PipelineStrategy = GetPipelineStrategyCombo().SelectedIndex switch
+        {
+            1 => FramePipelineStrategy.InteractivePerformance,
+            _ => FramePipelineStrategy.ReferenceQuality
+        };
+
+        UpdatePipelineStrategyDescription();
+    }
+
     private void OnApplyClicked(object? sender, RoutedEventArgs e)
     {
         ApplyDraftToRenderer();
@@ -165,6 +183,7 @@ public sealed partial class SettingsWindow : Window
         _renderer.WorkerBudgetMode = _draft.WorkerBudgetMode;
         _renderer.MaxRenderWorkers = _draft.MaxRenderWorkers;
         _renderer.EnableTileParallelism = _draft.EnableTileParallelism;
+        _renderer.PipelineStrategy = _draft.PipelineStrategy;
         _draft.SyncRuntimeFrom(_renderer);
     }
 
@@ -194,6 +213,14 @@ public sealed partial class SettingsWindow : Window
             _ => 0
         };
 
+        GetPipelineStrategyCombo().SelectedIndex = _draft.PipelineStrategy switch
+        {
+            FramePipelineStrategy.InteractivePerformance => 1,
+            _ => 0
+        };
+
+        UpdatePipelineStrategyDescription();
+
         GetApiAutoButton().IsChecked = _draft.ApiPreference != RendererApiPreference.DirectX11;
         GetApiDirectX11Button().IsChecked = _draft.ApiPreference == RendererApiPreference.DirectX11;
     }
@@ -212,6 +239,27 @@ public sealed partial class SettingsWindow : Window
     private ComboBox GetWorkerBudgetCombo() => this.FindControl<ComboBox>("WorkerBudgetCombo")
         ?? throw new InvalidOperationException("WorkerBudgetCombo is missing.");
 
+    private ComboBox GetPipelineStrategyCombo() => this.FindControl<ComboBox>("PipelineStrategyCombo")
+        ?? throw new InvalidOperationException("PipelineStrategyCombo is missing.");
+
+    private void UpdatePipelineStrategyDescription()
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+
+        if (this.FindControl<TextBlock>("PipelineStrategyDescriptionText") is { } descriptionText)
+        {
+            descriptionText.Text = FramePipelineStrategyDisplay.GetDescription(_draft.PipelineStrategy);
+        }
+
+        if (this.FindControl<TextBlock>("PipelineStrategyStatusText") is { } statusText)
+        {
+            statusText.Text = FramePipelineStrategyDisplay.GetStatusNote(_draft.PipelineStrategy);
+        }
+    }
+
     private RadioButton GetApiAutoButton() => this.FindControl<RadioButton>("ApiAutoButton")
         ?? throw new InvalidOperationException("ApiAutoButton is missing.");
 
@@ -228,6 +276,7 @@ public sealed partial class SettingsWindow : Window
         private WorkerBudgetMode _workerBudgetMode;
         private int _maxRenderWorkers;
         private bool _enableTileParallelism;
+        private FramePipelineStrategy _pipelineStrategy;
         private bool _isGpuAvailable;
         private bool _isDirectX11Available;
         private string _effectiveBackend = "AUTO";
@@ -256,6 +305,7 @@ public sealed partial class SettingsWindow : Window
             _workerBudgetMode = renderer.WorkerBudgetMode;
             _maxRenderWorkers = NormalizeMaxRenderWorkers(renderer.MaxRenderWorkers);
             _enableTileParallelism = renderer.EnableTileParallelism;
+            _pipelineStrategy = renderer.PipelineStrategy;
             SyncRuntimeFrom(renderer);
         }
 
@@ -263,6 +313,22 @@ public sealed partial class SettingsWindow : Window
         {
             return new SettingsDraft(renderer);
         }
+
+        public FramePipelineStrategy PipelineStrategy
+        {
+            get => _pipelineStrategy;
+            set
+            {
+                if (SetProperty(ref _pipelineStrategy, value))
+                {
+                    OnPropertyChanged(nameof(PipelineStrategyDescription));
+                    OnPropertyChanged(nameof(PipelineStrategyStatusNote));
+                }
+            }
+        }
+
+        public string PipelineStrategyDescription => FramePipelineStrategyDisplay.GetDescription(PipelineStrategy);
+        public string PipelineStrategyStatusNote => FramePipelineStrategyDisplay.GetStatusNote(PipelineStrategy);
 
         public RendererBackendPreference BackendPreference
         {

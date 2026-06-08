@@ -120,6 +120,7 @@ internal sealed class ViewportRenderRequestFactory
             ShowGrid: _session.Workspace.Viewport.ShowGrid && viewportRenderMode == ViewportRenderMode.Mesh,
             IncludeDebugFrame: includeDebugFrame,
             DebugOverlay: debugOverlay,
+            PipelineStrategy: runtimePlan.PipelineStrategy,
             DiagnosticsOptions: CreateViewportDiagnosticsOptions(renderer),
             OptimizerMode: _optimizerMode);
 

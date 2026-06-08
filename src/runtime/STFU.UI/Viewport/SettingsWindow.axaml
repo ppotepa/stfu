@@ -130,6 +130,30 @@
                   BorderBrush="{DynamicResource StfuLineSoftBrush}"
                   BorderThickness="1">
             <StackPanel Spacing="10">
+              <TextBlock Text="Pipeline Strategy" FontWeight="SemiBold" />
+              <ComboBox x:Name="PipelineStrategyCombo"
+                        SelectionChanged="OnPipelineStrategySelectionChanged">
+                <ComboBoxItem Content="Reference Quality" />
+                <ComboBoxItem Content="Interactive Performance" />
+              </ComboBox>
+              <TextBlock x:Name="PipelineStrategyDescriptionText"
+                         Text="{Binding PipelineStrategyDescription}"
+                         Foreground="{DynamicResource StfuMutedBrush}"
+                         TextWrapping="Wrap" />
+              <TextBlock x:Name="PipelineStrategyStatusText"
+                         Text="{Binding PipelineStrategyStatusNote}"
+                         Foreground="{DynamicResource StfuMutedBrush}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="2"
+                  Grid.Column="1"
+                  Padding="14"
+                  Background="{DynamicResource StfuSurfaceBrush}"
+                  BorderBrush="{DynamicResource StfuLineSoftBrush}"
+                  BorderThickness="1">
+            <StackPanel Spacing="10">
               <TextBlock Text="Parallelism" FontWeight="SemiBold" />
               <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
                 <TextBlock Grid.Column="0"

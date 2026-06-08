@@ -1,3 +1,4 @@
+using STFU.NPR.Pipelines.Abstractions;
 using STFU.Parallelism;
 
 namespace STFU.UI.Bridge.Renderer;
@@ -10,4 +11,5 @@ public sealed record RendererSettingsSnapshot(
     bool EnableGpuTimings = true,
     WorkerBudgetMode WorkerBudgetMode = WorkerBudgetMode.Performance,
     int MaxRenderWorkers = 0,
-    bool EnableTileParallelism = true);
+    bool EnableTileParallelism = true,
+    FramePipelineStrategy PipelineStrategy = FramePipelineStrategy.ReferenceQuality);

@@ -5,6 +5,7 @@ using STFU.NPR.Analysis;
 using STFU.NPR.Composition;
 using STFU.NPR.Debug;
 using STFU.NPR.Pipeline;
+using STFU.NPR.Pipelines.Abstractions;
 using STFU.NPR.Settings;
 using STFU.NPR.Temporal;
 using STFU.Rendering.Abstractions.Execution;
@@ -39,4 +40,5 @@ public sealed record NprRenderRequest(
     bool IncludeDebugFrame = true,
     DebugOverlayKind DebugOverlay = DebugOverlayKind.None,
     NprDiagnosticsOptions? DiagnosticsOptions = null,
-    NprRenderOptimizerMode OptimizerMode = NprRenderOptimizerMode.Auto);
+    NprRenderOptimizerMode OptimizerMode = NprRenderOptimizerMode.Auto,
+    FramePipelineStrategy PipelineStrategy = FramePipelineStrategy.ReferenceQuality);

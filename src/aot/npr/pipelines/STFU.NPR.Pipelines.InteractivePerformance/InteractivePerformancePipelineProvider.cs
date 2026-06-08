@@ -13,7 +13,7 @@ public sealed class InteractivePerformancePipelineProvider : IFramePipelineStrat
         FramePipelineStrategy.InteractivePerformance,
         NprPipelineIds.InteractivePerformance,
         "Interactive Performance",
-        "Optimized realtime pipeline placeholder. It currently delegates to Reference Quality until the optimized implementation is introduced.");
+        "Optimized realtime pipeline using cache-aware artifacts, budgeted updates and direct GPU-first rendering.");
 
     public IReadOnlyList<INprPreset> CreateBuiltInPresets()
     {
@@ -22,6 +22,6 @@ public sealed class InteractivePerformancePipelineProvider : IFramePipelineStrat
 
     public STFU.NPR.Pipeline.INprPipeline CreatePipeline(FramePipelineStrategyOptions options)
     {
-        return InteractivePerformancePipeline.Create();
+        return InteractivePerformancePipeline.Create(options);
     }
 }

@@ -78,6 +78,7 @@ public sealed class RendererSettingsStore
                     ["backend"] = snapshot.Backend,
                     ["api"] = snapshot.Api,
                     ["presentation"] = snapshot.Presentation,
+                    ["pipelineStrategy"] = snapshot.PipelineStrategy,
                     ["hud"] = snapshot.ShowRendererHud,
                     ["gpuTimings"] = snapshot.EnableGpuTimings,
                     ["workerBudgetMode"] = snapshot.WorkerBudgetMode,

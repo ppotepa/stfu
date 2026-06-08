@@ -8,6 +8,7 @@
     <ProjectReference Include="..\..\aot\STFU.Mesh\STFU.Mesh.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Messaging\STFU.Messaging.csproj" />
     <ProjectReference Include="..\..\aot\STFU.NPR\STFU.NPR.csproj" />
+    <ProjectReference Include="..\..\aot\npr\pipelines\STFU.NPR.Pipelines.Abstractions\STFU.NPR.Pipelines.Abstractions.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Parallelism\STFU.Parallelism.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Rendering.Abstractions\STFU.Rendering.Abstractions.csproj" />
     <ProjectReference Include="..\..\aot\STFU.Strokes\STFU.Strokes.csproj" />

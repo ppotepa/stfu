@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\aot\STFU.Rendering.Abstractions\STFU.Rendering.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\aot\npr\pipelines\STFU.NPR.Pipelines.Abstractions\STFU.NPR.Pipelines.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\aot\npr\pipelines\STFU.NPR.Pipelines.InteractivePerformance\STFU.NPR.Pipelines.InteractivePerformance.csproj" />
     <ProjectReference Include="..\..\src\aot\npr\pipelines\STFU.NPR.Pipelines\STFU.NPR.Pipelines.csproj" />
     <ProjectReference Include="..\..\src\aot\STFU.NPR\STFU.NPR.csproj" />
   </ItemGroup>

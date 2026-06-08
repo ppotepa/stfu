@@ -1,5 +1,7 @@
+using STFU.NPR.Pipelines.Abstractions;
 using STFU.Rendering.Abstractions.Execution;
 using STFU.UI.Bridge.Renderer;
+using STFU.UI.Viewport;
 
 namespace STFU.UI;
 
@@ -13,6 +15,7 @@ internal readonly record struct RendererSettingAvailability(
 internal readonly record struct RendererRuntimePlan(
     RendererBackendPreference RequestedBackend,
     RendererPresentationPreference RequestedPresentation,
+    FramePipelineStrategy PipelineStrategy,
     NprExecutionProfile EffectiveProfile,
     ViewportPresentationKind EffectivePresentation,
     ViewportSurfaceMode SurfaceMode,
@@ -29,6 +32,8 @@ internal readonly record struct RendererRuntimePlan(
     string ApiLabel,
     string PresentationLabel,
     string AdapterLabel,
+    string PipelineStrategyLabel,
+    string PipelineStrategyStatus,
     string StatusMessage)
 {
     public RendererSettingAvailability SettingAvailability => EffectiveProfile == NprExecutionProfile.FullCpuReference
@@ -56,12 +61,17 @@ internal sealed class RendererRuntimePlanResolver
         bool directPresenting,
         string? adapterName)
     {
+        var pipelineStrategy = settings.PipelineStrategy;
+        var strategyLabel = FramePipelineStrategyDisplay.GetDisplayName(pipelineStrategy);
+        var strategyStatus = FramePipelineStrategyDisplay.GetStatusNote(pipelineStrategy);
+
         var effectiveProfile = ResolveExecutionProfile(settings.BackendPreference, hasGpuRenderer);
         if (effectiveProfile == NprExecutionProfile.FullCpuReference)
         {
             return new RendererRuntimePlan(
                 settings.BackendPreference,
                 settings.PresentationPreference,
+                pipelineStrategy,
                 effectiveProfile,
                 ViewportPresentationKind.Bitmap,
                 ViewportSurfaceMode.Bitmap,
@@ -78,6 +88,8 @@ internal sealed class RendererRuntimePlanResolver
                 ApiLabel: "CPU",
                 PresentationLabel: "Bitmap",
                 AdapterLabel: "Unavailable",
+                PipelineStrategyLabel: strategyLabel,
+                PipelineStrategyStatus: strategyStatus,
                 StatusMessage: ResolveCpuStatus(settings.BackendPreference, hasGpuRenderer));
         }
 
@@ -85,20 +97,28 @@ internal sealed class RendererRuntimePlanResolver
         var apiWarning = ResolveApiWarning(settings.ApiPreference);
         var requestedDirect = settings.PresentationPreference == RendererPresentationPreference.Direct ||
             settings.PresentationPreference == RendererPresentationPreference.Auto && directPresenterAvailable;
-        if (settings.PresentationPreference == RendererPresentationPreference.Readback)
+
+        if (pipelineStrategy == FramePipelineStrategy.InteractivePerformance && directPresenterAvailable)
+        {
+            requestedDirect = true;
+        }
+
+        if (settings.PresentationPreference == RendererPresentationPreference.Readback &&
+            pipelineStrategy != FramePipelineStrategy.InteractivePerformance)
         {
             requestedDirect = false;
         }
 
         if (!requestedDirect)
         {
-            return CreateGpuReadbackPlan(settings, hasGpuRenderer, directPresenterAvailable, directSuppressed, apiLabel, adapterName, apiWarning, isFallback: false);
+            return CreateGpuReadbackPlan(settings, pipelineStrategy, hasGpuRenderer, directPresenterAvailable, directSuppressed, apiLabel, adapterName, apiWarning, isFallback: false);
         }
 
         if (!directPresenterAvailable)
         {
             return CreateGpuReadbackPlan(
                 settings,
+                pipelineStrategy,
                 hasGpuRenderer,
                 directPresenterAvailable,
                 directSuppressed,
@@ -112,6 +132,7 @@ internal sealed class RendererRuntimePlanResolver
         {
             return CreateGpuReadbackPlan(
                 settings,
+                pipelineStrategy,
                 hasGpuRenderer,
                 directPresenterAvailable,
                 directSuppressed,
@@ -127,6 +148,7 @@ internal sealed class RendererRuntimePlanResolver
         return new RendererRuntimePlan(
             settings.BackendPreference,
             settings.PresentationPreference,
+            pipelineStrategy,
             effectiveProfile,
             ViewportPresentationKind.DirectGpu,
             surfaceMode,
@@ -143,6 +165,8 @@ internal sealed class RendererRuntimePlanResolver
             ApiLabel: apiLabel,
             PresentationLabel: surfaceMode == ViewportSurfaceMode.DirectActive ? "Direct" : "Direct pending",
             AdapterLabel: string.IsNullOrWhiteSpace(adapterName) ? "Unavailable" : adapterName,
+            PipelineStrategyLabel: strategyLabel,
+            PipelineStrategyStatus: strategyStatus,
             StatusMessage: string.IsNullOrWhiteSpace(apiWarning) && surfaceMode == ViewportSurfaceMode.DirectCandidate
                 ? "Direct GPU pending first successful present."
                 : apiWarning);
@@ -150,6 +174,7 @@ internal sealed class RendererRuntimePlanResolver
 
     private static RendererRuntimePlan CreateGpuReadbackPlan(
         RendererSettingsViewModel settings,
+        FramePipelineStrategy pipelineStrategy,
         bool hasGpuRenderer,
         bool directPresenterAvailable,
         bool directSuppressed,
@@ -161,6 +186,7 @@ internal sealed class RendererRuntimePlanResolver
         return new RendererRuntimePlan(
             settings.BackendPreference,
             settings.PresentationPreference,
+            pipelineStrategy,
             NprExecutionProfile.CpuDrivenGpuAccelerated,
             ViewportPresentationKind.Bitmap,
             isFallback ? ViewportSurfaceMode.DirectSuppressed : ViewportSurfaceMode.Bitmap,
@@ -177,6 +203,8 @@ internal sealed class RendererRuntimePlanResolver
             ApiLabel: apiLabel,
             PresentationLabel: isFallback ? "Readback fallback" : "Readback",
             AdapterLabel: string.IsNullOrWhiteSpace(adapterName) ? "Unavailable" : adapterName,
+            PipelineStrategyLabel: FramePipelineStrategyDisplay.GetDisplayName(pipelineStrategy),
+            PipelineStrategyStatus: FramePipelineStrategyDisplay.GetStatusNote(pipelineStrategy),
             StatusMessage: statusMessage);
     }
 

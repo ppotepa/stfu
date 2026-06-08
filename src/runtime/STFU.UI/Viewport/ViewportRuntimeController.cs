@@ -117,6 +117,7 @@ internal sealed class ViewportRuntimeController : IDisposable
             nameof(RendererSettingsViewModel.BackendPreference) or
             nameof(RendererSettingsViewModel.PresentationPreference) or
             nameof(RendererSettingsViewModel.ApiPreference) or
+            nameof(RendererSettingsViewModel.PipelineStrategy) or
             nameof(RendererSettingsViewModel.MaxRenderWorkers) or
             nameof(RendererSettingsViewModel.EnableTileParallelism) or
             nameof(RendererSettingsViewModel.EnableGpuTimings) or
