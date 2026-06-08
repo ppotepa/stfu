@@ -5,7 +5,7 @@
   <Grid RowDefinitions="48,*" Background="{DynamicResource StfuBgBrush}">
     <ui:TopBarView Grid.Row="0" />
     <Grid Grid.Row="1"
-          ColumnDefinitions="*,480"
+          ColumnDefinitions="*,640"
           Margin="16"
           ColumnSpacing="16">
       <ui:ViewportStage Grid.Column="0" x:Name="ViewportStage" />

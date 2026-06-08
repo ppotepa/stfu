@@ -1,0 +1,159 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    x:Class="STFU.UI.Inspector.Scene.SceneTabView">
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Spacing="12" Margin="0,0,4,0">
+
+      <Border Padding="10" BorderThickness="1" BorderBrush="#D5D8DC" CornerRadius="6">
+        <StackPanel Spacing="6">
+          <TextBlock Text="Scene Overview" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+            <TextBlock Grid.Column="0" Text="Scene" Foreground="#68717A" />
+            <TextBlock Grid.Column="1" Text="Selected" Foreground="#68717A" />
+            <TextBlock Grid.Column="2" Text="Diagnostics" Foreground="#68717A" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Scene.SceneSummary}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Scene.SelectedEntityLabel}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Scene.DiagnosticsSummary}" TextWrapping="Wrap" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Padding="10" BorderThickness="1" BorderBrush="#D5D8DC" CornerRadius="6">
+        <StackPanel Spacing="8">
+          <DockPanel LastChildFill="True">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+              <Button Content="Create" Command="{Binding Scene.CreateEntityCommand}" />
+              <Button Content="Duplicate" Command="{Binding Scene.DuplicateEntityCommand}" />
+              <Button Content="Delete" Command="{Binding Scene.DeleteEntityCommand}" />
+            </StackPanel>
+            <TextBlock Text="Entity Outliner" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </DockPanel>
+
+          <ListBox
+              MinHeight="128"
+              ItemsSource="{Binding Scene.Entities}"
+              SelectedItem="{Binding Scene.SelectedEntity, Mode=TwoWay}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="2*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="2" Margin="0,4">
+                  <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="1" Text="{Binding MeshSourceLabel}" />
+                  <TextBlock Grid.Column="2" Text="{Binding Role}" HorizontalAlignment="Right" />
+                  <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding IdLabel}" Foreground="#68717A" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MeshStatsLabel}" Foreground="#68717A" />
+                  <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding PositionLabel}" Foreground="#68717A" HorizontalAlignment="Right" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </Border>
+
+      <Border Padding="10" BorderThickness="1" BorderBrush="#D5D8DC" CornerRadius="6">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Selected Entity" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" Foreground="#68717A" />
+            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Scene.SelectedEntity.Name, Mode=TwoWay}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Id" Foreground="#68717A" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Scene.SelectedEntityLabel}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Status" Foreground="#68717A" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Scene.SelectedEntityStatus}" TextWrapping="Wrap" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="Mesh" Foreground="#68717A" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Scene.SelectedMeshSummary}" TextWrapping="Wrap" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Padding="10" BorderThickness="1" BorderBrush="#D5D8DC" CornerRadius="6">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Transform" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="72,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="6" RowSpacing="6">
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="X" Foreground="#68717A" HorizontalAlignment="Center" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="Y" Foreground="#68717A" HorizontalAlignment="Center" />
+            <TextBlock Grid.Row="0" Grid.Column="3" Text="Z" Foreground="#68717A" HorizontalAlignment="Center" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Position" Foreground="#68717A" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding Scene.SelectedEntity.PositionX, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+            <NumericUpDown Grid.Row="1" Grid.Column="2" Value="{Binding Scene.SelectedEntity.PositionY, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+            <NumericUpDown Grid.Row="1" Grid.Column="3" Value="{Binding Scene.SelectedEntity.PositionZ, Mode=TwoWay}" Increment="0.1" FormatString="0.###" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Rotation (°)" Foreground="#68717A" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding Scene.SelectedEntity.RotationX, Mode=TwoWay}" Minimum="{Binding Scene.RotationMinimumDegrees}" Maximum="{Binding Scene.RotationMaximumDegrees}" Increment="{Binding Scene.RotationIncrementDegrees}" FormatString="0.###" />
+            <NumericUpDown Grid.Row="2" Grid.Column="2" Value="{Binding Scene.SelectedEntity.RotationY, Mode=TwoWay}" Minimum="{Binding Scene.RotationMinimumDegrees}" Maximum="{Binding Scene.RotationMaximumDegrees}" Increment="{Binding Scene.RotationIncrementDegrees}" FormatString="0.###" />
+            <NumericUpDown Grid.Row="2" Grid.Column="3" Value="{Binding Scene.SelectedEntity.RotationZ, Mode=TwoWay}" Minimum="{Binding Scene.RotationMinimumDegrees}" Maximum="{Binding Scene.RotationMaximumDegrees}" Increment="{Binding Scene.RotationIncrementDegrees}" FormatString="0.###" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="Scale" Foreground="#68717A" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding Scene.SelectedEntity.ScaleX, Mode=TwoWay}" Minimum="{Binding Scene.ScaleMinimum}" Increment="{Binding Scene.ScaleIncrement}" FormatString="0.###" />
+            <NumericUpDown Grid.Row="3" Grid.Column="2" Value="{Binding Scene.SelectedEntity.ScaleY, Mode=TwoWay}" Minimum="{Binding Scene.ScaleMinimum}" Increment="{Binding Scene.ScaleIncrement}" FormatString="0.###" />
+            <NumericUpDown Grid.Row="3" Grid.Column="3" Value="{Binding Scene.SelectedEntity.ScaleZ, Mode=TwoWay}" Minimum="{Binding Scene.ScaleMinimum}" Increment="{Binding Scene.ScaleIncrement}" FormatString="0.###" />
+          </Grid>
+
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Content="Reset" Command="{Binding Scene.ResetTransformCommand}" />
+            <Button Content="Reset Position" Command="{Binding Scene.ResetTransformPositionCommand}" />
+            <Button Content="Reset Rotation" Command="{Binding Scene.ResetTransformRotationCommand}" />
+            <Button Content="Reset Scale" Command="{Binding Scene.ResetTransformScaleCommand}" />
+            <Button Content="Normalize" Command="{Binding Scene.NormalizeSelectedCommand}" />
+            <Button Content="Ground" Command="{Binding Scene.GroundSelectedCommand}" />
+          </StackPanel>
+
+          <TextBlock Text="{Binding Scene.SelectedTransformSummary}" Foreground="#68717A" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Padding="10" BorderThickness="1" BorderBrush="#D5D8DC" CornerRadius="6">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Mesh Binding" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Handle" Foreground="#68717A" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Scene.SelectedEntity.MeshLabel}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Source" Foreground="#68717A" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Scene.SelectedEntity.MeshSourcePath}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Stats" Foreground="#68717A" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Scene.SelectedEntity.MeshStatsLabel}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="Bounds" Foreground="#68717A" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Scene.SelectedBoundsSummary}" TextWrapping="Wrap" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Padding="10" BorderThickness="1" BorderBrush="#D5D8DC" CornerRadius="6">
+        <StackPanel Spacing="8">
+          <TextBlock Text="NPR Role Routing" FontWeight="SemiBold" />
+          <ComboBox ItemsSource="{Binding Scene.RoleOptions}" SelectedItem="{Binding Scene.SelectedEntity.Role, Mode=TwoWay}" />
+          <ItemsControl ItemsSource="{Binding Scene.RoleRoutes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="96,*" Margin="0,3">
+                  <TextBlock Grid.Column="0" Text="{Binding Role}" FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="1" Text="{Binding Summary}" Foreground="#68717A" TextWrapping="Wrap" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Padding="10" BorderThickness="1" BorderBrush="#D5D8DC" CornerRadius="6">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Scene Diagnostics" FontWeight="SemiBold" />
+          <ItemsControl ItemsSource="{Binding Scene.Diagnostics}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" Margin="0,2" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding Scene.DiagnosticsSummary}" Foreground="#68717A" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
