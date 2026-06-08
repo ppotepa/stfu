@@ -2,6 +2,8 @@ namespace STFU.UI;
 
 internal sealed class ViewportFrameState
 {
+    public Dictionary<long, ViewportRuntimeStatus> RuntimeStatusByRevision { get; } = new();
+
     public long NextRevision;
     public long LastLoggedRevision;
     public long LastEnqueuedRevision;
@@ -47,5 +49,37 @@ internal sealed class ViewportFrameState
         DeferredFrameRequested = true;
         DeferredFrameLogCounter++;
         return DeferredFrameLogCounter % 120 == 0;
+    }
+
+    public void RememberRuntimeStatus(long revision, ViewportRuntimeStatus status)
+    {
+        RuntimeStatusByRevision[revision] = status;
+    }
+
+    public ViewportRuntimeStatus? ConsumeRuntimeStatus(long revision)
+    {
+        if (!RuntimeStatusByRevision.Remove(revision, out var status))
+        {
+            return null;
+        }
+
+        return status;
+    }
+
+    public void CleanupRuntimeStatuses(long completedRevision)
+    {
+        if (RuntimeStatusByRevision.Count == 0)
+        {
+            return;
+        }
+
+        var staleRevisions = RuntimeStatusByRevision.Keys
+            .Where(revision => revision <= completedRevision)
+            .ToArray();
+
+        foreach (var staleRevision in staleRevisions)
+        {
+            RuntimeStatusByRevision.Remove(staleRevision);
+        }
     }
 }

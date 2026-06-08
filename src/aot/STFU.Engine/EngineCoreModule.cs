@@ -14,6 +14,9 @@ public sealed class EngineCoreModule : IEngineModule
         context.Commands
             .Register(new CreateEntityCommandHandler(scene))
             .Register(new DeleteEntityCommandHandler(scene))
-            .Register(new SetEntityPositionCommandHandler(scene));
+            .Register(new RenameEntityCommandHandler(scene))
+            .Register(new DuplicateEntityCommandHandler(scene))
+            .Register(new SetEntityPositionCommandHandler(scene))
+            .Register(new SetEntityTransformCommandHandler(scene));
     }
 }

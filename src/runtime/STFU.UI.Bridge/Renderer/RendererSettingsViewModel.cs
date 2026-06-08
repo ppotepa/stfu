@@ -16,14 +16,24 @@ public sealed class RendererSettingsViewModel : BindableObject
     private string _effectiveBackend = "AUTO";
     private string _effectiveApi = "AUTO";
     private string _effectivePresentation = "AUTO";
+    private string _surfaceMode = "Bitmap";
     private string _adapterName = "Unavailable";
     private string _statusMessage = string.Empty;
+    private string _lastOutputKind = string.Empty;
+    private float _gpuReadbackMs;
     private bool _showRendererHud;
     private bool _enableGpuTimings;
     private WorkerBudgetMode _workerBudgetMode;
     private int _maxRenderWorkers;
     private bool _enableTileParallelism;
     private bool _suspendPersistence;
+    private bool _directPresenterAvailable;
+    private bool _directSuppressed;
+    private bool _preferGpuPresentation;
+    private bool _requireGpuReadback;
+    private bool _allowGpuReadback;
+    private bool _showDirectHost;
+    private bool _drawBitmap;
 
     public RendererSettingsViewModel(
         UiEngineSession session,
@@ -48,8 +58,18 @@ public sealed class RendererSettingsViewModel : BindableObject
             effectiveBackend: session.HasGpuRenderer ? "CPU+GPU" : "CPU",
             effectiveApi: session.HasGpuRenderer ? "DX11" : "CPU",
             effectivePresentation: session.HasGpuRenderer ? "Direct" : "Bitmap",
+            surfaceMode: session.HasGpuRenderer ? "DirectCandidate" : "Bitmap",
+            directPresenterAvailable: session.HasGpuRenderer,
+            directSuppressed: false,
+            preferGpuPresentation: session.HasGpuRenderer,
+            requireGpuReadback: false,
+            allowGpuReadback: !session.HasGpuRenderer,
+            showDirectHost: false,
+            drawBitmap: true,
             adapterName: session.GpuRenderBackend?.Info.Name ?? "Unavailable",
-            statusMessage: session.HasGpuRenderer ? string.Empty : "GPU backend unavailable; using Full CPU.");
+            statusMessage: session.HasGpuRenderer ? string.Empty : "GPU backend unavailable; using Full CPU.",
+            lastOutputKind: string.Empty,
+            gpuReadbackMs: 0f);
     }
 
     public RendererBackendPreference BackendPreference
@@ -247,6 +267,66 @@ public sealed class RendererSettingsViewModel : BindableObject
         private set => SetProperty(ref _adapterName, value);
     }
 
+    public string SurfaceMode
+    {
+        get => _surfaceMode;
+        private set => SetProperty(ref _surfaceMode, value);
+    }
+
+    public bool DirectPresenterAvailable
+    {
+        get => _directPresenterAvailable;
+        private set => SetProperty(ref _directPresenterAvailable, value);
+    }
+
+    public bool DirectSuppressed
+    {
+        get => _directSuppressed;
+        private set => SetProperty(ref _directSuppressed, value);
+    }
+
+    public bool PreferGpuPresentation
+    {
+        get => _preferGpuPresentation;
+        private set => SetProperty(ref _preferGpuPresentation, value);
+    }
+
+    public bool RequireGpuReadback
+    {
+        get => _requireGpuReadback;
+        private set => SetProperty(ref _requireGpuReadback, value);
+    }
+
+    public bool AllowGpuReadback
+    {
+        get => _allowGpuReadback;
+        private set => SetProperty(ref _allowGpuReadback, value);
+    }
+
+    public bool ShowDirectHost
+    {
+        get => _showDirectHost;
+        private set => SetProperty(ref _showDirectHost, value);
+    }
+
+    public bool DrawBitmap
+    {
+        get => _drawBitmap;
+        private set => SetProperty(ref _drawBitmap, value);
+    }
+
+    public string LastOutputKind
+    {
+        get => _lastOutputKind;
+        private set => SetProperty(ref _lastOutputKind, value);
+    }
+
+    public float GpuReadbackMs
+    {
+        get => _gpuReadbackMs;
+        private set => SetProperty(ref _gpuReadbackMs, value);
+    }
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -299,14 +379,34 @@ public sealed class RendererSettingsViewModel : BindableObject
         string effectiveBackend,
         string effectiveApi,
         string effectivePresentation,
+        string surfaceMode,
+        bool directPresenterAvailable,
+        bool directSuppressed,
+        bool preferGpuPresentation,
+        bool requireGpuReadback,
+        bool allowGpuReadback,
+        bool showDirectHost,
+        bool drawBitmap,
         string adapterName,
-        string statusMessage)
+        string statusMessage,
+        string lastOutputKind = "",
+        float gpuReadbackMs = 0f)
     {
         EffectiveBackend = effectiveBackend;
         EffectiveApi = effectiveApi;
         EffectivePresentation = effectivePresentation;
+        SurfaceMode = surfaceMode;
+        DirectPresenterAvailable = directPresenterAvailable;
+        DirectSuppressed = directSuppressed;
+        PreferGpuPresentation = preferGpuPresentation;
+        RequireGpuReadback = requireGpuReadback;
+        AllowGpuReadback = allowGpuReadback;
+        ShowDirectHost = showDirectHost;
+        DrawBitmap = drawBitmap;
         AdapterName = string.IsNullOrWhiteSpace(adapterName) ? "Unavailable" : adapterName;
         StatusMessage = statusMessage;
+        LastOutputKind = lastOutputKind;
+        GpuReadbackMs = gpuReadbackMs;
         OnPropertyChanged(nameof(RequestedSummary));
         OnPropertyChanged(nameof(IsGpuAvailable));
         OnPropertyChanged(nameof(IsDirectX11Available));

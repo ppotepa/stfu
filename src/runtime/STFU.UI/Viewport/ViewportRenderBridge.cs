@@ -14,6 +14,7 @@ using STFU.UI.Bridge.Session;
 using STFU.UI.Styling;
 using STFU.Viewport;
 using STFU.Viewport.Commands;
+using System.Linq;
 
 namespace STFU.UI;
 
@@ -174,6 +175,14 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             requestBuild.RuntimeStatus.EffectiveBackend,
             requestBuild.RuntimeStatus.EffectiveApi,
             requestBuild.RuntimeStatus.EffectivePresentation,
+            requestBuild.RuntimeStatus.SurfaceMode,
+            requestBuild.RuntimeStatus.DirectPresenterAvailable,
+            requestBuild.RuntimeStatus.DirectSuppressed,
+            requestBuild.RuntimeStatus.PreferGpuPresentation,
+            requestBuild.RuntimeStatus.RequireGpuReadback,
+            requestBuild.RuntimeStatus.AllowGpuReadback,
+            requestBuild.RuntimeStatus.ShowDirectHost,
+            requestBuild.RuntimeStatus.DrawBitmap,
             requestBuild.RuntimeStatus.AdapterName,
             requestBuild.RuntimeStatus.StatusMessage);
         if (revision == 1 || revision % 120 == 0)
@@ -220,6 +229,7 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             _state.RenderInFlight = true;
             _state.LastEnqueuedRevision = revision;
             _state.DeferredFrameRequested = false;
+            _state.RememberRuntimeStatus(revision, requestBuild.RuntimeStatus);
         }
 
         _ = _scheduler.EnqueueAsync(requestBuild.Request);
@@ -241,6 +251,27 @@ internal sealed class ViewportFrameCoordinator : IDisposable
 
         using (result)
         {
+            ViewportRuntimeStatus requestStatus;
+            lock (_gate)
+            {
+                requestStatus = _state.ConsumeRuntimeStatus(result.Revision) ?? new ViewportRuntimeStatus(
+                    EffectiveBackend: _session.Workspace.Renderer.EffectiveBackend,
+                    EffectiveApi: _session.Workspace.Renderer.EffectiveApi,
+                    EffectivePresentation: _session.Workspace.Renderer.EffectivePresentation,
+                    SurfaceMode: _session.Workspace.Renderer.SurfaceMode,
+                    DirectPresenterAvailable: _session.Workspace.Renderer.DirectPresenterAvailable,
+                    DirectSuppressed: _session.Workspace.Renderer.DirectSuppressed,
+                    PreferGpuPresentation: _session.Workspace.Renderer.PreferGpuPresentation,
+                    RequireGpuReadback: _session.Workspace.Renderer.RequireGpuReadback,
+                    AllowGpuReadback: _session.Workspace.Renderer.AllowGpuReadback,
+                    ShowDirectHost: _session.Workspace.Renderer.ShowDirectHost,
+                    DrawBitmap: _session.Workspace.Renderer.DrawBitmap,
+                    AdapterName: _session.Workspace.Renderer.AdapterName,
+                    StatusMessage: _session.Workspace.Renderer.StatusMessage,
+                    LastOutputKind: _session.Workspace.Renderer.LastOutputKind,
+                    GpuReadbackMs: _session.Workspace.Renderer.GpuReadbackMs);
+            }
+
             if (result.Status is NprRenderStatus.Cancelled or NprRenderStatus.Dropped)
             {
                 return false;
@@ -272,6 +303,7 @@ internal sealed class ViewportFrameCoordinator : IDisposable
 
             if (result.OutputKind == NprRenderOutputKind.GpuTexture)
             {
+                var displayedPresentation = false;
                 var presenter = _directXPresenter;
                 var presenterAttached = presenter?.IsAttached ?? false;
                 var hasLease = result.GpuTextureLease is not null;
@@ -350,6 +382,7 @@ internal sealed class ViewportFrameCoordinator : IDisposable
 
                 if (presented)
                 {
+                    displayedPresentation = true;
                     _state.ResetDirectPresentFailures();
                     _state.LastPresentedWithGpuTexture = true;
                 }
@@ -379,10 +412,20 @@ internal sealed class ViewportFrameCoordinator : IDisposable
                     {
                         _state.LastPresentedWithGpuTexture = false;
                     }
+                    else if (_state.LastPresentedWithGpuTexture)
+                    {
+                        // Keep direct-present status if this is a temporary skip after an active session;
+                        // the next successful frame will clear any stale state.
+                    }
                 }
+                UpdateRuntimeStatusFromResult(
+                    result,
+                    displayedPresentation,
+                    requestStatus);
             }
             else
             {
+                var displayedPresentation = false;
                 if (!_bitmapPresenter.TryPresent(result, out var bitmapAvailability))
                 {
                     StfuLog.Write(
@@ -400,6 +443,10 @@ internal sealed class ViewportFrameCoordinator : IDisposable
                 }
 
                 _state.LastPresentedWithGpuTexture = false;
+                UpdateRuntimeStatusFromResult(
+                    result,
+                    displayedPresentation,
+                    requestStatus);
             }
 
             _session.Strokes.Publish(result.StrokeFrame);
@@ -416,7 +463,10 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             _session.Workspace.Layers.RefreshRuntimeCounters();
 
             LogFrameIfNeeded(result);
-            UpdateRuntimeStatusFromResult(result);
+            if (_state.LastPresentedWithGpuTexture is false && result.OutputKind != NprRenderOutputKind.GpuTexture)
+            {
+                // Already updated from branch above.
+            }
             return true;
         }
     }
@@ -435,6 +485,7 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             lock (_gate)
             {
                 _state.LastCompletedRevision = NumericMath.AtLeast(_state.LastCompletedRevision, result.Revision);
+                _state.CleanupRuntimeStatuses(_state.LastCompletedRevision);
                 _state.RenderInFlight = _state.LastCompletedRevision < _state.LastEnqueuedRevision;
                 requestNextFrame = _state.DeferredFrameRequested && !_state.RenderInFlight;
             }
@@ -458,6 +509,7 @@ internal sealed class ViewportFrameCoordinator : IDisposable
         lock (_gate)
         {
             _state.LastCompletedRevision = NumericMath.AtLeast(_state.LastCompletedRevision, result.Revision);
+            _state.CleanupRuntimeStatuses(_state.LastCompletedRevision - 1);
             _state.RenderInFlight = _state.LastCompletedRevision < _state.LastEnqueuedRevision;
             requestDeferredFrame = _state.DeferredFrameRequested && !_state.RenderInFlight;
             _pendingResult?.Dispose();
@@ -505,11 +557,40 @@ internal sealed class ViewportFrameCoordinator : IDisposable
         }
     }
 
-    private void UpdateRuntimeStatusFromResult(NprRenderResult result)
+    private void UpdateRuntimeStatusFromResult(
+        NprRenderResult result,
+        bool presentedDirect,
+        ViewportRuntimeStatus requestStatus)
     {
-        // Runtime status is driven by RendererRuntimePlan when requests are built.
-        // Do not infer effective presentation from result.OutputKind here: DirectCandidate,
-        // DirectActive and DirectSuppressed are runtime-plan states, not raw result kinds.
+        var drawBitmap = result.OutputKind == NprRenderOutputKind.PixelSurface;
+        var outputKind = result.OutputKind.ToString();
+        var adapterName = string.IsNullOrWhiteSpace(result.Diagnostics.Notes)
+            ? requestStatus.AdapterName
+            : result.Diagnostics.Notes;
+        var gpuReadbackMs = (float)(result.Diagnostics.Timings.FirstOrDefault(t => t.Name == "GpuReadback")?.Milliseconds ?? 0d);
+
+        var effectivePresentation = result.OutputKind == NprRenderOutputKind.GpuTexture && presentedDirect
+            ? "Direct"
+            : result.OutputKind == NprRenderOutputKind.GpuTexture
+                ? "DirectSkipped"
+                : requestStatus.EffectivePresentation;
+
+        _session.Workspace.Renderer.UpdateRuntimeStatus(
+            requestStatus.EffectiveBackend,
+            requestStatus.EffectiveApi,
+            effectivePresentation,
+            requestStatus.SurfaceMode,
+            requestStatus.DirectPresenterAvailable,
+            requestStatus.DirectSuppressed,
+            requestStatus.PreferGpuPresentation,
+            requestStatus.RequireGpuReadback,
+            requestStatus.AllowGpuReadback,
+            requestStatus.ShowDirectHost,
+            drawBitmap,
+            adapterName,
+            $"{requestStatus.StatusMessage}{(gpuReadbackMs > 0 ? $" | GpuReadback {gpuReadbackMs:0.00}ms" : string.Empty)}",
+            outputKind,
+            gpuReadbackMs);
     }
 
     private void LogFrameIfNeeded(NprRenderResult result)

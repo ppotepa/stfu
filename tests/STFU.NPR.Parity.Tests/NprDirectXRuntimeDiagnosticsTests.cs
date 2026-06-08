@@ -92,7 +92,7 @@ public sealed class NprDirectXRuntimeDiagnosticsTests
     }
 
     private static NprRenderResult RenderFrame(
-        StfuEngine? engine,
+        StfuEngine engine,
         string label,
         NprFrameBudget budget,
         NprQualityProfile quality)

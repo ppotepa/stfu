@@ -18,11 +18,15 @@ public sealed class InspectorViewModel : BindableObject
                 new("Load Mesh", "Open or reload source geometry."),
                 new("Assign Mesh", "Bind selected mesh to selected entity.")
             ]),
-            new(InspectorTab.Scene, "SCENE", "\uECA5", "Scene", "Entities, transforms, roles, and scene graph basics.",
+            new(InspectorTab.Scene, "SCENE", "\uECA5", "Scene", "Scene graph, selected entity, transform, mesh binding, NPR role routing, and readiness diagnostics.",
             [
-                new("Entities", "Create, select, and remove scene entities."),
-                new("Transform", "Position, rotation, and scale."),
-                new("Role", "Foreground, midground, background style routing.")
+                new("Overview", "Renderable entity count, mesh bindings, and selected-object status."),
+                new("Entity Outliner", "Create, select, duplicate, and delete scene entities."),
+                new("Selected Entity", "Name, id, mesh source, mesh statistics, and render status."),
+                new("Transform", "Position, rotation, scale, reset, normalize, and ground alignment."),
+                new("Mesh Binding", "Current mesh handle, source path, bounds, vertices, and triangles."),
+                new("NPR Role Routing", "Foreground, midground, and background style routing for the active preset."),
+                new("Diagnostics", "Missing mesh, empty mesh, zero scale, empty scene, and no-selection warnings.")
             ]),
             new(InspectorTab.General, "GENERAL", "\uE713", "General", "Preset, pipeline, seed, and viewport mode.",
             [
@@ -99,6 +103,7 @@ public sealed class InspectorViewModel : BindableObject
             OnPropertyChanged(nameof(Icon));
             OnPropertyChanged(nameof(Sections));
             OnPropertyChanged(nameof(IsLoadActive));
+            OnPropertyChanged(nameof(IsSceneActive));
             OnPropertyChanged(nameof(IsBoilerplateActive));
             UpdateActiveTabs();
         }
@@ -114,7 +119,9 @@ public sealed class InspectorViewModel : BindableObject
 
     public bool IsLoadActive => ActiveTab == InspectorTab.Load;
 
-    public bool IsBoilerplateActive => !IsLoadActive;
+    public bool IsSceneActive => ActiveTab == InspectorTab.Scene;
+
+    public bool IsBoilerplateActive => !IsLoadActive && !IsSceneActive;
 
     private InspectorTabItem ActiveItem => Tabs.First(item => item.Id == ActiveTab);
 

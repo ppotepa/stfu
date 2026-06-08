@@ -149,6 +149,7 @@ public sealed class WorkspaceViewModel : BindableObject
         if (e.PropertyName is nameof(PresetViewModel.ActivePresetId))
         {
             DefaultDrawing.RefreshFromEngine();
+            Scene.RefreshFromEngine(Scene.SelectedEntity?.Id);
             Layers.RefreshFromEngine();
         }
     }

@@ -15,8 +15,18 @@ internal readonly record struct ViewportRuntimeStatus(
     string EffectiveBackend,
     string EffectiveApi,
     string EffectivePresentation,
+    string SurfaceMode,
+    bool DirectPresenterAvailable,
+    bool DirectSuppressed,
+    bool PreferGpuPresentation,
+    bool RequireGpuReadback,
+    bool AllowGpuReadback,
+    bool ShowDirectHost,
+    bool DrawBitmap,
     string AdapterName,
-    string StatusMessage);
+    string StatusMessage,
+    string LastOutputKind,
+    float GpuReadbackMs);
 
 internal readonly record struct ViewportRenderRequestBuild(
     NprRenderRequest Request,
@@ -54,8 +64,18 @@ internal sealed class ViewportRenderRequestFactory
             runtimePlan.BackendLabel,
             runtimePlan.ApiLabel,
             runtimePlan.PresentationLabel,
+            runtimePlan.SurfaceMode.ToString(),
+            runtimePlan.DirectPresenterAvailable,
+            runtimePlan.DirectSuppressed,
+            runtimePlan.PreferGpuPresentation,
+            runtimePlan.RequireGpuReadback,
+            runtimePlan.AllowGpuReadback,
+            runtimePlan.ShowDirectHost,
+            runtimePlan.DrawBitmap,
             runtimePlan.AdapterLabel,
-            runtimePlan.StatusMessage);
+            runtimePlan.StatusMessage,
+            LastOutputKind: string.Empty,
+            GpuReadbackMs: 0f);
         var frameBudget = new NprFrameBudget(
             TargetFps: 60,
             MaxWorkerThreads: renderer.MaxRenderWorkers,

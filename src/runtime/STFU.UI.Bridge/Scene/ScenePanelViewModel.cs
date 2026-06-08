@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Numerics;
 using System.Windows.Input;
 using STFU.Assets;
+using STFU.Common.Math;
 using STFU.Common.Primitives;
 using STFU.Engine.Commands;
 using STFU.Mesh;
@@ -487,7 +488,7 @@ public sealed class ScenePanelViewModel : BindableObject
     {
         return new Transform3D(
             new Vector3(entity.PositionX, entity.PositionY, entity.PositionZ),
-            new Vector3(
+            new Vector3(    
                 SceneTransformMath.ToRadians(entity.RotationX),
                 SceneTransformMath.ToRadians(entity.RotationY),
                 SceneTransformMath.ToRadians(entity.RotationZ)),

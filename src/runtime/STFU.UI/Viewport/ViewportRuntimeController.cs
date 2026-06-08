@@ -83,6 +83,14 @@ internal sealed class ViewportRuntimeController : IDisposable
             plan.BackendLabel,
             plan.ApiLabel,
             plan.PresentationLabel,
+            plan.SurfaceMode.ToString(),
+            plan.DirectPresenterAvailable,
+            plan.DirectSuppressed,
+            plan.PreferGpuPresentation,
+            plan.RequireGpuReadback,
+            plan.AllowGpuReadback,
+            plan.ShowDirectHost,
+            plan.DrawBitmap,
             plan.AdapterLabel,
             plan.StatusMessage);
 

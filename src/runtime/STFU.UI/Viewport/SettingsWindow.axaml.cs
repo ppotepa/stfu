@@ -117,8 +117,18 @@ public sealed partial class SettingsWindow : Window
         if (e.PropertyName is nameof(RendererSettingsViewModel.EffectiveBackend)
             or nameof(RendererSettingsViewModel.EffectiveApi)
             or nameof(RendererSettingsViewModel.EffectivePresentation)
+            or nameof(RendererSettingsViewModel.SurfaceMode)
+            or nameof(RendererSettingsViewModel.DirectPresenterAvailable)
+            or nameof(RendererSettingsViewModel.DirectSuppressed)
+            or nameof(RendererSettingsViewModel.PreferGpuPresentation)
+            or nameof(RendererSettingsViewModel.RequireGpuReadback)
+            or nameof(RendererSettingsViewModel.AllowGpuReadback)
+            or nameof(RendererSettingsViewModel.ShowDirectHost)
+            or nameof(RendererSettingsViewModel.DrawBitmap)
             or nameof(RendererSettingsViewModel.AdapterName)
             or nameof(RendererSettingsViewModel.StatusMessage)
+            or nameof(RendererSettingsViewModel.LastOutputKind)
+            or nameof(RendererSettingsViewModel.GpuReadbackMs)
             or nameof(RendererSettingsViewModel.IsGpuAvailable)
             or nameof(RendererSettingsViewModel.IsDirectX11Available)
             or nameof(RendererSettingsViewModel.CanConfigureGpu)
@@ -223,8 +233,18 @@ public sealed partial class SettingsWindow : Window
         private string _effectiveBackend = "AUTO";
         private string _effectiveApi = "AUTO";
         private string _effectivePresentation = "AUTO";
+        private string _surfaceMode = "Bitmap";
         private string _adapterName = "Unavailable";
         private string _statusMessage = string.Empty;
+        private string _lastOutputKind = string.Empty;
+        private float _gpuReadbackMs;
+        private bool _directPresenterAvailable;
+        private bool _directSuppressed;
+        private bool _preferGpuPresentation;
+        private bool _requireGpuReadback;
+        private bool _allowGpuReadback;
+        private bool _showDirectHost;
+        private bool _drawBitmap;
 
         private SettingsDraft(RendererSettingsViewModel renderer)
         {
@@ -403,6 +423,66 @@ public sealed partial class SettingsWindow : Window
             private set => SetProperty(ref _adapterName, value);
         }
 
+        public string SurfaceMode
+        {
+            get => _surfaceMode;
+            private set => SetProperty(ref _surfaceMode, value);
+        }
+
+        public bool DirectPresenterAvailable
+        {
+            get => _directPresenterAvailable;
+            private set => SetProperty(ref _directPresenterAvailable, value);
+        }
+
+        public bool DirectSuppressed
+        {
+            get => _directSuppressed;
+            private set => SetProperty(ref _directSuppressed, value);
+        }
+
+        public bool PreferGpuPresentation
+        {
+            get => _preferGpuPresentation;
+            private set => SetProperty(ref _preferGpuPresentation, value);
+        }
+
+        public bool RequireGpuReadback
+        {
+            get => _requireGpuReadback;
+            private set => SetProperty(ref _requireGpuReadback, value);
+        }
+
+        public bool AllowGpuReadback
+        {
+            get => _allowGpuReadback;
+            private set => SetProperty(ref _allowGpuReadback, value);
+        }
+
+        public bool ShowDirectHost
+        {
+            get => _showDirectHost;
+            private set => SetProperty(ref _showDirectHost, value);
+        }
+
+        public bool DrawBitmap
+        {
+            get => _drawBitmap;
+            private set => SetProperty(ref _drawBitmap, value);
+        }
+
+        public string LastOutputKind
+        {
+            get => _lastOutputKind;
+            private set => SetProperty(ref _lastOutputKind, value);
+        }
+
+        public float GpuReadbackMs
+        {
+            get => _gpuReadbackMs;
+            private set => SetProperty(ref _gpuReadbackMs, value);
+        }
+
         public string StatusMessage
         {
             get => _statusMessage;
@@ -428,8 +508,18 @@ public sealed partial class SettingsWindow : Window
             EffectiveBackend = renderer.EffectiveBackend;
             EffectiveApi = renderer.EffectiveApi;
             EffectivePresentation = renderer.EffectivePresentation;
+            SurfaceMode = renderer.SurfaceMode;
+            DirectPresenterAvailable = renderer.DirectPresenterAvailable;
+            DirectSuppressed = renderer.DirectSuppressed;
+            PreferGpuPresentation = renderer.PreferGpuPresentation;
+            RequireGpuReadback = renderer.RequireGpuReadback;
+            AllowGpuReadback = renderer.AllowGpuReadback;
+            ShowDirectHost = renderer.ShowDirectHost;
+            DrawBitmap = renderer.DrawBitmap;
             AdapterName = renderer.AdapterName;
             StatusMessage = renderer.StatusMessage;
+            LastOutputKind = renderer.LastOutputKind;
+            GpuReadbackMs = renderer.GpuReadbackMs;
             OnGpuSettingAvailabilityChanged();
         }
 
