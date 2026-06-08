@@ -3,7 +3,7 @@ using STFU.NPR.Graph;
 using STFU.Parallelism;
 using System.Runtime.InteropServices;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.INprStep
 {

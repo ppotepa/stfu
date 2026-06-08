@@ -11,11 +11,11 @@ public sealed class OptimizationHardeningSourceGuardTests
         var repo = FindRepositoryRoot();
         var hotPathFiles = new[]
         {
-            "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildInkFrameStep.cs",
-            "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs",
-            "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultClassifyEdgesToFragmentsStep.cs",
-            "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildPathsFromFragmentsStep.cs",
-            "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultSimplifyAndSortPathsStep.cs",
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildInkFrameStep.cs",
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs",
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultClassifyEdgesToFragmentsStep.cs",
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildPathsFromFragmentsStep.cs",
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultSimplifyAndSortPathsStep.cs",
             "src/aot/STFU.Rendering.Cpu/Rasterization/CpuStrokeRasterizer.cs",
             "src/aot/STFU.Rendering.Cpu/Rasterization/CpuToneRasterizer.cs",
             "src/runtime/STFU.Rendering.DirectX/Upload/DxStrokeInstanceBuilder.cs"
@@ -66,9 +66,9 @@ public sealed class OptimizationHardeningSourceGuardTests
     public void OptimizedPipelineFiles_ExposeExpectedCountersAndScratchContracts()
     {
         var repo = FindRepositoryRoot();
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildInkFrameStep.cs", "_segmentEmitFlags", "_pathEmitOffsets", "precomputedPointCapacity");
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs", "pixelTests", "pixelWrites", "visibleFaces");
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildPathsFromFragmentsStep.cs", "PathBuildScratch", "expectedKindCapacity");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildInkFrameStep.cs", "_segmentEmitFlags", "_pathEmitOffsets", "precomputedPointCapacity");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs", "pixelTests", "pixelWrites", "visibleFaces");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildPathsFromFragmentsStep.cs", "PathBuildScratch", "expectedKindCapacity");
         AssertFileContains(repo, "src/aot/STFU.Rendering.Cpu/Rasterization/CpuRasterWorkspace.cs", "ToneSourceX", "ToneSourceY", "ToneCoverageScratch", "ToneAlphaScratch");
         AssertFileContains(repo, "src/aot/STFU.Rendering.Cpu/Rasterization/CpuStrokeRasterizer.cs", "TileSegmentIndices", "StrokeTileRefs");
         AssertFileContains(repo, "src/aot/STFU.Rendering.Cpu/Rasterization/CpuToneRasterizer.cs", "ToneSameSizeFastPath");

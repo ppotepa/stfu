@@ -1,6 +1,6 @@
 using STFU.NPR.Composition;
 using STFU.NPR.Pipeline.ComicSurface;
-using STFU.NPR.Pipeline.Default;
+using STFU.NPR.Pipeline.ReferenceQuality;
 
 namespace STFU.NPR.Pipelines;
 
@@ -10,7 +10,7 @@ public static class BuiltInNprPipelines
     {
         return
         [
-            new DefaultPipelineProvider(),
+            new ReferenceQualityPipelineProvider(),
             new ComicSurfacePipelineProvider()
         ];
     }

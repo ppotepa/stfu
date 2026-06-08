@@ -6,11 +6,11 @@ public sealed class NprHotPathAllocationGuardTests
 {
     private static readonly string[] HotPathFiles =
     [
-        "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildInkFrameStep.cs",
-        "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs",
-        "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultClassifyEdgesToFragmentsStep.cs",
-        "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildPathsFromFragmentsStep.cs",
-        "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultSimplifyAndSortPathsStep.cs",
+        "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildInkFrameStep.cs",
+        "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs",
+        "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultClassifyEdgesToFragmentsStep.cs",
+        "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildPathsFromFragmentsStep.cs",
+        "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultSimplifyAndSortPathsStep.cs",
         "src/aot/STFU.Rendering.Cpu/Rasterization/CpuStrokeRasterizer.cs",
         "src/aot/STFU.Rendering.Cpu/Rasterization/CpuToneRasterizer.cs",
         "src/runtime/STFU.Rendering.DirectX/Upload/DxStrokeInstanceBuilder.cs"
@@ -68,7 +68,7 @@ public sealed class NprHotPathAllocationGuardTests
     public void DefaultBuildDebugFrameStep_DoesNotUsePredicateCountForVisibilityTotals()
     {
         var repoRoot = FindRepositoryRoot();
-        var path = Path.Combine(repoRoot, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildDebugFrameStep.cs".Replace('/', Path.DirectorySeparatorChar));
+        var path = Path.Combine(repoRoot, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildDebugFrameStep.cs".Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(path))
         {
             return;

@@ -1,7 +1,7 @@
 using STFU.Common.Math;
 using STFU.Strokes;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 internal static class DefaultPointPathAdapter
 {

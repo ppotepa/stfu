@@ -6,7 +6,7 @@ using STFU.NPR.Graph;
 using STFU.NPR.Settings;
 using STFU.Parallelism;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
 {

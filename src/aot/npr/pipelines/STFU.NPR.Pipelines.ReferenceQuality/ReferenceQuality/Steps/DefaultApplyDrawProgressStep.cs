@@ -2,7 +2,7 @@ using STFU.Common.Math;
 using STFU.NPR.Graph;
 using STFU.Strokes;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class DefaultApplyDrawProgressStep : STFU.NPR.Pipeline.INprStep
 {

@@ -7,7 +7,7 @@ using STFU.NPR.Settings;
 using STFU.Parallelism;
 using STFU.Strokes;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
 {

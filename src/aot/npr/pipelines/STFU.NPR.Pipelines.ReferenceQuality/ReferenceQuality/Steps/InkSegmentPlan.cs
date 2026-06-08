@@ -1,4 +1,4 @@
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 internal readonly record struct InkSegmentPlan(
     int PathIndex,

@@ -9,10 +9,10 @@ public sealed class NprFinalOptimizationContractTests
     {
         var repo = FindRepositoryRoot();
 
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildInkFrameStep.cs", "InkSegmentPlan", "_segmentEmitFlags", "_pathEmitOffsets");
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs", "rangeTileCounts", "rangeTileOffsets", "pixelTests", "pixelWrites");
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildPathsFromFragmentsStep.cs", "_silhouetteScratch", "_featureScratch", "_boundaryScratch");
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultSimplifyAndSortPathsStep.cs", "PathSimplificationMath");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildInkFrameStep.cs", "InkSegmentPlan", "_segmentEmitFlags", "_pathEmitOffsets");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildFaceIdVisibilityBufferStep.cs", "rangeTileCounts", "rangeTileOffsets", "pixelTests", "pixelWrites");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildPathsFromFragmentsStep.cs", "_silhouetteScratch", "_featureScratch", "_boundaryScratch");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultSimplifyAndSortPathsStep.cs", "PathSimplificationMath");
         AssertFileContains(repo, "src/aot/STFU.Rendering.Abstractions/Diagnostics/VisibilityParityStats.cs", "FallbackUsed", "FallbackReason");
     }
 

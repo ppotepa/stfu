@@ -1,18 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\STFU.NPR\STFU.NPR.csproj" />
     <ProjectReference Include="..\STFU.NPR.Pipelines.Abstractions\STFU.NPR.Pipelines.Abstractions.csproj" />
     <ProjectReference Include="..\STFU.NPR.Pipelines.ReferenceQuality\STFU.NPR.Pipelines.ReferenceQuality.csproj" />
-    <ProjectReference Include="..\STFU.NPR.Pipelines.InteractivePerformance\STFU.NPR.Pipelines.InteractivePerformance.csproj" />
-    <ProjectReference Include="..\..\..\STFU.NPR\STFU.NPR.csproj" />
-    <ProjectReference Include="..\..\..\STFU.Parallelism\STFU.Parallelism.csproj" />
-    <ProjectReference Include="..\..\..\STFU.Strokes\STFU.Strokes.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsAotCompatible>true</IsAotCompatible>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

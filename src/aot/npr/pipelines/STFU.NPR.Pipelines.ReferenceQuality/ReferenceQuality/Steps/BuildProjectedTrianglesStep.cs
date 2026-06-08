@@ -6,7 +6,7 @@ using STFU.NPR.Graph;
 using STFU.Parallelism;
 using STFU.Strokes;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
 {

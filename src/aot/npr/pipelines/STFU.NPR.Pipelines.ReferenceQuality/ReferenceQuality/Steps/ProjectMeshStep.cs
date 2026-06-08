@@ -8,7 +8,7 @@ using STFU.NPR.Graph;
 using STFU.NPR.Projection;
 using STFU.Parallelism;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class ProjectMeshStep : STFU.NPR.Pipeline.INprStep
 {

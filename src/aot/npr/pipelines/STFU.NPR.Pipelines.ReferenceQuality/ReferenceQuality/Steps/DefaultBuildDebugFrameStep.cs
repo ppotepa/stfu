@@ -1,7 +1,7 @@
 using STFU.NPR.Debug;
 using STFU.NPR.Graph;
 
-namespace STFU.NPR.Pipeline.Default.Steps;
+namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class DefaultBuildDebugFrameStep : STFU.NPR.Pipeline.INprStep
 {

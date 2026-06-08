@@ -9,7 +9,7 @@ public sealed class NprFinalGateManifestTests
     {
         var repo = FindRepositoryRoot();
 
-        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines/Default/Steps/DefaultBuildInkFrameStep.cs", "InkSegmentPlan", "_segmentEmitFlags", "_pathEmitOffsets", "_segmentScratch");
+        AssertFileContains(repo, "src/aot/npr/pipelines/STFU.NPR.Pipelines.ReferenceQuality/ReferenceQuality/Steps/DefaultBuildInkFrameStep.cs", "InkSegmentPlan", "_segmentEmitFlags", "_pathEmitOffsets", "_segmentScratch");
         AssertFileContains(repo, "src/aot/STFU.Rendering.Cpu/Rasterization/CpuRasterWorkspace.cs", "RangeTileCounts", "RangeTileOffsets", "TileSegmentIndices", "ToneSourceXMap", "ToneSourceYMap", "ToneCoverageScratch", "ToneAlphaScratch");
         AssertFileContains(repo, "src/aot/STFU.Rendering.Cpu/Rasterization/CpuStrokeRasterizer.cs", "StrokeSegmentsInput", "StrokeTileRefs", "StrokeTilesTouched", "StrokePixelTests", "StrokePixelWrites");
         AssertFileContains(repo, "src/aot/STFU.Rendering.Cpu/Rasterization/CpuToneRasterizer.cs", "GetToneSourceXMap", "GetToneSourceYMap", "ToneSameSizeFastPath", "TonePixels");
