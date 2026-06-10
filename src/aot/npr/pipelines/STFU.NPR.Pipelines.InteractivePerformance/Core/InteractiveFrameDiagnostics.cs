@@ -1,4 +1,5 @@
 using STFU.NPR.Pipelines.Abstractions;
+using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Scheduling;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Core;
