@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using STFU.Common.Math;
 using STFU.NPR.Debug;
+using STFU.NPR.Pipeline;
 using STFU.NPR.Rendering;
 using STFU.Rendering.Abstractions.Backend;
 using STFU.Rendering.Abstractions.Context;
@@ -124,6 +125,7 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
             diagnostics.PathCount = strokeFrame.Paths.Count;
             diagnostics.LayerCount = nprFrame.Layers.Count;
             diagnostics.ToneSurfaceCount = context.Graph.ToneSurfaces.Count;
+            CopyPipelineCounters(context, diagnostics);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -164,6 +166,14 @@ public sealed class FullCpuRenderBackend : ICpuRenderBackend
         {
             lease.Dispose();
             throw;
+        }
+    }
+
+    private static void CopyPipelineCounters(NprContext context, NprRenderDiagnostics diagnostics)
+    {
+        foreach (var pair in context.Counters.Values)
+        {
+            diagnostics.Counters[pair.Key] = pair.Value;
         }
     }
 }

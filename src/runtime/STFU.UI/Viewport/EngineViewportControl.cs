@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -7,9 +8,11 @@ using STFU.Common.Math;
 using STFU.Engine;
 using STFU.NPR.Composition;
 using STFU.NPR.Debug;
+using STFU.NPR.Pipelines.Abstractions;
 using STFU.Strokes;
 using STFU.UI.Bridge.Session;
 using STFU.UI.Styling;
+using STFU.UI.Viewport;
 using STFU.Viewport;
 
 namespace STFU.UI;
@@ -159,6 +162,8 @@ public sealed class EngineViewportControl : Control
             _bitmapPresenter.Draw(context, bounds, ViewportPaperColor());
             DrawDebugOverlay(context, _viewport.Snapshot.DebugFrame, _viewport.DebugOverlay);
         }
+
+        DrawPipelineStatusHud(context, bounds);
     }
 
     internal void PumpDirectFrame()
@@ -278,6 +283,73 @@ public sealed class EngineViewportControl : Control
         return UiThemeService.IsDark
             ? Color.FromRgb(23, 25, 22)
             : Color.FromRgb(245, 245, 242);
+    }
+
+    private void DrawPipelineStatusHud(DrawingContext context, Rect bounds)
+    {
+        var renderer = _session.Workspace.Renderer;
+        if (!renderer.ShowRendererHud)
+        {
+            return;
+        }
+
+        var pipelineLabel = FramePipelineStrategyDisplay.GetDisplayName(renderer.PipelineStrategy);
+        var fallbackLabel = renderer.PipelineStrategy == FramePipelineStrategy.InteractivePerformance
+            ? "Reference Quality"
+            : "no";
+        var outputKind = string.IsNullOrWhiteSpace(renderer.LastOutputKind)
+            ? "pending"
+            : renderer.LastOutputKind;
+        var presentationLabel = renderer.PreferGpuPresentation && !renderer.DrawBitmap
+            ? "Direct GPU"
+            : renderer.RequireGpuReadback
+                ? "Readback"
+                : renderer.DrawBitmap
+                    ? "Bitmap"
+                    : renderer.EffectivePresentation;
+        var readbackLabel = renderer.RequireGpuReadback
+            ? "readback required"
+            : renderer.AllowGpuReadback
+                ? "readback allowed"
+                : "no readback";
+        var status = string.IsNullOrWhiteSpace(renderer.StatusMessage)
+            ? "status: OK"
+            : $"status: {renderer.StatusMessage}";
+
+        var text =
+            $"Pipeline: {pipelineLabel} | Fallback: {fallbackLabel}{Environment.NewLine}" +
+            $"Runtime: {renderer.EffectiveBackend} / {presentationLabel} / {renderer.SurfaceMode}{Environment.NewLine}" +
+            $"Output: {outputKind} | {readbackLabel}{Environment.NewLine}" +
+            status;
+
+        var foreground = new SolidColorBrush(UiThemeService.IsDark
+            ? Color.FromRgb(232, 236, 226)
+            : Color.FromRgb(28, 31, 27));
+        var background = new SolidColorBrush(UiThemeService.IsDark
+            ? Color.FromArgb(205, 8, 10, 8)
+            : Color.FromArgb(215, 255, 255, 252));
+        var border = new Pen(new SolidColorBrush(UiThemeService.IsDark
+            ? Color.FromArgb(160, 118, 134, 112)
+            : Color.FromArgb(165, 190, 190, 180)), 1);
+
+        var formattedText = new FormattedText(
+            text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            12,
+            foreground);
+
+        const double padding = 8;
+        var origin = new Point(bounds.X + 14, bounds.Y + 14);
+        var panelRect = new Rect(
+            origin.X - padding,
+            origin.Y - padding,
+            formattedText.Width + padding * 2,
+            formattedText.Height + padding * 2);
+
+        context.DrawRectangle(background, border, panelRect);
+        context.DrawText(formattedText, origin);
     }
 
     private static void DrawDebugOverlay(DrawingContext context, NprDebugFrame debugFrame, DebugOverlayKind overlay)

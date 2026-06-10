@@ -42,6 +42,75 @@ public sealed class InteractivePerformanceSourceContractTests
             "FramePipelineStrategy.ReferenceQuality");
     }
 
+    [Fact]
+    public void Viewport_hud_surfaces_active_pipeline_strategy()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/EngineViewportControl.cs",
+            "DrawPipelineStatusHud",
+            "Pipeline:",
+            "FramePipelineStrategyDisplay.GetDisplayName",
+            "output fallback: Reference Quality");
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportRenderBridge.cs",
+            "pipelineStrategy",
+            "pipelineStrategyLabel",
+            "pipelineStrategyStatus");
+    }
+
+
+    [Fact]
+    public void Viewport_hud_uses_avalonia_formatted_text_width_height()
+    {
+        var repo = FindRepositoryRoot();
+        var path = Path.Combine(repo, "src/runtime/STFU.UI/Viewport/EngineViewportControl.cs");
+        Assert.True(File.Exists(path), $"Missing file: {path}");
+
+        var text = File.ReadAllText(path);
+
+        Assert.Contains("formattedText.Width", text);
+        Assert.Contains("formattedText.Height", text);
+        Assert.DoesNotContain("formattedText.Bounds", text);
+    }
+
+    [Fact]
+    public void Interactive_performance_exposes_visibility_and_candidate_counters()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.totalFaces",
+            "InteractivePerformance.visibleFaces",
+            "InteractivePerformance.totalEdges",
+            "InteractivePerformance.candidateEdges");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Providers/CpuReferenceVisibilityProvider.cs",
+            "CpuReferenceVisibility",
+            "DefaultFaceIdVisibility");
+    }
+
+    [Fact]
+    public void Viewport_status_formats_interactive_pipeline_reduction_summary()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportRenderBridge.cs",
+            "FormatInteractivePipelineSummary",
+            "Faces",
+            "Edges");
+    }
+
     private static void AssertFileContains(string repo, string relativePath, params string[] expected)
     {
         var path = Path.Combine(repo, relativePath);

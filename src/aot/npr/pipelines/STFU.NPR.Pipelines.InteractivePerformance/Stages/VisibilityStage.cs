@@ -10,7 +10,7 @@ public sealed class VisibilityStage : IInteractivePipelineStage
     private readonly IInteractiveVisibilityProvider _provider;
 
     public VisibilityStage()
-        : this(new CpuApproxVisibilityProvider())
+        : this(new CpuReferenceVisibilityProvider())
     {
     }
 
@@ -31,9 +31,10 @@ public sealed class VisibilityStage : IInteractivePipelineStage
 
     public void Execute(InteractiveFrameContext context)
     {
+        var faceCount = context.ReferenceContext.Graph.Triangles.Count;
         var key = new ArtifactKey(
             ArtifactKind.VisibleFaces,
-            ContentHash: 0,
+            ContentHash: (ulong)faceCount,
             CameraHash: 0,
             StyleHash: 0,
             Width: context.Intent.Width,
@@ -42,7 +43,9 @@ public sealed class VisibilityStage : IInteractivePipelineStage
         if (context.Artifacts.TryGet<VisibleFaceSetArtifact>(key, out var cached))
         {
             context.Diagnostics.CacheHits++;
+            context.Diagnostics.TotalFaces = cached.FaceCount;
             context.Diagnostics.VisibleFaces = cached.VisibleFaceCount;
+            context.Diagnostics.VisibleFaceRatioPercent = cached.VisibleFaceRatioPercent;
             return;
         }
 
@@ -50,6 +53,8 @@ public sealed class VisibilityStage : IInteractivePipelineStage
         context.Artifacts.Set(artifact);
 
         context.Diagnostics.CacheMisses++;
+        context.Diagnostics.TotalFaces = artifact.FaceCount;
         context.Diagnostics.VisibleFaces = artifact.VisibleFaceCount;
+        context.Diagnostics.VisibleFaceRatioPercent = artifact.VisibleFaceRatioPercent;
     }
 }

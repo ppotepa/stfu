@@ -34,6 +34,8 @@ public sealed class NprRenderDiagnostics
 
     public string? Notes { get; set; }
 
+    public Dictionary<string, long> Counters { get; } = new(StringComparer.Ordinal);
+
     public void AddTiming(string name, double milliseconds, string? notes = null)
     {
         _timings.Add(new NprPassTiming(name, milliseconds, notes));

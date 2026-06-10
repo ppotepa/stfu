@@ -9,9 +9,12 @@ public sealed class CpuApproxVisibilityProvider : IInteractiveVisibilityProvider
 
     public VisibleFaceSetArtifact BuildVisibleFaces(InteractiveFrameContext context)
     {
+        var faceCount = context.ReferenceContext.Graph.Triangles.Count;
+        var visibleFaces = faceCount <= 0 ? Array.Empty<int>() : Enumerable.Range(0, faceCount).ToArray();
+
         var key = new ArtifactKey(
             ArtifactKind.VisibleFaces,
-            ContentHash: 0,
+            ContentHash: (ulong)faceCount,
             CameraHash: 0,
             StyleHash: 0,
             Width: context.Intent.Width,
@@ -22,9 +25,9 @@ public sealed class CpuApproxVisibilityProvider : IInteractiveVisibilityProvider
             Key = key,
             Revision = context.Intent.FrameId,
             LastBuildTime = TimeSpan.Zero,
-            FaceCount = 0,
-            VisibleFaceCount = 0,
-            VisibleFaceIndices = [],
+            FaceCount = faceCount,
+            VisibleFaceCount = visibleFaces.Length,
+            VisibleFaceIndices = visibleFaces,
             ProviderName = Name
         };
     }

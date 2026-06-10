@@ -203,6 +203,9 @@ internal sealed class ViewportFrameCoordinator : IDisposable
                     ["width"] = width,
                     ["height"] = height,
                     ["profile"] = requestBuild.RuntimePlan.EffectiveProfile,
+                    ["pipelineStrategy"] = requestBuild.RuntimePlan.PipelineStrategy,
+                    ["pipelineStrategyLabel"] = requestBuild.RuntimePlan.PipelineStrategyLabel,
+                    ["pipelineStrategyStatus"] = requestBuild.RuntimePlan.PipelineStrategyStatus,
                     ["presentation"] = requestBuild.RuntimeStatus.EffectivePresentation,
                     ["surfaceMode"] = requestBuild.RuntimePlan.SurfaceMode,
                     ["workerBudgetMode"] = requestBuild.FrameBudget.WorkerBudgetMode,
@@ -568,6 +571,7 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             ? requestStatus.AdapterName
             : result.Diagnostics.Notes;
         var gpuReadbackMs = (float)(result.Diagnostics.Timings.FirstOrDefault(t => t.Name == "GpuReadback")?.Milliseconds ?? 0d);
+        var interactiveSummary = FormatInteractivePipelineSummary(result.Diagnostics.Counters);
 
         var effectivePresentation = result.OutputKind == NprRenderOutputKind.GpuTexture && presentedDirect
             ? "Direct"
@@ -588,9 +592,33 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             requestStatus.ShowDirectHost,
             drawBitmap,
             adapterName,
-            $"{requestStatus.StatusMessage}{(gpuReadbackMs > 0 ? $" | GpuReadback {gpuReadbackMs:0.00}ms" : string.Empty)}",
+            $"{requestStatus.StatusMessage}{(gpuReadbackMs > 0 ? $" | GpuReadback {gpuReadbackMs:0.00}ms" : string.Empty)}{interactiveSummary}",
             outputKind,
             gpuReadbackMs);
+    }
+
+    private static string FormatInteractivePipelineSummary(IReadOnlyDictionary<string, long> counters)
+    {
+        if (!counters.TryGetValue("InteractivePerformance.totalFaces", out var totalFaces) &&
+            !counters.TryGetValue("InteractivePerformance.totalEdges", out var totalEdgesOnly))
+        {
+            return string.Empty;
+        }
+
+        counters.TryGetValue("InteractivePerformance.visibleFaces", out var visibleFaces);
+        counters.TryGetValue("InteractivePerformance.totalEdges", out var totalEdges);
+        counters.TryGetValue("InteractivePerformance.candidateEdges", out var candidateEdges);
+
+        var faces = totalFaces > 0
+            ? $"Faces {totalFaces:n0}->{visibleFaces:n0}"
+            : "Faces pending";
+        var edges = totalEdges > 0
+            ? $"Edges {totalEdges:n0}->{candidateEdges:n0}"
+            : totalEdgesOnly > 0
+                ? $"Edges {totalEdgesOnly:n0}"
+                : "Edges pending";
+
+        return $" | IP {faces}; {edges}";
     }
 
     private void LogFrameIfNeeded(NprRenderResult result)

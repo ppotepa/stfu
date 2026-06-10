@@ -22,8 +22,12 @@ public sealed class InteractiveFrameDiagnostics
     public int CacheMisses { get; set; }
     public int ProjectedVertices { get; set; }
     public int ProjectedTriangles { get; set; }
+    public int TotalFaces { get; set; }
     public int VisibleFaces { get; set; }
+    public double VisibleFaceRatioPercent { get; set; }
+    public int TotalEdges { get; set; }
     public int CandidateEdges { get; set; }
+    public double CandidateReductionPercent { get; set; }
     public int VisibleSegments { get; set; }
     public int StrokeCommands { get; set; }
 

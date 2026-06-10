@@ -4,6 +4,7 @@ using STFU.Common.Math;
 using STFU.Logging;
 using STFU.NPR.Debug;
 using STFU.NPR.Graph;
+using STFU.NPR.Pipeline;
 using STFU.Rendering.Abstractions.Diagnostics;
 using STFU.NPR.Rendering;
 using STFU.Rendering.Abstractions.Backend;
@@ -155,6 +156,7 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
             diagnostics.PathCount = strokeFrame.Paths.Count;
             diagnostics.LayerCount = nprFrame.Layers.Count;
             diagnostics.ToneSurfaceCount = context.Graph.ToneSurfaces.Count;
+            CopyPipelineCounters(context, diagnostics);
         }
 
         var rentWatch = Stopwatch.StartNew();
@@ -345,6 +347,14 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
 
         await ValueTask.CompletedTask;
         return result;
+    }
+
+    private static void CopyPipelineCounters(NprContext context, NprRenderDiagnostics diagnostics)
+    {
+        foreach (var pair in context.Counters.Values)
+        {
+            diagnostics.Counters[pair.Key] = pair.Value;
+        }
     }
 
     private void LogMemoryIfNeeded(NprRenderRequest request, NprRenderDiagnostics diagnostics)

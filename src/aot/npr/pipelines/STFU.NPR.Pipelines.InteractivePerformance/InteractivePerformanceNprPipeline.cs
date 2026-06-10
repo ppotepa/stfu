@@ -32,14 +32,10 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
         var intent = InteractiveFrameIntentFactory.FromContext(context, _options);
 
         var result = _orchestrator.Execute(intent, context);
+        var frame = _referenceFallback.Execute(context);
 
         InteractiveDiagnosticsBridge.WriteToContext(context, result.Diagnostics);
 
-        if (result.RequiresReferenceFallback || _options.ForceReferenceFallback)
-        {
-            return _referenceFallback.Execute(context);
-        }
-
-        return _referenceFallback.Execute(context);
+        return frame;
     }
 }
