@@ -68,6 +68,8 @@ $requiredMarkers = @(
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputHealthAnalyzer.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveReferenceExecutionPolicy.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveCandidateEdgeSource.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveBudgetDecision.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveBudgetPressure.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/ProjectedTriangleCandidateEdgeBuilder.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactStore.cs",
     "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
@@ -212,7 +214,13 @@ foreach ($marker in @(
     "STFU_INTERACTIVE_REFERENCE_FREE_PREVIEW",
     "STFU_INTERACTIVE_MAX_CANDIDATE_EDGES",
     "STFU_INTERACTIVE_MAX_STROKE_COMMANDS",
-    "STFU_INTERACTIVE_MAX_VISIBLE_SEGMENTS"
+    "STFU_INTERACTIVE_MAX_VISIBLE_SEGMENTS",
+    "ResolveBudgetDecision",
+    "OverBudgetStreak",
+    "UnderBudgetStreak",
+    "EffectiveMaxCandidateEdges",
+    "InteractivePerformance.budgetPressure",
+    "InteractivePerformance.effectiveToneDeferred"
 )) {
     $found = (Get-ChildItem -Path src -Recurse -File -Include *.cs | Select-String -SimpleMatch $marker -Quiet)
     if (-not $found) {

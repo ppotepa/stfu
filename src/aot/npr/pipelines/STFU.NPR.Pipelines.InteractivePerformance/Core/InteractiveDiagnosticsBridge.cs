@@ -16,6 +16,18 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.frameId", diagnostics.FrameId);
         context.Counters.Set("InteractivePerformance.workClass", (long)diagnostics.WorkClass);
         context.Counters.Set("InteractivePerformance.qualityMode", (long)diagnostics.QualityMode);
+        context.Counters.Set("InteractivePerformance.requestedQualityMode", (long)diagnostics.RequestedQualityMode);
+        context.Counters.Set("InteractivePerformance.resolvedQualityMode", (long)diagnostics.ResolvedQualityMode);
+        context.Counters.Set("InteractivePerformance.budgetPressure", diagnostics.BudgetPressure);
+        context.Counters.Set("InteractivePerformance.previousKnownFrameMs", (long)Math.Round(diagnostics.PreviousKnownFrameMs));
+        context.Counters.Set("InteractivePerformance.targetFrameMs", (long)Math.Round(diagnostics.TargetFrameMs));
+        context.Counters.Set("InteractivePerformance.overBudgetStreak", diagnostics.OverBudgetStreak);
+        context.Counters.Set("InteractivePerformance.underBudgetStreak", diagnostics.UnderBudgetStreak);
+        context.Counters.Set("InteractivePerformance.budgetQualityChanged", diagnostics.BudgetQualityChanged ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.effectiveMaxCandidateEdges", diagnostics.EffectiveMaxCandidateEdges);
+        context.Counters.Set("InteractivePerformance.effectiveMaxStrokeCommands", diagnostics.EffectiveMaxStrokeCommands);
+        context.Counters.Set("InteractivePerformance.effectiveMaxVisibleStrokeSegments", diagnostics.EffectiveMaxVisibleStrokeSegments);
+        context.Counters.Set("InteractivePerformance.effectiveToneDeferred", diagnostics.EffectiveToneDeferred ? 1 : 0);
         context.Counters.Set("InteractivePerformance.cameraChanged", diagnostics.CameraChanged ? 1 : 0);
         context.Counters.Set("InteractivePerformance.sceneChanged", diagnostics.SceneChanged ? 1 : 0);
         context.Counters.Set("InteractivePerformance.styleChanged", diagnostics.StyleChanged ? 1 : 0);

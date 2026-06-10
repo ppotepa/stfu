@@ -30,9 +30,12 @@ public sealed class StrokePlanningStage : IInteractivePipelineStage
 
     public void Execute(InteractiveFrameContext context)
     {
+        var options = context.Intent.Options ?? _options;
         var candidateArtifact = LoadCandidateEdges(context);
         var sourceCandidateCount = candidateArtifact?.CandidateEdgeCount ?? 0;
-        var key = ArtifactKeyFactory.StrokeCommands(context.Intent, sourceCandidateCount);
+        var key = ArtifactKeyFactory.StrokeCommands(
+            context.Intent,
+            HashBudget(sourceCandidateCount, options.MaxInteractiveStrokeCommands));
 
         if (context.Artifacts.TryGet<StrokeCommandArtifact>(key, out var cached))
         {
@@ -46,7 +49,7 @@ public sealed class StrokePlanningStage : IInteractivePipelineStage
             : StrokeCommandPlanner.BuildCommands(candidateArtifact.Edges);
         var commands = InteractiveBudgetLimiter.LimitStrokeCommands(
             sourceCommands,
-            _options.MaxInteractiveStrokeCommands);
+            options.MaxInteractiveStrokeCommands);
 
         var artifact = new StrokeCommandArtifact
         {
@@ -60,6 +63,11 @@ public sealed class StrokePlanningStage : IInteractivePipelineStage
         context.Artifacts.Set(artifact);
         context.Diagnostics.CacheMisses++;
         WriteDiagnostics(context, artifact, sourceCommands.Length, commands.Length);
+    }
+
+    private static int HashBudget(int sourceCount, int maxCount)
+    {
+        return HashCode.Combine(sourceCount, maxCount);
     }
 
     private static CandidateEdgeArtifact? LoadCandidateEdges(InteractiveFrameContext context)

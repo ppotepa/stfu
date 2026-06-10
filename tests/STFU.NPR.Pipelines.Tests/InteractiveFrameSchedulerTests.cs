@@ -104,6 +104,56 @@ public sealed class InteractiveFrameSchedulerTests
         Assert.True(changed.StyleChanged);
     }
 
+
+    [Fact]
+    public void AdaptiveBudgetController_downgrades_after_consecutive_over_budget_frames()
+    {
+        var controller = new AdaptiveBudgetController();
+        var options = FramePipelineStrategyOptions.Default with
+        {
+            TargetFrameMs = 16.6,
+            MaxInteractiveCandidateEdges = 10_000,
+            MaxInteractiveStrokeCommands = 8_000,
+            MaxInteractiveVisibleStrokeSegments = 6_000
+        };
+        var intent = CreateIntent(new InteractiveFrameSignature(1, 2, 3, 4, 5));
+        var previous = new InteractiveFrameDiagnostics { ProjectionMs = 12, VisibilityMs = 12 };
+
+        _ = controller.ResolveBudgetDecision(intent, previous, options);
+        var second = controller.ResolveBudgetDecision(intent, previous, options);
+
+        Assert.Equal(InteractiveQualityMode.FastPreview, second.ResolvedQualityMode);
+        Assert.Equal(2, second.OverBudgetStreak);
+        Assert.True(second.QualityChanged);
+        Assert.True(second.EffectiveToneDeferred);
+        Assert.True(second.EffectiveMaxCandidateEdges < options.MaxInteractiveCandidateEdges);
+    }
+
+    [Fact]
+    public void AdaptiveBudgetController_upgrades_after_stable_under_budget_frames()
+    {
+        var controller = new AdaptiveBudgetController();
+        var options = FramePipelineStrategyOptions.Default with
+        {
+            TargetFrameMs = 16.6,
+            MaxInteractiveCandidateEdges = 10_000,
+            MaxInteractiveStrokeCommands = 8_000,
+            MaxInteractiveVisibleStrokeSegments = 6_000
+        };
+        var intent = CreateIntent(new InteractiveFrameSignature(1, 2, 3, 4, 5))
+            with { QualityMode = InteractiveQualityMode.FastPreview };
+        var previous = new InteractiveFrameDiagnostics { ProjectionMs = 2, VisibilityMs = 2 };
+
+        _ = controller.ResolveBudgetDecision(intent, previous, options);
+        _ = controller.ResolveBudgetDecision(intent, previous, options);
+        _ = controller.ResolveBudgetDecision(intent, previous, options);
+        var fourth = controller.ResolveBudgetDecision(intent, previous, options);
+
+        Assert.Equal(InteractiveQualityMode.BalancedViewport, fourth.ResolvedQualityMode);
+        Assert.Equal(4, fourth.UnderBudgetStreak);
+        Assert.True(fourth.QualityChanged);
+    }
+
     private static InteractiveFrameIntent CreateIntent(InteractiveFrameSignature signature)
     {
         return new InteractiveFrameIntent(

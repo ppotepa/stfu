@@ -30,9 +30,12 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
 
     public void Execute(InteractiveFrameContext context)
     {
+        var options = context.Intent.Options ?? _options;
         var visibleFaces = LoadVisibleFaceSet(context);
         var source = ResolveSource(context);
-        var key = ArtifactKeyFactory.CandidateEdges(context.Intent, source.TotalEdgeCount);
+        var key = ArtifactKeyFactory.CandidateEdges(
+            context.Intent,
+            HashBudget(source.TotalEdgeCount, options.MaxInteractiveCandidateEdges));
 
         if (context.Artifacts.TryGet<CandidateEdgeArtifact>(key, out var cached))
         {
@@ -44,7 +47,7 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         var sourceEdges = BuildCandidateEdges(context, visibleFaces, source);
         var budgetedEdges = InteractiveBudgetLimiter.LimitCandidateEdges(
             sourceEdges,
-            _options.MaxInteractiveCandidateEdges);
+            options.MaxInteractiveCandidateEdges);
         var artifact = new CandidateEdgeArtifact
         {
             Key = key,
@@ -180,6 +183,11 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         context.Diagnostics.CandidateEdgesBeforeBudget = beforeBudget;
         context.Diagnostics.CandidateEdgesAfterBudget = afterBudget;
         context.Diagnostics.CandidateEdgeBudgetApplied = beforeBudget > afterBudget;
+    }
+
+    private static int HashBudget(int sourceCount, int maxCount)
+    {
+        return HashCode.Combine(sourceCount, maxCount);
     }
 
     private static float Distance(float x0, float y0, float x1, float y1)

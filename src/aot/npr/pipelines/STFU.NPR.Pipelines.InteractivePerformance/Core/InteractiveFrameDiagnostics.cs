@@ -26,6 +26,18 @@ public sealed class InteractiveFrameDiagnostics
     public bool ViewportSizeChanged { get; set; }
     public bool DebugOverlayChanged { get; set; }
     public InteractiveQualityMode QualityMode { get; set; }
+    public InteractiveQualityMode RequestedQualityMode { get; set; }
+    public InteractiveQualityMode ResolvedQualityMode { get; set; }
+    public long BudgetPressure { get; set; }
+    public double PreviousKnownFrameMs { get; set; }
+    public double TargetFrameMs { get; set; }
+    public int OverBudgetStreak { get; set; }
+    public int UnderBudgetStreak { get; set; }
+    public bool BudgetQualityChanged { get; set; }
+    public int EffectiveMaxCandidateEdges { get; set; }
+    public int EffectiveMaxStrokeCommands { get; set; }
+    public int EffectiveMaxVisibleStrokeSegments { get; set; }
+    public bool EffectiveToneDeferred { get; set; }
     public int ArtifactStoreItemCount { get; set; }
     public int FrameOrCameraArtifactCount { get; set; }
     public int PrunedFrameOrCameraArtifactCount { get; set; }
@@ -160,6 +172,25 @@ public sealed class InteractiveFrameDiagnostics
         QualityMode = intent.QualityMode;
     }
 
+
+    public void CaptureBudgetDecision(InteractiveBudgetDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        RequestedQualityMode = decision.RequestedQualityMode;
+        ResolvedQualityMode = decision.ResolvedQualityMode;
+        QualityMode = decision.ResolvedQualityMode;
+        BudgetPressure = (long)decision.Pressure;
+        PreviousKnownFrameMs = decision.PreviousKnownFrameMs;
+        TargetFrameMs = decision.TargetFrameMs;
+        OverBudgetStreak = decision.OverBudgetStreak;
+        UnderBudgetStreak = decision.UnderBudgetStreak;
+        BudgetQualityChanged = decision.QualityChanged;
+        EffectiveMaxCandidateEdges = decision.EffectiveMaxCandidateEdges;
+        EffectiveMaxStrokeCommands = decision.EffectiveMaxStrokeCommands;
+        EffectiveMaxVisibleStrokeSegments = decision.EffectiveMaxVisibleStrokeSegments;
+        EffectiveToneDeferred = decision.EffectiveToneDeferred;
+    }
 
     public void CaptureReferenceExecution(
         InteractiveReferenceExecutionPolicy policy,

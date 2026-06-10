@@ -30,9 +30,12 @@ public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
 
     public void Execute(InteractiveFrameContext context)
     {
+        var options = context.Intent.Options ?? _options;
         var strokeCommands = LoadStrokeCommands(context);
         var commandCount = strokeCommands?.CommandCount ?? 0;
-        var key = ArtifactKeyFactory.VisibleStrokeSegments(context.Intent, commandCount);
+        var key = ArtifactKeyFactory.VisibleStrokeSegments(
+            context.Intent,
+            HashBudget(commandCount, options.MaxInteractiveVisibleStrokeSegments));
 
         if (context.Artifacts.TryGet<VisibleStrokeSegmentArtifact>(key, out var cached))
         {
@@ -46,10 +49,10 @@ public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
             : VisibleStrokeSegmentPlanner.BuildSegments(
                 strokeCommands.Commands,
                 context.Intent.QualityMode,
-                _options.MaxInteractiveVisibleStrokeSegments);
+                options.MaxInteractiveVisibleStrokeSegments);
         var segments = InteractiveBudgetLimiter.LimitVisibleSegments(
             sourceSegments,
-            _options.MaxInteractiveVisibleStrokeSegments);
+            options.MaxInteractiveVisibleStrokeSegments);
 
         var artifact = new VisibleStrokeSegmentArtifact
         {
@@ -66,6 +69,11 @@ public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
         context.Artifacts.Set(artifact);
         context.Diagnostics.CacheMisses++;
         WriteDiagnostics(context, artifact, sourceSegments.Length, segments.Length);
+    }
+
+    private static int HashBudget(int sourceCount, int maxCount)
+    {
+        return HashCode.Combine(sourceCount, maxCount);
     }
 
     private static StrokeCommandArtifact? LoadStrokeCommands(InteractiveFrameContext context)

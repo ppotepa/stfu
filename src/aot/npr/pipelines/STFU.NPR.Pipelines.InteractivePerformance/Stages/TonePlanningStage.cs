@@ -23,8 +23,9 @@ public sealed class TonePlanningStage : IInteractivePipelineStage
 
     public bool ShouldRun(InteractiveFrameContext context)
     {
-        if (_options.DeferToneCoverageWhenPreviewDoesNotRequireTone &&
-            !_options.RequireToneCoverageForInteractivePreview &&
+        var options = context.Intent.Options ?? _options;
+        if (options.DeferToneCoverageWhenPreviewDoesNotRequireTone &&
+            !options.RequireToneCoverageForInteractivePreview &&
             context.WorkClass != InteractiveWorkClass.FullVisibleStrokeRefresh)
         {
             context.Diagnostics.TonePlanningDeferred = true;

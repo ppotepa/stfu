@@ -72,12 +72,11 @@ public sealed class InteractiveFrameOrchestrator
         ArgumentNullException.ThrowIfNull(intent);
         ArgumentNullException.ThrowIfNull(referenceContext);
 
-        intent = ResolveIntent(intent);
-
         var diagnostics = new InteractiveFrameDiagnostics
         {
             Strategy = FramePipelineStrategy.InteractivePerformance
         };
+        intent = ResolveIntent(intent, diagnostics);
         diagnostics.CaptureIntent(intent);
 
         var context = new InteractiveFrameContext
@@ -113,10 +112,19 @@ public sealed class InteractiveFrameOrchestrator
             : new InteractiveOutputSelection { Summary = InteractiveOutputSummary.None };
     }
 
-    private InteractiveFrameIntent ResolveIntent(InteractiveFrameIntent intent)
+    private InteractiveFrameIntent ResolveIntent(
+        InteractiveFrameIntent intent,
+        InteractiveFrameDiagnostics diagnostics)
     {
-        var qualityMode = _budgetController.ResolveQualityMode(intent, _previousDiagnostics);
-        intent = intent with { QualityMode = qualityMode };
+        var decision = _budgetController.ResolveBudgetDecision(intent, _previousDiagnostics, _options);
+        diagnostics.CaptureBudgetDecision(decision);
+
+        intent = intent with
+        {
+            QualityMode = decision.ResolvedQualityMode,
+            Options = decision.ApplyTo(_options)
+        };
+
         return _changeTracker.Resolve(intent);
     }
 

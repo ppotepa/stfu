@@ -844,6 +844,43 @@ public sealed class InteractivePerformanceSourceContractTests
             "STFU_INTERACTIVE_MAX_FRAME_ARTIFACTS_TOTAL");
     }
 
+
+    [Fact]
+    public void Interactive_adaptive_budget_contract_is_visible()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Scheduling/AdaptiveBudgetController.cs",
+            "ResolveBudgetDecision",
+            "OverBudgetStreak",
+            "UnderBudgetStreak",
+            "ScaleBudget",
+            "ResolveToneDeferral");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveBudgetDecision.cs",
+            "EffectiveMaxCandidateEdges",
+            "EffectiveMaxStrokeCommands",
+            "EffectiveMaxVisibleStrokeSegments",
+            "ApplyTo");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveFrameOrchestrator.cs",
+            "CaptureBudgetDecision",
+            "decision.ApplyTo(_options)");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.budgetPressure",
+            "InteractivePerformance.effectiveMaxCandidateEdges",
+            "InteractivePerformance.effectiveToneDeferred");
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
