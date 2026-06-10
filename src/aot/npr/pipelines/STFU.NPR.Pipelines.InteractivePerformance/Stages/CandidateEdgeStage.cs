@@ -50,18 +50,18 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         context.Diagnostics.CandidateReductionPercent = artifact.CandidateReductionPercent;
     }
 
-    private static HashSet<int> LoadVisibleFaceSet(InteractiveFrameContext context)
+    private static HashSet<int>? LoadVisibleFaceSet(InteractiveFrameContext context)
     {
         var key = ArtifactKeyFactory.VisibleFaces(context.Intent, context.ReferenceContext.Graph.Triangles.Count);
 
         return context.Artifacts.TryGet<VisibleFaceSetArtifact>(key, out var visibleFaces)
             ? visibleFaces.VisibleFaceIndices.ToHashSet()
-            : [];
+            : null;
     }
 
     private static InteractiveCandidateEdge[] BuildCandidateEdges(
         InteractiveFrameContext context,
-        IReadOnlySet<int> visibleFaces)
+        IReadOnlySet<int>? visibleFaces)
     {
         var fragments = context.ReferenceContext.Graph.DefaultFragments;
         if (fragments.Count == 0)
@@ -73,7 +73,7 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         for (var index = 0; index < fragments.Count; index++)
         {
             var fragment = fragments[index];
-            if (visibleFaces.Count > 0 &&
+            if (visibleFaces is not null &&
                 !visibleFaces.Contains(fragment.FirstTriangleIndex) &&
                 !visibleFaces.Contains(fragment.SecondTriangleIndex))
             {

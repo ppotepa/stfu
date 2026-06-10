@@ -47,6 +47,11 @@ public sealed class InteractiveFrameOrchestrator
             stages.Add(new StrokePlanningStage());
         }
 
+        if (_options.EnableVisibleStrokeSegmentStage)
+        {
+            stages.Add(new VisibleStrokeSegmentStage());
+        }
+
         if (_options.EnableTonePlanningStage)
         {
             stages.Add(new TonePlanningStage());
@@ -87,10 +92,19 @@ public sealed class InteractiveFrameOrchestrator
             diagnostics.AddStageTiming(stage.Name, elapsed);
         }
 
+        var output = SelectOutput();
+        diagnostics.CaptureOutput(output.Summary);
         CaptureArtifactStoreStats(diagnostics);
         _previousDiagnostics = diagnostics;
 
-        return new InteractivePipelineResult(diagnostics);
+        return new InteractivePipelineResult(diagnostics, output);
+    }
+
+    private InteractiveOutputSelection SelectOutput()
+    {
+        return _options.EnableInteractiveOutputContract
+            ? InteractiveOutputSelector.Select(_artifacts)
+            : new InteractiveOutputSelection { Summary = InteractiveOutputSummary.None };
     }
 
     private InteractiveFrameIntent ResolveIntent(InteractiveFrameIntent intent)

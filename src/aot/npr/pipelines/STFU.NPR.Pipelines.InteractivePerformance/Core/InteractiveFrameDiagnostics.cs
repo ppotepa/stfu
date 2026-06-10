@@ -43,6 +43,9 @@ public sealed class InteractiveFrameDiagnostics
     public int CacheMisses { get; set; }
     public int ProjectedVertices { get; set; }
     public int ProjectedTriangles { get; set; }
+    public int VisibleProjectedVertices { get; set; }
+    public int VisibleProjectedTriangles { get; set; }
+    public int FrontFacingProjectedTriangles { get; set; }
     public int TotalFaces { get; set; }
     public int VisibleFaces { get; set; }
     public double VisibleFaceRatioPercent { get; set; }
@@ -50,6 +53,8 @@ public sealed class InteractiveFrameDiagnostics
     public int CandidateEdges { get; set; }
     public double CandidateReductionPercent { get; set; }
     public int VisibleSegments { get; set; }
+    public int VisibleSegmentSourceCommands { get; set; }
+    public double VisibleSegmentCoveragePercent { get; set; }
     public int TotalStrokeCandidates { get; set; }
     public int StrokeCommands { get; set; }
     public double StrokeCommandReductionPercent { get; set; }
@@ -59,6 +64,16 @@ public sealed class InteractiveFrameDiagnostics
     public int ToneHighlightRegions { get; set; }
     public int ToneMidtoneRegions { get; set; }
     public int ToneShadowRegions { get; set; }
+    public InteractiveOutputKind OutputKind { get; set; } = InteractiveOutputKind.None;
+    public bool InteractivePreviewCandidateAvailable { get; set; }
+    public int OutputProjectedVertices { get; set; }
+    public int OutputProjectedTriangles { get; set; }
+    public int OutputVisibleFaces { get; set; }
+    public int OutputCandidateEdges { get; set; }
+    public int OutputStrokeCommands { get; set; }
+    public int OutputVisibleStrokeSegments { get; set; }
+    public int OutputToneRegions { get; set; }
+    public string OutputReason { get; set; } = string.Empty;
 
     public bool UsedReferenceFallback { get; set; }
     public string FallbackReason { get; set; } = string.Empty;
@@ -87,6 +102,22 @@ public sealed class InteractiveFrameDiagnostics
         QualityMode = intent.QualityMode;
     }
 
+    public void CaptureOutput(InteractiveOutputSummary output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+
+        OutputKind = output.Kind;
+        InteractivePreviewCandidateAvailable = output.IsInteractivePreviewCandidate;
+        OutputProjectedVertices = output.ProjectedVertexCount;
+        OutputProjectedTriangles = output.ProjectedTriangleCount;
+        OutputVisibleFaces = output.VisibleFaceCount;
+        OutputCandidateEdges = output.CandidateEdgeCount;
+        OutputStrokeCommands = output.StrokeCommandCount;
+        OutputVisibleStrokeSegments = output.VisibleStrokeSegmentCount;
+        OutputToneRegions = output.ToneRegionCount;
+        OutputReason = output.Reason;
+    }
+
     public void AddStageTiming(string stageName, TimeSpan elapsed)
     {
         if (string.IsNullOrWhiteSpace(stageName))
@@ -110,6 +141,9 @@ public sealed class InteractiveFrameDiagnostics
                 break;
             case "InteractiveStrokePlanning":
                 StrokePlanMs = ms;
+                break;
+            case "InteractiveVisibleStrokeSegments":
+                StrokePlanMs += ms;
                 break;
             case "InteractiveTonePlanning":
                 TonePlanMs = ms;

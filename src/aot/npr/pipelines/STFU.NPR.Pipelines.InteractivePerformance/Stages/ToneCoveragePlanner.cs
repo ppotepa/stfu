@@ -86,7 +86,7 @@ public static class ToneCoveragePlanner
 
     private static int[] SelectSourceFaces(NprGraph graph, VisibleFaceSetArtifact? visibleFaces)
     {
-        if (visibleFaces is not null && visibleFaces.VisibleFaceIndices.Length > 0)
+        if (visibleFaces is not null)
         {
             return visibleFaces.VisibleFaceIndices;
         }

@@ -275,6 +275,112 @@ public sealed class InteractivePerformanceSourceContractTests
         }
     }
 
+
+    [Fact]
+    public void Interactive_projection_stage_builds_full_projected_geometry_artifacts()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/ProjectionStage.cs",
+            "ArtifactKeyFactory.ProjectedVertices",
+            "ArtifactKeyFactory.ProjectedTriangles",
+            "ProjectionArtifactBuilder.BuildVertices",
+            "ProjectionArtifactBuilder.BuildTriangles");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ProjectedVertexArtifact.cs",
+            "InteractiveProjectedVertex",
+            "VisibleVertexCount",
+            "VisibleVertexRatioPercent");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ProjectedTriangleArtifact.cs",
+            "InteractiveProjectedTriangle",
+            "FrontFacingTriangleCount",
+            "VisibleTriangleCount");
+    }
+
+    [Fact]
+    public void Interactive_pipeline_builds_visible_stroke_segment_artifact()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.Abstractions/FramePipelineStrategyOptions.cs",
+            "EnableVisibleStrokeSegmentStage { get; init; } = true");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveFrameOrchestrator.cs",
+            "EnableVisibleStrokeSegmentStage",
+            "VisibleStrokeSegmentStage");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/VisibleStrokeSegmentStage.cs",
+            "VisibleStrokeSegmentPlanner.BuildSegments",
+            "VisibleSegments",
+            "VisibleSegmentCoveragePercent");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactKeyFactory.cs",
+            "ProjectedVertices",
+            "ProjectedTriangles",
+            "VisibleStrokeSegments");
+    }
+
+    [Fact]
+    public void Interactive_validation_script_is_available_for_rpack_actions()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "scripts/validate-interactive-performance.ps1",
+            "dotnet build STFU.slnx",
+            "--filter Interactive",
+            "artifacts/rpack-validation/interactive-performance");
+    }
+
+    [Fact]
+    public void Interactive_output_contract_is_declared_and_reported()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePipelineResult.cs",
+            "InteractiveOutputSelection",
+            "OutputKind",
+            "HasInteractivePreviewCandidate");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputSelector.cs",
+            "InteractivePreviewCandidate",
+            "VisibleStrokeSegments",
+            "ToneCoverage");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.Abstractions/FramePipelineStrategyOptions.cs",
+            "EnableInteractiveOutputContract",
+            "UseReferenceFallbackForFinalFrame");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.outputKind",
+            "InteractivePerformance.interactivePreviewCandidate",
+            "InteractivePerformance.outputVisibleStrokeSegments");
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

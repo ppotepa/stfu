@@ -40,6 +40,9 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
 
         InteractiveDiagnosticsBridge.WriteToContext(context, result.Diagnostics);
 
+        // IP-011 exposes a typed interactive output contract through diagnostics and
+        // InteractivePipelineResult. The final StrokeFrame still comes from Reference
+        // Quality until IP-012/IP-013 build and enable a self-contained viewport frame.
         return frame;
     }
 }

@@ -40,6 +40,33 @@ public sealed class InteractiveFrameOrchestratorTests
     }
 
     [Fact]
+    public void Pipeline_result_exposes_interactive_output_summary()
+    {
+        var diagnostics = new InteractiveFrameDiagnostics
+        {
+            Strategy = FramePipelineStrategy.InteractivePerformance,
+            UsedReferenceFallback = true
+        };
+        var output = new InteractiveOutputSelection
+        {
+            Summary = new InteractiveOutputSummary
+            {
+                Kind = InteractiveOutputKind.VisibleStrokeSegments,
+                HasVisibleStrokeSegments = true,
+                VisibleStrokeSegmentCount = 2,
+                Reason = "test output"
+            }
+        };
+
+        var result = new InteractivePipelineResult(diagnostics, output);
+
+        Assert.Equal(InteractiveOutputKind.VisibleStrokeSegments, result.OutputKind);
+        Assert.True(result.RequiresReferenceFallback);
+        Assert.False(result.HasInteractivePreviewCandidate);
+        Assert.Equal(2, result.Output.Summary.VisibleStrokeSegmentCount);
+    }
+
+    [Fact]
     public void StrokeCommandPlanner_maps_candidate_edges_to_draw_commands()
     {
         var candidates = new[]

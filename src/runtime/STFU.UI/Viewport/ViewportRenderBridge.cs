@@ -599,17 +599,23 @@ internal sealed class ViewportFrameCoordinator : IDisposable
 
     private static string FormatInteractivePipelineSummary(IReadOnlyDictionary<string, long> counters)
     {
+        long totalEdgesOnly = 0;
+
         if (!counters.TryGetValue("InteractivePerformance.totalFaces", out var totalFaces) &&
-            !counters.TryGetValue("InteractivePerformance.totalEdges", out var totalEdgesOnly))
+            !counters.TryGetValue("InteractivePerformance.totalEdges", out totalEdgesOnly))
         {
             return string.Empty;
         }
 
+        counters.TryGetValue("InteractivePerformance.projectedVertices", out var projectedVertices);
+        counters.TryGetValue("InteractivePerformance.projectedTriangles", out var projectedTriangles);
+        counters.TryGetValue("InteractivePerformance.visibleProjectedTriangles", out var visibleProjectedTriangles);
         counters.TryGetValue("InteractivePerformance.visibleFaces", out var visibleFaces);
         counters.TryGetValue("InteractivePerformance.totalEdges", out var totalEdges);
         counters.TryGetValue("InteractivePerformance.candidateEdges", out var candidateEdges);
         counters.TryGetValue("InteractivePerformance.totalStrokeCandidates", out var totalStrokeCandidates);
         counters.TryGetValue("InteractivePerformance.strokeCommands", out var strokeCommands);
+        counters.TryGetValue("InteractivePerformance.visibleSegments", out var visibleSegments);
         counters.TryGetValue("InteractivePerformance.toneSourceFaces", out var toneSourceFaces);
         counters.TryGetValue("InteractivePerformance.toneRegions", out var toneRegions);
         counters.TryGetValue("InteractivePerformance.workClass", out var workClass);
@@ -617,6 +623,9 @@ internal sealed class ViewportFrameCoordinator : IDisposable
         counters.TryGetValue("InteractivePerformance.cacheHits", out var cacheHits);
         counters.TryGetValue("InteractivePerformance.cacheMisses", out var cacheMisses);
 
+        var projection = projectedVertices > 0 || projectedTriangles > 0
+            ? $"Proj V{projectedVertices:n0}/T{projectedTriangles:n0}->{visibleProjectedTriangles:n0}"
+            : "Proj pending";
         var faces = totalFaces > 0
             ? $"Faces {totalFaces:n0}->{visibleFaces:n0}"
             : "Faces pending";
@@ -626,8 +635,10 @@ internal sealed class ViewportFrameCoordinator : IDisposable
                 ? $"Edges {totalEdgesOnly:n0}"
                 : "Edges pending";
         var strokes = totalStrokeCandidates > 0
-            ? $"; Strokes {totalStrokeCandidates:n0}->{strokeCommands:n0}"
-            : string.Empty;
+            ? $"; Strokes {totalStrokeCandidates:n0}->{strokeCommands:n0}->{visibleSegments:n0}"
+            : visibleSegments > 0
+                ? $"; Segments {visibleSegments:n0}"
+                : string.Empty;
         var tones = toneSourceFaces > 0
             ? $"; Tones {toneSourceFaces:n0}->{toneRegions:n0}"
             : string.Empty;
@@ -638,7 +649,7 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             ? $"; Cache {cacheHits:n0}/{cacheMisses:n0}"
             : string.Empty;
 
-        return $" | IP {faces}; {edges}{strokes}{tones}{runtime}{cache}";
+        return $" | IP {projection}; {faces}; {edges}{strokes}{tones}{runtime}{cache}";
     }
 
 

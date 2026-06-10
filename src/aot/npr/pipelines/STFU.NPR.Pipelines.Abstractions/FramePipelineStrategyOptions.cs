@@ -11,6 +11,10 @@ public sealed record FramePipelineStrategyOptions
     public bool EnableVisibilityStage { get; init; } = true;
     public bool EnableCandidateEdgeStage { get; init; } = true;
     public bool EnableStrokePlanningStage { get; init; } = true;
+    public bool EnableVisibleStrokeSegmentStage { get; init; } = true;
     public bool EnableTonePlanningStage { get; init; } = true;
+    public bool EnableInteractiveOutputContract { get; init; } = true;
+    public bool EnableInteractivePreviewOutput { get; init; }
+    public bool UseReferenceFallbackForFinalFrame { get; init; } = true;
     public double TargetFrameMs { get; init; } = 16.6;
 }

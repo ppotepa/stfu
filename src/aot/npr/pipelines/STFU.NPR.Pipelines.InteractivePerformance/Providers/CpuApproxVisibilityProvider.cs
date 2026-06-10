@@ -12,13 +12,7 @@ public sealed class CpuApproxVisibilityProvider : IInteractiveVisibilityProvider
         var faceCount = context.ReferenceContext.Graph.Triangles.Count;
         var visibleFaces = faceCount <= 0 ? Array.Empty<int>() : Enumerable.Range(0, faceCount).ToArray();
 
-        var key = new ArtifactKey(
-            ArtifactKind.VisibleFaces,
-            ContentHash: (ulong)faceCount,
-            CameraHash: 0,
-            StyleHash: 0,
-            Width: context.Intent.Width,
-            Height: context.Intent.Height);
+        var key = ArtifactKeyFactory.VisibleFaces(context.Intent, faceCount);
 
         return new VisibleFaceSetArtifact
         {

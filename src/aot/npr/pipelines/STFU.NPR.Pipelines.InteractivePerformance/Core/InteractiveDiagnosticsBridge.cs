@@ -26,6 +26,11 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.viewportHash", ToCounterValue(diagnostics.ViewportHash));
         context.Counters.Set("InteractivePerformance.artifactStoreItems", diagnostics.ArtifactStoreItemCount);
         context.Counters.Set("InteractivePerformance.frameOrCameraArtifacts", diagnostics.FrameOrCameraArtifactCount);
+        context.Counters.Set("InteractivePerformance.projectedVertices", diagnostics.ProjectedVertices);
+        context.Counters.Set("InteractivePerformance.projectedTriangles", diagnostics.ProjectedTriangles);
+        context.Counters.Set("InteractivePerformance.visibleProjectedVertices", diagnostics.VisibleProjectedVertices);
+        context.Counters.Set("InteractivePerformance.visibleProjectedTriangles", diagnostics.VisibleProjectedTriangles);
+        context.Counters.Set("InteractivePerformance.frontFacingProjectedTriangles", diagnostics.FrontFacingProjectedTriangles);
 
         context.Counters.Set("InteractivePerformance.totalFaces", diagnostics.TotalFaces);
         context.Counters.Set("InteractivePerformance.visibleFaces", diagnostics.VisibleFaces);
@@ -36,12 +41,24 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.totalStrokeCandidates", diagnostics.TotalStrokeCandidates);
         context.Counters.Set("InteractivePerformance.strokeCommands", diagnostics.StrokeCommands);
         context.Counters.Set("InteractivePerformance.strokeCommandReductionPercent", (long)Math.Round(diagnostics.StrokeCommandReductionPercent));
+        context.Counters.Set("InteractivePerformance.visibleSegments", diagnostics.VisibleSegments);
+        context.Counters.Set("InteractivePerformance.visibleSegmentSourceCommands", diagnostics.VisibleSegmentSourceCommands);
+        context.Counters.Set("InteractivePerformance.visibleSegmentCoveragePercent", (long)Math.Round(diagnostics.VisibleSegmentCoveragePercent));
         context.Counters.Set("InteractivePerformance.toneSourceFaces", diagnostics.ToneSourceFaces);
         context.Counters.Set("InteractivePerformance.toneRegions", diagnostics.ToneRegions);
         context.Counters.Set("InteractivePerformance.toneCoverageRatioPercent", (long)Math.Round(diagnostics.ToneCoverageRatioPercent));
         context.Counters.Set("InteractivePerformance.toneHighlightRegions", diagnostics.ToneHighlightRegions);
         context.Counters.Set("InteractivePerformance.toneMidtoneRegions", diagnostics.ToneMidtoneRegions);
         context.Counters.Set("InteractivePerformance.toneShadowRegions", diagnostics.ToneShadowRegions);
+        context.Counters.Set("InteractivePerformance.outputKind", (long)diagnostics.OutputKind);
+        context.Counters.Set("InteractivePerformance.interactivePreviewCandidate", diagnostics.InteractivePreviewCandidateAvailable ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.outputProjectedVertices", diagnostics.OutputProjectedVertices);
+        context.Counters.Set("InteractivePerformance.outputProjectedTriangles", diagnostics.OutputProjectedTriangles);
+        context.Counters.Set("InteractivePerformance.outputVisibleFaces", diagnostics.OutputVisibleFaces);
+        context.Counters.Set("InteractivePerformance.outputCandidateEdges", diagnostics.OutputCandidateEdges);
+        context.Counters.Set("InteractivePerformance.outputStrokeCommands", diagnostics.OutputStrokeCommands);
+        context.Counters.Set("InteractivePerformance.outputVisibleStrokeSegments", diagnostics.OutputVisibleStrokeSegments);
+        context.Counters.Set("InteractivePerformance.outputToneRegions", diagnostics.OutputToneRegions);
         context.Counters.Set("InteractivePerformance.cacheHits", diagnostics.CacheHits);
         context.Counters.Set("InteractivePerformance.cacheMisses", diagnostics.CacheMisses);
         context.Counters.Set("InteractivePerformance.usedReferenceFallback", diagnostics.UsedReferenceFallback ? 1 : 0);
