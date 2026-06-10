@@ -881,6 +881,31 @@ public sealed class InteractivePerformanceSourceContractTests
             "InteractivePerformance.effectiveToneDeferred");
     }
 
+
+    [Fact]
+    public void Interactive_benchmark_report_contract_is_visible()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveFrameBenchmarkReporter.cs",
+            "BuildReport",
+            "WriteSummary",
+            "WriteCsv",
+            "InteractiveFrameBenchmarkReport");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveFrameDiagnostics.cs",
+            "TotalInteractiveStageMs");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.totalInteractiveStageMs");
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

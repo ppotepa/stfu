@@ -79,14 +79,7 @@ public sealed class AdaptiveBudgetController
     {
         ArgumentNullException.ThrowIfNull(previous);
 
-        return
-            previous.ProjectionMs +
-            previous.VisibilityMs +
-            previous.CandidateMs +
-            previous.StrokePlanMs +
-            previous.TonePlanMs +
-            previous.GpuUploadMs +
-            previous.GpuDrawMs;
+        return previous.TotalInteractiveStageMs;
     }
 
     private static double ResolveTargetFrameMs(

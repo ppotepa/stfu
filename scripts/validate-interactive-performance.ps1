@@ -70,6 +70,8 @@ $requiredMarkers = @(
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveCandidateEdgeSource.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveBudgetDecision.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveBudgetPressure.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveFrameBenchmarkReporter.cs",
+    "tools/ci/run-interactive-performance-bench.ps1",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/ProjectedTriangleCandidateEdgeBuilder.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactStore.cs",
     "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
@@ -225,6 +227,26 @@ foreach ($marker in @(
     $found = (Get-ChildItem -Path src -Recurse -File -Include *.cs | Select-String -SimpleMatch $marker -Quiet)
     if (-not $found) {
         throw "Missing Interactive Performance budget/reference-free marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
+}
+Write-ReportLine ""
+
+
+Write-ReportLine "[contract] checking benchmark/report markers"
+foreach ($marker in @(
+    "InteractiveFrameBenchmarkReporter",
+    "InteractiveFrameBenchmarkReport",
+    "InteractiveFrameBenchmarkSample",
+    "TotalInteractiveStageMs",
+    "InteractivePerformance.totalInteractiveStageMs",
+    "run-interactive-performance-bench.ps1",
+    "STFU_FRAME_PIPELINE_STRATEGY",
+    "STFU_INTERACTIVE_REFERENCE_EXECUTION"
+)) {
+    $found = (Get-ChildItem -Path src,tools,scripts,tests -Recurse -File -Include *.cs,*.ps1 | Select-String -SimpleMatch $marker -Quiet)
+    if (-not $found) {
+        throw "Missing Interactive Performance benchmark/report marker: $marker"
     }
     Write-ReportLine "  ok $marker"
 }

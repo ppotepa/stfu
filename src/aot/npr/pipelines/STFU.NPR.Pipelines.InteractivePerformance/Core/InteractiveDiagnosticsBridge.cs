@@ -21,6 +21,7 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.budgetPressure", diagnostics.BudgetPressure);
         context.Counters.Set("InteractivePerformance.previousKnownFrameMs", (long)Math.Round(diagnostics.PreviousKnownFrameMs));
         context.Counters.Set("InteractivePerformance.targetFrameMs", (long)Math.Round(diagnostics.TargetFrameMs));
+        context.Counters.Set("InteractivePerformance.totalInteractiveStageMs", (long)Math.Round(diagnostics.TotalInteractiveStageMs));
         context.Counters.Set("InteractivePerformance.overBudgetStreak", diagnostics.OverBudgetStreak);
         context.Counters.Set("InteractivePerformance.underBudgetStreak", diagnostics.UnderBudgetStreak);
         context.Counters.Set("InteractivePerformance.budgetQualityChanged", diagnostics.BudgetQualityChanged ? 1 : 0);

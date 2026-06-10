@@ -52,6 +52,14 @@ public sealed class InteractiveFrameDiagnostics
     public double TonePlanMs { get; set; }
     public double GpuUploadMs { get; set; }
     public double GpuDrawMs { get; set; }
+    public double TotalInteractiveStageMs =>
+        ProjectionMs +
+        VisibilityMs +
+        CandidateMs +
+        StrokePlanMs +
+        TonePlanMs +
+        GpuUploadMs +
+        GpuDrawMs;
 
     public int CacheHits { get; set; }
     public int CacheMisses { get; set; }
