@@ -103,6 +103,11 @@ public static class InteractiveOutputSelector
         InteractiveStrokeFrameArtifact? interactiveStrokeFrame,
         ToneCoverageArtifact? toneCoverage)
     {
+        if ((visibleStrokeSegments?.SegmentCount ?? 0) > 0 && (toneCoverage?.RegionCount ?? 0) > 0)
+        {
+            return InteractiveOutputKind.InteractivePreviewCandidate;
+        }
+
         if (interactiveStrokeFrame?.HasRenderableFrame == true && (toneCoverage?.RegionCount ?? 0) > 0)
         {
             return InteractiveOutputKind.InteractivePreviewCandidate;
@@ -155,6 +160,11 @@ public static class InteractiveOutputSelector
         InteractiveStrokeFrameArtifact? interactiveStrokeFrame,
         ToneCoverageArtifact? toneCoverage)
     {
+        if ((visibleStrokeSegments?.SegmentCount ?? 0) > 0 && (toneCoverage?.RegionCount ?? 0) > 0)
+        {
+            return InteractiveOutputReadiness.PreviewReady;
+        }
+
         if (interactiveStrokeFrame?.HasRenderableFrame == true && (toneCoverage?.RegionCount ?? 0) > 0)
         {
             return InteractiveOutputReadiness.PreviewReady;
@@ -213,7 +223,7 @@ public static class InteractiveOutputSelector
     {
         return kind switch
         {
-            InteractiveOutputKind.InteractivePreviewCandidate => "Interactive stroke frame and tone coverage are available for viewport preview output.",
+            InteractiveOutputKind.InteractivePreviewCandidate => "Interactive stroke data and tone coverage are available for viewport preview output.",
             InteractiveOutputKind.InteractiveStrokeFrame => "Interactive stroke frame is available; tone coverage is missing or empty.",
             InteractiveOutputKind.VisibleStrokeSegments => "Interactive visible stroke segments are available, but stroke frame assembly has not produced output.",
             InteractiveOutputKind.ToneCoverage => "Interactive tone coverage is available, but visible stroke segments are missing or empty.",
