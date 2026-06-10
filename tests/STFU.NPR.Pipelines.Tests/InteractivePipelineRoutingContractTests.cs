@@ -89,11 +89,12 @@ public sealed class InteractivePipelineRoutingContractTests
 
         AssertFileContains(
             repo,
-            "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
-            "CreateInteractivePerformanceOptions",
-            "EnableInteractivePreviewOutput = false",
-            "UseReferenceFallbackForFinalFrame = true",
-            "RequireToneCoverageForInteractivePreview = false",
+            "src/runtime/STFU.UI/Viewport/ViewportInteractivePerformanceOptionsResolver.cs",
+            "PreviewOutputVariable",
+            "EnableInteractivePreviewOutput = previewOutput",
+            "UseReferenceFallbackForFinalFrame = !previewOutput || forceFallback",
+            "RequireToneCoverageForInteractivePreview = requireToneCoverage",
+            "InteractivePreviewMinReadinessScore = minReadinessScore",
             "TargetFrameMs = 16.6");
     }
 
@@ -104,8 +105,9 @@ public sealed class InteractivePipelineRoutingContractTests
 
         AssertFileContains(
             repo,
-            "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
-            "PreferSelfContainedProjection = runtimePlan.PreferGpuPresentation",
+            "src/runtime/STFU.UI/Viewport/ViewportInteractivePerformanceOptionsResolver.cs",
+            "PreferSelfContainedProjectionVariable",
+            "runtimePlan.PreferGpuPresentation",
             "FramePipelineStrategyOptions.Default with");
     }
 
@@ -213,6 +215,8 @@ public sealed class InteractivePipelineRoutingContractTests
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
             "options.UseReferenceFallbackForFinalFrame",
             "EnableInteractivePreviewOutput is disabled.",
+            "InteractivePreviewMinReadinessScore",
+            "StrokeSegmentBudgetExceeded",
             "Interactive stroke frame selected for final viewport output.");
     }
 

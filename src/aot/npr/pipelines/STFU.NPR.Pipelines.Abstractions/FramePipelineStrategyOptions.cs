@@ -23,6 +23,8 @@ public sealed record FramePipelineStrategyOptions
     public bool UseReferenceFallbackForFinalFrame { get; init; } = true;
     public bool RequireToneCoverageForInteractivePreview { get; init; }
     public int InteractivePreviewMaxStrokeSegments { get; init; }
+
+    public int InteractivePreviewMinReadinessScore { get; init; }
     public int MaxFrameOrCameraArtifactsPerKind { get; init; } = 3;
     public int MaxTotalFrameOrCameraArtifacts { get; init; } = 64;
     public double TargetFrameMs { get; init; } = 16.6;

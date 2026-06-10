@@ -8,12 +8,15 @@ internal static class ViewportInteractivePerformanceOptionsResolver
     internal const string ForceReferenceFallbackVariable = "STFU_INTERACTIVE_FORCE_REFERENCE_FALLBACK";
     internal const string RequireToneCoverageVariable = "STFU_INTERACTIVE_PREVIEW_REQUIRE_TONE";
     internal const string MaxStrokeSegmentsVariable = "STFU_INTERACTIVE_PREVIEW_MAX_SEGMENTS";
+    internal const string MinReadinessScoreVariable = "STFU_INTERACTIVE_PREVIEW_MIN_READINESS_SCORE";
     internal const string PreferSelfContainedProjectionVariable = "STFU_INTERACTIVE_PREFER_SELF_CONTAINED_PROJECTION";
     internal const string MaxFrameArtifactsPerKindVariable = "STFU_INTERACTIVE_MAX_FRAME_ARTIFACTS_PER_KIND";
     internal const string MaxFrameArtifactsTotalVariable = "STFU_INTERACTIVE_MAX_FRAME_ARTIFACTS_TOTAL";
 
     private const int MinimumPreviewStrokeSegments = 128;
     private const int MaximumPreviewStrokeSegments = 262_144;
+    private const int MinimumPreviewReadinessScore = 0;
+    private const int MaximumPreviewReadinessScore = 100;
     private const int MinimumFrameArtifactsPerKind = 1;
     private const int MaximumFrameArtifactsPerKind = 32;
     private const int MinimumTotalFrameArtifacts = 8;
@@ -29,6 +32,11 @@ internal static class ViewportInteractivePerformanceOptionsResolver
             defaultValue: 0,
             min: MinimumPreviewStrokeSegments,
             max: MaximumPreviewStrokeSegments);
+        var minReadinessScore = ReadBoundedInt(
+            MinReadinessScoreVariable,
+            defaultValue: FramePipelineStrategyOptions.Default.InteractivePreviewMinReadinessScore,
+            min: MinimumPreviewReadinessScore,
+            max: MaximumPreviewReadinessScore);
         var preferSelfContainedProjection = ReadBool(PreferSelfContainedProjectionVariable) ??
             runtimePlan.PreferGpuPresentation;
         var maxFrameArtifactsPerKind = ReadBoundedInt(
@@ -50,6 +58,7 @@ internal static class ViewportInteractivePerformanceOptionsResolver
             UseReferenceFallbackForFinalFrame = !previewOutput || forceFallback,
             RequireToneCoverageForInteractivePreview = requireToneCoverage,
             InteractivePreviewMaxStrokeSegments = maxStrokeSegments,
+            InteractivePreviewMinReadinessScore = minReadinessScore,
             MaxFrameOrCameraArtifactsPerKind = maxFrameArtifactsPerKind,
             MaxTotalFrameOrCameraArtifacts = maxTotalFrameArtifacts,
             TargetFrameMs = 16.6

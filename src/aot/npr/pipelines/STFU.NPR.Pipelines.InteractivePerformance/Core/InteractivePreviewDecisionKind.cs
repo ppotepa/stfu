@@ -9,5 +9,7 @@ public enum InteractivePreviewDecisionKind
     PreviewOutputDisabled,
     MissingInteractiveStrokeFrame,
     EmptyInteractiveStrokeFrame,
+    OutputReadinessTooLow,
+    StrokeSegmentBudgetExceeded,
     MissingToneCoverage
 }

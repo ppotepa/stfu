@@ -69,6 +69,10 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
     {
         var decision = InteractivePreviewPolicy.Decide(_options, result);
         result.Diagnostics.PreviewDecision = decision.Kind;
+        result.Diagnostics.PreviewCandidateReadinessScore = result.Output.Summary.ReadinessScore;
+        result.Diagnostics.PreviewMinimumReadinessScore = _options.InteractivePreviewMinReadinessScore;
+        result.Diagnostics.PreviewRejectedByReadinessGate = decision.Kind == InteractivePreviewDecisionKind.OutputReadinessTooLow;
+        result.Diagnostics.PreviewRejectedBySegmentBudget = decision.Kind == InteractivePreviewDecisionKind.StrokeSegmentBudgetExceeded;
         result.Diagnostics.FinalOutputReason = decision.Reason;
 
         if (decision.SelectedInteractiveFrame && decision.Frame is not null)

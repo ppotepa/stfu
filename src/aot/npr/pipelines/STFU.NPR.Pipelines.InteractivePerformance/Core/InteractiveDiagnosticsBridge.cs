@@ -81,6 +81,10 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.outputInteractiveStrokeFrameSegments", diagnostics.OutputInteractiveStrokeFrameSegments);
         context.Counters.Set("InteractivePerformance.outputToneRegions", diagnostics.OutputToneRegions);
         context.Counters.Set("InteractivePerformance.previewDecision", (long)diagnostics.PreviewDecision);
+        context.Counters.Set("InteractivePerformance.previewCandidateReadinessScore", diagnostics.PreviewCandidateReadinessScore);
+        context.Counters.Set("InteractivePerformance.previewMinimumReadinessScore", diagnostics.PreviewMinimumReadinessScore);
+        context.Counters.Set("InteractivePerformance.previewRejectedByReadinessGate", diagnostics.PreviewRejectedByReadinessGate ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.previewRejectedBySegmentBudget", diagnostics.PreviewRejectedBySegmentBudget ? 1 : 0);
         context.Counters.Set("InteractivePerformance.returnedInteractiveFrame", diagnostics.ReturnedInteractiveFrame ? 1 : 0);
         context.Counters.Set("InteractivePerformance.returnedReferenceFallback", diagnostics.ReturnedReferenceFallback ? 1 : 0);
         context.Counters.Set("InteractivePerformance.returnedInteractiveFramePaths", diagnostics.ReturnedInteractiveFramePaths);

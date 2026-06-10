@@ -48,6 +48,22 @@ public static class InteractivePreviewPolicy
                 "Interactive stroke frame artifact is empty.");
         }
 
+        var minReadinessScore = Math.Clamp(options.InteractivePreviewMinReadinessScore, 0, 100);
+        if (minReadinessScore > 0 && result.Output.Summary.ReadinessScore < minReadinessScore)
+        {
+            return InteractivePreviewDecision.UseReferenceFallback(
+                InteractivePreviewDecisionKind.OutputReadinessTooLow,
+                $"Interactive output readiness score {result.Output.Summary.ReadinessScore} is below required {minReadinessScore}.");
+        }
+
+        if (options.InteractivePreviewMaxStrokeSegments > 0 &&
+            frameArtifact.FrameSegmentCount > options.InteractivePreviewMaxStrokeSegments)
+        {
+            return InteractivePreviewDecision.UseReferenceFallback(
+                InteractivePreviewDecisionKind.StrokeSegmentBudgetExceeded,
+                $"Interactive stroke frame has {frameArtifact.FrameSegmentCount} segment(s), above preview budget {options.InteractivePreviewMaxStrokeSegments}.");
+        }
+
         if (options.RequireToneCoverageForInteractivePreview && (result.ToneCoverage?.RegionCount ?? 0) <= 0)
         {
             return InteractivePreviewDecision.UseReferenceFallback(

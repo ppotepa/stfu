@@ -106,7 +106,8 @@ public sealed class InteractivePerformanceSourceContractTests
             "DrawPipelineStatusHud",
             "Pipeline:",
             "FramePipelineStrategyDisplay.GetDisplayName",
-            "output fallback: Reference Quality");
+            "fallbackLabel",
+            "Reference Quality");
 
         AssertFileContains(
             repo,
@@ -204,8 +205,14 @@ public sealed class InteractivePerformanceSourceContractTests
             "BuiltInFramePipelineStrategies.CreateRegistry",
             "FramePipelineStrategy.InteractivePerformance",
             "provider.CreatePipeline(options)",
-            "UseReferenceFallbackForFinalFrame = true",
-            "EnableInteractivePreviewOutput = false");
+            "ViewportInteractivePerformanceOptionsResolver.Create(runtimePlan)");
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportInteractivePerformanceOptionsResolver.cs",
+            "EnableInteractivePreviewOutput = previewOutput",
+            "UseReferenceFallbackForFinalFrame = !previewOutput || forceFallback",
+            "InteractivePreviewMinReadinessScore = minReadinessScore");
 
         AssertFileContains(
             repo,
@@ -575,14 +582,16 @@ public sealed class InteractivePerformanceSourceContractTests
             "InteractivePreviewPolicy.Decide",
             "ReturnedInteractiveFrame",
             "ReturnedReferenceFallback",
-            "UseReferenceFallbackForFinalFrame");
+            "PreviewMinimumReadinessScore");
 
         AssertFileContains(
             repo,
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
             "EnableInteractivePreviewOutput",
             "RequireToneCoverageForInteractivePreview",
-            "UseReferenceFallbackForFinalFrame");
+            "UseReferenceFallbackForFinalFrame",
+            "InteractivePreviewMinReadinessScore",
+            "StrokeSegmentBudgetExceeded");
 
         AssertFileContains(
             repo,
@@ -762,6 +771,34 @@ public sealed class InteractivePerformanceSourceContractTests
             "Readiness ladder");
     }
 
+
+
+    [Fact]
+    public void Interactive_preview_output_gates_are_enforced_in_policy_and_diagnostics()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
+            "InteractivePreviewMinReadinessScore",
+            "OutputReadinessTooLow",
+            "StrokeSegmentBudgetExceeded");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs",
+            "PreviewCandidateReadinessScore",
+            "PreviewRejectedByReadinessGate",
+            "PreviewRejectedBySegmentBudget");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.previewCandidateReadinessScore",
+            "InteractivePerformance.previewRejectedByReadinessGate",
+            "InteractivePerformance.previewRejectedBySegmentBudget");
+    }
 
 
     [Fact]

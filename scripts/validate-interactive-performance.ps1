@@ -94,7 +94,10 @@ $bridgeText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipe
 foreach ($counter in @(
     "InteractivePerformance.outputHealthStatus",
     "InteractivePerformance.outputHealthScore",
-    "InteractivePerformance.outputHealthWarningCount"
+    "InteractivePerformance.outputHealthWarningCount",
+    "InteractivePerformance.previewCandidateReadinessScore",
+    "InteractivePerformance.previewRejectedByReadinessGate",
+    "InteractivePerformance.previewRejectedBySegmentBudget"
 )) {
     if ($bridgeText -notlike "*$counter*") {
         throw "Missing Interactive Performance health counter: $counter"
@@ -103,6 +106,20 @@ foreach ($counter in @(
 }
 Write-ReportLine ""
 
+
+Write-ReportLine "[contract] checking preview output gate markers"
+$previewPolicyText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs"
+foreach ($marker in @(
+    "InteractivePreviewMinReadinessScore",
+    "OutputReadinessTooLow",
+    "StrokeSegmentBudgetExceeded"
+)) {
+    if ($previewPolicyText -notlike "*$marker*") {
+        throw "Missing Interactive Performance preview gate marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
+}
+Write-ReportLine ""
 
 Write-ReportLine "[contract] checking reference execution policy markers"
 $referencePolicyText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveReferenceExecutionPolicy.cs"

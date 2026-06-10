@@ -98,6 +98,10 @@ public sealed class InteractiveFrameDiagnostics
     public string OutputReason { get; set; } = string.Empty;
 
     public InteractivePreviewDecisionKind PreviewDecision { get; set; } = InteractivePreviewDecisionKind.Unknown;
+    public int PreviewCandidateReadinessScore { get; set; }
+    public int PreviewMinimumReadinessScore { get; set; }
+    public bool PreviewRejectedByReadinessGate { get; set; }
+    public bool PreviewRejectedBySegmentBudget { get; set; }
     public bool ReturnedInteractiveFrame { get; set; }
     public bool ReturnedReferenceFallback { get; set; }
     public int ReturnedInteractiveFramePaths { get; set; }

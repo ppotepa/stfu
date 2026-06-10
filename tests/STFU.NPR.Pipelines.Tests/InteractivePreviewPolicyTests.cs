@@ -131,6 +131,42 @@ public sealed class InteractivePreviewPolicyTests
     }
 
     [Fact]
+    public void Decide_rejects_preview_when_readiness_score_is_below_gate()
+    {
+        var result = CreateResult(CreateRenderableFrameArtifact(), readinessScore: 70);
+        var options = FramePipelineStrategyOptions.Default with
+        {
+            EnableInteractivePreviewOutput = true,
+            UseReferenceFallbackForFinalFrame = false,
+            InteractivePreviewMinReadinessScore = 85
+        };
+
+        var decision = InteractivePreviewPolicy.Decide(options, result);
+
+        Assert.Equal(InteractivePreviewDecisionKind.OutputReadinessTooLow, decision.Kind);
+        Assert.True(decision.UsesReferenceFallback);
+        Assert.Contains("below required", decision.Reason);
+    }
+
+    [Fact]
+    public void Decide_rejects_preview_when_segment_budget_is_exceeded()
+    {
+        var result = CreateResult(CreateRenderableFrameArtifact(segmentCount: 3));
+        var options = FramePipelineStrategyOptions.Default with
+        {
+            EnableInteractivePreviewOutput = true,
+            UseReferenceFallbackForFinalFrame = false,
+            InteractivePreviewMaxStrokeSegments = 2
+        };
+
+        var decision = InteractivePreviewPolicy.Decide(options, result);
+
+        Assert.Equal(InteractivePreviewDecisionKind.StrokeSegmentBudgetExceeded, decision.Kind);
+        Assert.True(decision.UsesReferenceFallback);
+        Assert.Contains("above preview budget", decision.Reason);
+    }
+
+    [Fact]
     public void TrySelectInteractiveFrame_preserves_legacy_boolean_contract()
     {
         var result = CreateResult(CreateRenderableFrameArtifact());
@@ -153,7 +189,8 @@ public sealed class InteractivePreviewPolicyTests
 
     private static InteractivePipelineResult CreateResult(
         InteractiveStrokeFrameArtifact? frameArtifact,
-        ToneCoverageArtifact? toneCoverage = null)
+        ToneCoverageArtifact? toneCoverage = null,
+        int? readinessScore = null)
     {
         var output = new InteractiveOutputSelection
         {
@@ -162,6 +199,10 @@ public sealed class InteractivePreviewPolicyTests
                 Kind = frameArtifact?.HasRenderableFrame == true
                     ? InteractiveOutputKind.InteractiveStrokeFrame
                     : InteractiveOutputKind.ReferenceFallback,
+                Readiness = frameArtifact?.HasRenderableFrame == true
+                    ? InteractiveOutputReadiness.StrokeFrameReady
+                    : InteractiveOutputReadiness.None,
+                ReadinessScore = readinessScore ?? (frameArtifact?.HasRenderableFrame == true ? 85 : 0),
                 HasInteractiveStrokeFrame = frameArtifact is not null,
                 InteractiveStrokeFramePathCount = frameArtifact?.PathCount ?? 0,
                 InteractiveStrokeFrameSegmentCount = frameArtifact?.FrameSegmentCount ?? 0,
@@ -176,24 +217,25 @@ public sealed class InteractivePreviewPolicyTests
         return new InteractivePipelineResult(new InteractiveFrameDiagnostics(), output);
     }
 
-    private static InteractiveStrokeFrameArtifact CreateRenderableFrameArtifact()
+    private static InteractiveStrokeFrameArtifact CreateRenderableFrameArtifact(int segmentCount = 1)
     {
-        var segment = new StrokeSegment2D(
-            new Point2D(1, 1),
-            new Point2D(20, 20),
-            StrokeStyle2D.Default,
-            new StrokeMetadata(
-                StableId: 1,
-                Layer: "interactive",
-                SourceKind: "test"));
-        var segments = new[] { segment };
+        var segments = Enumerable.Range(0, Math.Max(1, segmentCount))
+            .Select(index => new StrokeSegment2D(
+                new Point2D(1 + index, 1),
+                new Point2D(20 + index, 20),
+                StrokeStyle2D.Default,
+                new StrokeMetadata(
+                    StableId: index + 1,
+                    Layer: "interactive",
+                    SourceKind: "test")))
+            .ToArray();
         var frame = new StrokeFrame(
             64,
             64,
             new StrokeSegmentPathList(segments),
             segments);
 
-        return CreateFrameArtifact(frame, sourceSegmentCount: 1);
+        return CreateFrameArtifact(frame, sourceSegmentCount: segments.Length);
     }
 
     private static InteractiveStrokeFrameArtifact CreateEmptyFrameArtifact()
