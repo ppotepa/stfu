@@ -375,6 +375,35 @@ public sealed class InteractivePerformanceSourceContractTests
         Assert.Contains("if (_isRefreshing)", scenePanel);
     }
 
+
+    [Fact]
+    public void Interactive_pipeline_has_reference_execution_policy_boundary()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveReferenceExecutionPolicy.cs",
+            "STFU_INTERACTIVE_REFERENCE_EXECUTION",
+            "BeforeInteractive",
+            "LateFallback",
+            "CanUseLateFallback");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs",
+            "InteractiveReferenceExecutionPolicy.Resolve",
+            "EnsureReferenceFallbackFrame",
+            "CaptureReferenceExecution");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.referenceExecutionMode",
+            "InteractivePerformance.referenceExecutedBeforeInteractive",
+            "InteractivePerformance.referenceExecutedAfterInteractive");
+    }
+
     private static void AssertFileContains(string repo, string relativePath, params string[] expected)
     {
         var path = Path.Combine(repo, relativePath);
@@ -543,7 +572,7 @@ public sealed class InteractivePerformanceSourceContractTests
         AssertFileContains(
             repo,
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs",
-            "InteractivePreviewPolicy.TrySelectInteractiveFrame",
+            "InteractivePreviewPolicy.Decide",
             "ReturnedInteractiveFrame",
             "ReturnedReferenceFallback",
             "UseReferenceFallbackForFinalFrame");

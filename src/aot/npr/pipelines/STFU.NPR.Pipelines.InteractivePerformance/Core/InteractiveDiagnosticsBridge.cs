@@ -83,6 +83,11 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.outputHealthStatus", (long)diagnostics.OutputHealthStatus);
         context.Counters.Set("InteractivePerformance.outputHealthScore", diagnostics.OutputHealthScore);
         context.Counters.Set("InteractivePerformance.outputHealthWarningCount", diagnostics.OutputHealthWarningCount);
+        context.Counters.Set("InteractivePerformance.referenceExecutionMode", (long)diagnostics.ReferenceExecutionMode);
+        context.Counters.Set("InteractivePerformance.referenceExecutedBeforeInteractive", diagnostics.ReferenceExecutedBeforeInteractive ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.referenceExecutedAfterInteractive", diagnostics.ReferenceExecutedAfterInteractive ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.referenceExecutionSkipped", diagnostics.ReferenceExecutionSkipped ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.referenceFallbackFrameAvailable", diagnostics.ReferenceFallbackFrameAvailable ? 1 : 0);
         context.Counters.Set("InteractivePerformance.cacheHits", diagnostics.CacheHits);
         context.Counters.Set("InteractivePerformance.cacheMisses", diagnostics.CacheMisses);
         context.Counters.Set("InteractivePerformance.usedReferenceFallback", diagnostics.UsedReferenceFallback ? 1 : 0);

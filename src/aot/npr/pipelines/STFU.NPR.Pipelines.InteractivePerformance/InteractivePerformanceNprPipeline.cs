@@ -12,6 +12,7 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
     private readonly FramePipelineStrategyOptions _options;
     private readonly InteractiveFrameOrchestrator _orchestrator;
     private readonly INprPipeline _referenceFallback;
+    private readonly InteractiveReferenceExecutionPolicy _referenceExecutionPolicy;
 
     public InteractivePerformanceNprPipeline()
         : this(FramePipelineStrategyOptions.Default)
@@ -23,6 +24,7 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
         _options = options ?? FramePipelineStrategyOptions.Default;
         _orchestrator = new InteractiveFrameOrchestrator(_options);
         _referenceFallback = ReferenceQualityPipeline.Create();
+        _referenceExecutionPolicy = InteractiveReferenceExecutionPolicy.Resolve(_options);
     }
 
     public StrokeFrame Execute(NprContext context)
@@ -31,13 +33,28 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
 
         var intent = InteractiveFrameIntentFactory.FromContext(context, _options);
 
-        // MVP bridge: keep Reference Quality as a populated graph source, then harvest
+        // Default bridge: keep Reference Quality as a populated graph source, then harvest
         // projection/visibility/stroke/tone artifacts for the Interactive Performance path.
-        // IP-012/IP-013 can optionally return an assembled interactive StrokeFrame while
-        // the Reference Quality pipeline remains the safe default and export baseline.
-        var referenceFrame = _referenceFallback.Execute(context);
+        // The reference execution policy can defer the reference run for explicit preview
+        // experiments, while the default remains the safe reference prepass/export baseline.
+        var referenceFrame = StrokeFrame.Empty;
+        var referenceFrameAvailable = false;
+        var referenceExecutedBeforeInteractive = false;
+
+        if (_referenceExecutionPolicy.ExecuteBeforeInteractive)
+        {
+            referenceFrame = _referenceFallback.Execute(context);
+            referenceFrameAvailable = true;
+            referenceExecutedBeforeInteractive = true;
+        }
+
         var result = _orchestrator.Execute(intent, context);
-        var finalFrame = SelectFinalFrame(context, referenceFrame, result);
+        var finalFrame = SelectFinalFrame(
+            context,
+            result,
+            ref referenceFrame,
+            ref referenceFrameAvailable,
+            referenceExecutedBeforeInteractive);
 
         InteractiveDiagnosticsBridge.WriteToContext(context, result.Diagnostics);
         return finalFrame;
@@ -45,8 +62,10 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
 
     private StrokeFrame SelectFinalFrame(
         NprContext context,
-        StrokeFrame referenceFrame,
-        InteractivePipelineResult result)
+        InteractivePipelineResult result,
+        ref StrokeFrame referenceFrame,
+        ref bool referenceFrameAvailable,
+        bool referenceExecutedBeforeInteractive)
     {
         var decision = InteractivePreviewPolicy.Decide(_options, result);
         result.Diagnostics.PreviewDecision = decision.Kind;
@@ -59,9 +78,19 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
             result.Diagnostics.ReturnedReferenceFallback = false;
             result.Diagnostics.ReturnedInteractiveFramePaths = decision.FramePathCount;
             result.Diagnostics.ReturnedInteractiveFrameSegments = decision.FrameSegmentCount;
+            result.Diagnostics.CaptureReferenceExecution(
+                _referenceExecutionPolicy,
+                referenceExecutedBeforeInteractive,
+                executedAfterInteractive: false,
+                fallbackFrameAvailable: referenceFrameAvailable);
             result.Diagnostics.CaptureOutputHealth(InteractiveOutputHealthAnalyzer.Analyze(result.Diagnostics));
             return decision.Frame;
         }
+
+        var referenceExecutedAfterInteractive = EnsureReferenceFallbackFrame(
+            context,
+            ref referenceFrame,
+            ref referenceFrameAvailable);
 
         result.Diagnostics.ReturnedInteractiveFrame = false;
         result.Diagnostics.ReturnedReferenceFallback = true;
@@ -73,7 +102,32 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
         }
 
         context.Frame = referenceFrame;
+        result.Diagnostics.CaptureReferenceExecution(
+            _referenceExecutionPolicy,
+            referenceExecutedBeforeInteractive,
+            referenceExecutedAfterInteractive,
+            referenceFrameAvailable);
         result.Diagnostics.CaptureOutputHealth(InteractiveOutputHealthAnalyzer.Analyze(result.Diagnostics));
         return referenceFrame;
+    }
+
+    private bool EnsureReferenceFallbackFrame(
+        NprContext context,
+        ref StrokeFrame referenceFrame,
+        ref bool referenceFrameAvailable)
+    {
+        if (referenceFrameAvailable)
+        {
+            return false;
+        }
+
+        if (!_referenceExecutionPolicy.AllowLateFallback)
+        {
+            return false;
+        }
+
+        referenceFrame = _referenceFallback.Execute(context);
+        referenceFrameAvailable = true;
+        return true;
     }
 }

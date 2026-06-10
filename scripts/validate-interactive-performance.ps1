@@ -66,6 +66,7 @@ $requiredMarkers = @(
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveStrokeFrameStage.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputHealthAnalyzer.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveReferenceExecutionPolicy.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactStore.cs",
     "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
     "src/runtime/STFU.UI.Bridge/Scene/ScenePanelViewModel.cs"
@@ -97,6 +98,32 @@ foreach ($counter in @(
         throw "Missing Interactive Performance health counter: $counter"
     }
     Write-ReportLine "  ok $counter"
+}
+Write-ReportLine ""
+
+
+Write-ReportLine "[contract] checking reference execution policy markers"
+$referencePolicyText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveReferenceExecutionPolicy.cs"
+foreach ($marker in @(
+    "STFU_INTERACTIVE_REFERENCE_EXECUTION",
+    "BeforeInteractive",
+    "LateFallback"
+)) {
+    if ($referencePolicyText -notlike "*$marker*") {
+        throw "Missing Interactive Performance reference execution marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
+}
+$pipelineText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs"
+foreach ($marker in @(
+    "InteractiveReferenceExecutionPolicy.Resolve",
+    "EnsureReferenceFallbackFrame",
+    "CaptureReferenceExecution"
+)) {
+    if ($pipelineText -notlike "*$marker*") {
+        throw "Missing Interactive Performance reference execution pipeline marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
 }
 Write-ReportLine ""
 

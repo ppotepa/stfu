@@ -107,6 +107,13 @@ public sealed class InteractiveFrameDiagnostics
     public bool UsedReferenceFallback { get; set; }
     public string FallbackReason { get; set; } = string.Empty;
 
+    public InteractiveReferenceExecutionMode ReferenceExecutionMode { get; set; } = InteractiveReferenceExecutionMode.BeforeInteractive;
+    public bool ReferenceExecutedBeforeInteractive { get; set; }
+    public bool ReferenceExecutedAfterInteractive { get; set; }
+    public bool ReferenceExecutionSkipped { get; set; }
+    public bool ReferenceFallbackFrameAvailable { get; set; }
+    public string ReferenceExecutionReason { get; set; } = string.Empty;
+
     public IReadOnlyDictionary<string, double> StageTimingsMs => _stageTimingsMs;
 
 
@@ -129,6 +136,23 @@ public sealed class InteractiveFrameDiagnostics
         ViewportSizeChanged = intent.ViewportSizeChanged;
         DebugOverlayChanged = intent.DebugOverlayChanged;
         QualityMode = intent.QualityMode;
+    }
+
+
+    public void CaptureReferenceExecution(
+        InteractiveReferenceExecutionPolicy policy,
+        bool executedBeforeInteractive,
+        bool executedAfterInteractive,
+        bool fallbackFrameAvailable)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+
+        ReferenceExecutionMode = policy.Mode;
+        ReferenceExecutedBeforeInteractive = executedBeforeInteractive;
+        ReferenceExecutedAfterInteractive = executedAfterInteractive;
+        ReferenceExecutionSkipped = !executedBeforeInteractive && !executedAfterInteractive;
+        ReferenceFallbackFrameAvailable = fallbackFrameAvailable;
+        ReferenceExecutionReason = policy.Reason;
     }
 
     public void CaptureOutput(InteractiveOutputSummary output)
