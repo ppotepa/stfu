@@ -19,7 +19,6 @@ public sealed class ScenePanelViewModel : BindableObject
     private readonly UiEngineSession _session;
     private EntityListItem? _selectedEntity;
     private bool _isRefreshing;
-    private bool _suspendEntityCommit;
 
     public ScenePanelViewModel(UiEngineSession session)
     {
@@ -508,7 +507,7 @@ public sealed class ScenePanelViewModel : BindableObject
 
     private void OnSelectedEntityChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (_isRefreshing || _suspendEntityCommit)
+        if (_isRefreshing)
         {
             return;
         }

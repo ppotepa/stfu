@@ -10,6 +10,10 @@ public sealed class InteractiveOutputSummary
 
     public required InteractiveOutputKind Kind { get; init; }
 
+    public InteractiveOutputReadiness Readiness { get; init; }
+
+    public int ReadinessScore { get; init; }
+
     public bool HasProjectionArtifacts { get; init; }
 
     public bool HasVisibleFaces { get; init; }
@@ -49,4 +53,10 @@ public sealed class InteractiveOutputSummary
         InteractiveOutputKind.InteractiveStrokeFrame;
 
     public bool HasRenderableStrokeData => HasInteractiveStrokeFrame || HasVisibleStrokeSegments || HasStrokeCommands;
+
+    public bool HasCompletePreviewArtifacts =>
+        HasInteractiveStrokeFrame &&
+        InteractiveStrokeFrameSegmentCount > 0 &&
+        HasToneCoverage &&
+        ToneRegionCount > 0;
 }

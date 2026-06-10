@@ -48,28 +48,32 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
         StrokeFrame referenceFrame,
         InteractivePipelineResult result)
     {
-        if (InteractivePreviewPolicy.TrySelectInteractiveFrame(
-                _options,
-                result,
-                out var interactiveFrame,
-                out var interactiveReason))
+        var decision = InteractivePreviewPolicy.Decide(_options, result);
+        result.Diagnostics.PreviewDecision = decision.Kind;
+        result.Diagnostics.FinalOutputReason = decision.Reason;
+
+        if (decision.SelectedInteractiveFrame && decision.Frame is not null)
         {
-            context.Frame = interactiveFrame;
+            context.Frame = decision.Frame;
             result.Diagnostics.ReturnedInteractiveFrame = true;
             result.Diagnostics.ReturnedReferenceFallback = false;
-            result.Diagnostics.FinalOutputReason = interactiveReason;
-            return interactiveFrame;
+            result.Diagnostics.ReturnedInteractiveFramePaths = decision.FramePathCount;
+            result.Diagnostics.ReturnedInteractiveFrameSegments = decision.FrameSegmentCount;
+            result.Diagnostics.CaptureOutputHealth(InteractiveOutputHealthAnalyzer.Analyze(result.Diagnostics));
+            return decision.Frame;
         }
 
         result.Diagnostics.ReturnedInteractiveFrame = false;
         result.Diagnostics.ReturnedReferenceFallback = true;
-        result.Diagnostics.FinalOutputReason = interactiveReason;
+        result.Diagnostics.ReturnedInteractiveFramePaths = 0;
+        result.Diagnostics.ReturnedInteractiveFrameSegments = 0;
         if (string.IsNullOrWhiteSpace(result.Diagnostics.FallbackReason))
         {
-            result.Diagnostics.FallbackReason = interactiveReason;
+            result.Diagnostics.FallbackReason = decision.Reason;
         }
 
         context.Frame = referenceFrame;
+        result.Diagnostics.CaptureOutputHealth(InteractiveOutputHealthAnalyzer.Analyze(result.Diagnostics));
         return referenceFrame;
     }
 }

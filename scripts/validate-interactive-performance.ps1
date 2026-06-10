@@ -60,17 +60,67 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-ReportLine ""
 
-Write-ReportLine "[contract] checking IP-012/IP-013 source markers"
+Write-ReportLine "[contract] checking Interactive Performance source markers"
 $requiredMarkers = @(
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveStrokeFrameBuilder.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveStrokeFrameStage.cs",
-    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs"
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputHealthAnalyzer.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactStore.cs",
+    "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
+    "src/runtime/STFU.UI.Bridge/Scene/ScenePanelViewModel.cs"
 )
 foreach ($marker in $requiredMarkers) {
     if (-not (Test-Path -LiteralPath $marker)) {
         throw "Missing expected Interactive Performance source marker: $marker"
     }
     Write-ReportLine "  ok $marker"
+}
+Write-ReportLine ""
+
+Write-ReportLine "[contract] checking build-fix markers"
+$selectorText = Get-Content -Raw -LiteralPath "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs"
+if ($selectorText -notlike "*using STFU.Rendering.Abstractions.Execution;*") {
+    throw "ViewportFramePipelineSelector is missing the NprRenderContentKind namespace import."
+}
+$scenePanelText = Get-Content -Raw -LiteralPath "src/runtime/STFU.UI.Bridge/Scene/ScenePanelViewModel.cs"
+if ($scenePanelText -like "*_suspendEntityCommit*") {
+    throw "ScenePanelViewModel still contains the unused _suspendEntityCommit field."
+}
+$bridgeText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs"
+foreach ($counter in @(
+    "InteractivePerformance.outputHealthStatus",
+    "InteractivePerformance.outputHealthScore",
+    "InteractivePerformance.outputHealthWarningCount"
+)) {
+    if ($bridgeText -notlike "*$counter*") {
+        throw "Missing Interactive Performance health counter: $counter"
+    }
+    Write-ReportLine "  ok $counter"
+}
+Write-ReportLine ""
+
+Write-ReportLine "[contract] checking artifact pruning markers"
+$artifactStoreText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactStore.cs"
+foreach ($marker in @(
+    "PruneFrameOrCameraArtifacts",
+    "PruneFrameOrCameraArtifactsPerKind",
+    "PruneTotalFrameOrCameraArtifacts"
+)) {
+    if ($artifactStoreText -notlike "*$marker*") {
+        throw "Missing Interactive Performance artifact pruning marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
+}
+$optionsText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.Abstractions/FramePipelineStrategyOptions.cs"
+foreach ($option in @(
+    "MaxFrameOrCameraArtifactsPerKind",
+    "MaxTotalFrameOrCameraArtifacts"
+)) {
+    if ($optionsText -notlike "*$option*") {
+        throw "Missing Interactive Performance artifact retention option: $option"
+    }
+    Write-ReportLine "  ok $option"
 }
 Write-ReportLine ""
 

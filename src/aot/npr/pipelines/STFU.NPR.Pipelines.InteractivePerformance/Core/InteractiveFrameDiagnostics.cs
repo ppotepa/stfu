@@ -27,6 +27,7 @@ public sealed class InteractiveFrameDiagnostics
     public InteractiveQualityMode QualityMode { get; set; }
     public int ArtifactStoreItemCount { get; set; }
     public int FrameOrCameraArtifactCount { get; set; }
+    public int PrunedFrameOrCameraArtifactCount { get; set; }
     public int StaticArtifactCount { get; set; }
     public int SceneArtifactCount { get; set; }
     public int SessionArtifactCount { get; set; }
@@ -78,6 +79,8 @@ public sealed class InteractiveFrameDiagnostics
     public int ToneShadowRegions { get; set; }
     public InteractiveOutputKind OutputKind { get; set; } = InteractiveOutputKind.None;
     public bool InteractivePreviewCandidateAvailable { get; set; }
+    public InteractiveOutputReadiness OutputReadiness { get; set; } = InteractiveOutputReadiness.None;
+    public int OutputReadinessScore { get; set; }
     public int OutputProjectedVertices { get; set; }
     public int OutputProjectedTriangles { get; set; }
     public int OutputVisibleFaces { get; set; }
@@ -89,9 +92,17 @@ public sealed class InteractiveFrameDiagnostics
     public int OutputToneRegions { get; set; }
     public string OutputReason { get; set; } = string.Empty;
 
+    public InteractivePreviewDecisionKind PreviewDecision { get; set; } = InteractivePreviewDecisionKind.Unknown;
     public bool ReturnedInteractiveFrame { get; set; }
     public bool ReturnedReferenceFallback { get; set; }
+    public int ReturnedInteractiveFramePaths { get; set; }
+    public int ReturnedInteractiveFrameSegments { get; set; }
     public string FinalOutputReason { get; set; } = string.Empty;
+
+    public InteractiveOutputHealthStatus OutputHealthStatus { get; set; } = InteractiveOutputHealthStatus.Unknown;
+    public int OutputHealthScore { get; set; }
+    public int OutputHealthWarningCount { get; set; }
+    public string OutputHealthSummary { get; set; } = string.Empty;
 
     public bool UsedReferenceFallback { get; set; }
     public string FallbackReason { get; set; } = string.Empty;
@@ -126,6 +137,8 @@ public sealed class InteractiveFrameDiagnostics
 
         OutputKind = output.Kind;
         InteractivePreviewCandidateAvailable = output.IsInteractivePreviewCandidate;
+        OutputReadiness = output.Readiness;
+        OutputReadinessScore = output.ReadinessScore;
         OutputProjectedVertices = output.ProjectedVertexCount;
         OutputProjectedTriangles = output.ProjectedTriangleCount;
         OutputVisibleFaces = output.VisibleFaceCount;
@@ -136,6 +149,16 @@ public sealed class InteractiveFrameDiagnostics
         OutputInteractiveStrokeFrameSegments = output.InteractiveStrokeFrameSegmentCount;
         OutputToneRegions = output.ToneRegionCount;
         OutputReason = output.Reason;
+    }
+
+    public void CaptureOutputHealth(InteractiveOutputHealthReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        OutputHealthStatus = report.Status;
+        OutputHealthScore = report.Score;
+        OutputHealthWarningCount = report.WarningCount;
+        OutputHealthSummary = report.Summary;
     }
 
     public void AddStageTiming(string stageName, TimeSpan elapsed)

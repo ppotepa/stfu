@@ -1,4 +1,5 @@
 using System.Numerics;
+using STFU.Common.Math;
 using STFU.Engine.Entities;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Core;
@@ -38,6 +39,14 @@ public static class InteractiveFrameHasher
         return hash;
     }
 
+    public static ulong Mix(ulong hash, Transform3D value)
+    {
+        hash = Mix(hash, value.Position);
+        hash = Mix(hash, value.Rotation);
+        hash = Mix(hash, value.Scale);
+        return hash;
+    }
+
     public static ulong Mix(ulong hash, string? value)
     {
         if (string.IsNullOrEmpty(value))
@@ -58,7 +67,7 @@ public static class InteractiveFrameHasher
         hash = Mix(hash, entity.Id.Value);
         hash = Mix(hash, entity.Mesh.Value);
         hash = Mix(hash, entity.Name);
-        hash = Mix(hash, entity.Position);
+        hash = Mix(hash, entity.Transform);
         return hash;
     }
 

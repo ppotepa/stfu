@@ -60,9 +60,20 @@ public static class InteractiveOutputSelector
             interactiveStrokeFrame,
             toneCoverage);
 
+        var readiness = ResolveReadiness(
+            projectedTriangles,
+            visibleFaces,
+            candidateEdges,
+            strokeCommands,
+            visibleStrokeSegments,
+            interactiveStrokeFrame,
+            toneCoverage);
+
         return new InteractiveOutputSummary
         {
             Kind = kind,
+            Readiness = readiness,
+            ReadinessScore = ToReadinessScore(readiness),
             HasProjectionArtifacts = projectedVertices is not null || projectedTriangles is not null,
             HasVisibleFaces = visibleFaces is not null,
             HasCandidateEdges = candidateEdges is not null,
@@ -133,6 +144,69 @@ public static class InteractiveOutputSelector
         }
 
         return InteractiveOutputKind.ReferenceFallback;
+    }
+
+    private static InteractiveOutputReadiness ResolveReadiness(
+        ProjectedTriangleArtifact? projectedTriangles,
+        VisibleFaceSetArtifact? visibleFaces,
+        CandidateEdgeArtifact? candidateEdges,
+        StrokeCommandArtifact? strokeCommands,
+        VisibleStrokeSegmentArtifact? visibleStrokeSegments,
+        InteractiveStrokeFrameArtifact? interactiveStrokeFrame,
+        ToneCoverageArtifact? toneCoverage)
+    {
+        if (interactiveStrokeFrame?.HasRenderableFrame == true && (toneCoverage?.RegionCount ?? 0) > 0)
+        {
+            return InteractiveOutputReadiness.PreviewReady;
+        }
+
+        if (interactiveStrokeFrame?.HasRenderableFrame == true)
+        {
+            return InteractiveOutputReadiness.StrokeFrameReady;
+        }
+
+        if ((visibleStrokeSegments?.SegmentCount ?? 0) > 0)
+        {
+            return InteractiveOutputReadiness.VisibleSegmentsReady;
+        }
+
+        if ((strokeCommands?.CommandCount ?? 0) > 0)
+        {
+            return InteractiveOutputReadiness.StrokeCommandsReady;
+        }
+
+        if ((candidateEdges?.CandidateEdgeCount ?? 0) > 0)
+        {
+            return InteractiveOutputReadiness.CandidateEdgesReady;
+        }
+
+        if ((visibleFaces?.VisibleFaceCount ?? 0) > 0)
+        {
+            return InteractiveOutputReadiness.VisibilityReady;
+        }
+
+        if ((projectedTriangles?.TriangleCount ?? 0) > 0)
+        {
+            return InteractiveOutputReadiness.ProjectionReady;
+        }
+
+        return InteractiveOutputReadiness.None;
+    }
+
+    private static int ToReadinessScore(InteractiveOutputReadiness readiness)
+    {
+        return readiness switch
+        {
+            InteractiveOutputReadiness.None => 0,
+            InteractiveOutputReadiness.ProjectionReady => 10,
+            InteractiveOutputReadiness.VisibilityReady => 25,
+            InteractiveOutputReadiness.CandidateEdgesReady => 40,
+            InteractiveOutputReadiness.StrokeCommandsReady => 55,
+            InteractiveOutputReadiness.VisibleSegmentsReady => 70,
+            InteractiveOutputReadiness.StrokeFrameReady => 85,
+            InteractiveOutputReadiness.PreviewReady => 100,
+            _ => 0
+        };
     }
 
     private static string BuildReason(InteractiveOutputKind kind)

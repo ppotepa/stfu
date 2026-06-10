@@ -26,6 +26,7 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.viewportHash", ToCounterValue(diagnostics.ViewportHash));
         context.Counters.Set("InteractivePerformance.artifactStoreItems", diagnostics.ArtifactStoreItemCount);
         context.Counters.Set("InteractivePerformance.frameOrCameraArtifacts", diagnostics.FrameOrCameraArtifactCount);
+        context.Counters.Set("InteractivePerformance.prunedFrameOrCameraArtifacts", diagnostics.PrunedFrameOrCameraArtifactCount);
         context.Counters.Set("InteractivePerformance.projectionSource", diagnostics.ProjectionSource);
         context.Counters.Set("InteractivePerformance.projectionBuiltSelfContained", diagnostics.ProjectionBuiltSelfContained ? 1 : 0);
         context.Counters.Set("InteractivePerformance.projectionSourceEntities", diagnostics.ProjectionSourceEntities);
@@ -62,6 +63,8 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.toneMidtoneRegions", diagnostics.ToneMidtoneRegions);
         context.Counters.Set("InteractivePerformance.toneShadowRegions", diagnostics.ToneShadowRegions);
         context.Counters.Set("InteractivePerformance.outputKind", (long)diagnostics.OutputKind);
+        context.Counters.Set("InteractivePerformance.outputReadiness", (long)diagnostics.OutputReadiness);
+        context.Counters.Set("InteractivePerformance.outputReadinessScore", diagnostics.OutputReadinessScore);
         context.Counters.Set("InteractivePerformance.interactivePreviewCandidate", diagnostics.InteractivePreviewCandidateAvailable ? 1 : 0);
         context.Counters.Set("InteractivePerformance.outputProjectedVertices", diagnostics.OutputProjectedVertices);
         context.Counters.Set("InteractivePerformance.outputProjectedTriangles", diagnostics.OutputProjectedTriangles);
@@ -72,8 +75,14 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.outputInteractiveStrokeFramePaths", diagnostics.OutputInteractiveStrokeFramePaths);
         context.Counters.Set("InteractivePerformance.outputInteractiveStrokeFrameSegments", diagnostics.OutputInteractiveStrokeFrameSegments);
         context.Counters.Set("InteractivePerformance.outputToneRegions", diagnostics.OutputToneRegions);
+        context.Counters.Set("InteractivePerformance.previewDecision", (long)diagnostics.PreviewDecision);
         context.Counters.Set("InteractivePerformance.returnedInteractiveFrame", diagnostics.ReturnedInteractiveFrame ? 1 : 0);
         context.Counters.Set("InteractivePerformance.returnedReferenceFallback", diagnostics.ReturnedReferenceFallback ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.returnedInteractiveFramePaths", diagnostics.ReturnedInteractiveFramePaths);
+        context.Counters.Set("InteractivePerformance.returnedInteractiveFrameSegments", diagnostics.ReturnedInteractiveFrameSegments);
+        context.Counters.Set("InteractivePerformance.outputHealthStatus", (long)diagnostics.OutputHealthStatus);
+        context.Counters.Set("InteractivePerformance.outputHealthScore", diagnostics.OutputHealthScore);
+        context.Counters.Set("InteractivePerformance.outputHealthWarningCount", diagnostics.OutputHealthWarningCount);
         context.Counters.Set("InteractivePerformance.cacheHits", diagnostics.CacheHits);
         context.Counters.Set("InteractivePerformance.cacheMisses", diagnostics.CacheMisses);
         context.Counters.Set("InteractivePerformance.usedReferenceFallback", diagnostics.UsedReferenceFallback ? 1 : 0);

@@ -630,6 +630,9 @@ internal sealed class ViewportFrameCoordinator : IDisposable
         counters.TryGetValue("InteractivePerformance.cacheMisses", out var cacheMisses);
         counters.TryGetValue("InteractivePerformance.returnedInteractiveFrame", out var returnedInteractiveFrame);
         counters.TryGetValue("InteractivePerformance.returnedReferenceFallback", out var returnedReferenceFallback);
+        counters.TryGetValue("InteractivePerformance.outputHealthStatus", out var outputHealthStatus);
+        counters.TryGetValue("InteractivePerformance.outputHealthScore", out var outputHealthScore);
+        counters.TryGetValue("InteractivePerformance.outputHealthWarningCount", out var outputHealthWarningCount);
 
         var projectionLabel = FormatInteractiveProjectionSource(projectionSource, projectionBuiltSelfContained);
         var projection = projectedVertices > 0 || projectedTriangles > 0
@@ -660,6 +663,9 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             : returnedReferenceFallback > 0
                 ? "; Output reference"
                 : string.Empty;
+        var health = outputHealthScore > 0 || outputHealthWarningCount > 0
+            ? $"; Health {FormatInteractiveOutputHealth(outputHealthStatus)} {outputHealthScore:n0}/100 warn {outputHealthWarningCount:n0}"
+            : string.Empty;
         var runtime = workClass > 0 || qualityMode > 0
             ? $"; Work {FormatInteractiveWorkClass(workClass)}/{FormatInteractiveQualityMode(qualityMode)}"
             : string.Empty;
@@ -667,10 +673,25 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             ? $"; Cache {cacheHits:n0}/{cacheMisses:n0}"
             : string.Empty;
 
-        return $" | IP {projection}; {faces}; {edges}{strokes}{frame}{tones}{output}{runtime}{cache}";
+        return $" | IP {projection}; {faces}; {edges}{strokes}{frame}{tones}{output}{health}{runtime}{cache}";
     }
 
 
+
+    private static string FormatInteractiveOutputHealth(long value)
+    {
+        return value switch
+        {
+            1 => "NoArtifacts",
+            2 => "Projection",
+            3 => "Geometry",
+            4 => "StrokeData",
+            5 => "PreviewReady",
+            6 => "ReferenceOut",
+            7 => "InteractiveOut",
+            _ => "Unknown"
+        };
+    }
 
     private static string FormatInteractiveProjectionSource(long value, long selfContained)
     {

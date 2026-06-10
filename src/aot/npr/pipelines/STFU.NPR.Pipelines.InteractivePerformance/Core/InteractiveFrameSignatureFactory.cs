@@ -24,9 +24,12 @@ public static class InteractiveFrameSignatureFactory
         var hash = InteractiveFrameHasher.Empty;
         hash = InteractiveFrameHasher.Mix(hash, context.Scene.Entities.Count);
 
+        hash = InteractiveFrameHasher.Mix(hash, (int)context.EntityStyles.DefaultRole);
+
         foreach (var entity in context.Scene.Entities)
         {
             hash = InteractiveFrameHasher.MixEntity(hash, entity);
+            hash = InteractiveFrameHasher.Mix(hash, (int)context.EntityStyles.GetRole(entity.Id));
         }
 
         return hash;

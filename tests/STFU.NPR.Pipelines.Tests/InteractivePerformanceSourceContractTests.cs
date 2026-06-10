@@ -170,6 +170,66 @@ public sealed class InteractivePerformanceSourceContractTests
     }
 
 
+
+
+    [Fact]
+    public void Interactive_frame_signature_hashes_transform_and_scene_role()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveFrameHasher.cs",
+            "Mix(ulong hash, Transform3D value)",
+            "value.Position",
+            "value.Rotation",
+            "value.Scale",
+            "entity.Transform");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveFrameSignatureFactory.cs",
+            "context.EntityStyles.DefaultRole",
+            "context.EntityStyles.GetRole(entity.Id)");
+    }
+
+    [Fact]
+    public void Viewport_request_factory_routes_selected_frame_pipeline_strategy()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
+            "BuiltInFramePipelineStrategies.CreateRegistry",
+            "FramePipelineStrategy.InteractivePerformance",
+            "provider.CreatePipeline(options)",
+            "UseReferenceFallbackForFinalFrame = true",
+            "EnableInteractivePreviewOutput = false");
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportRenderRequestFactory.cs",
+            "_pipelineSelector.Select",
+            "Pipeline: pipelineSelection.Pipeline",
+            "ActivePipelineId: pipelineSelection.PipelineId",
+            "PipelineStrategy: pipelineSelection.Strategy");
+    }
+
+    [Fact]
+    public void Builtin_npr_pipeline_provider_list_includes_interactive_strategy_provider()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines/BuiltInNprPipelines.cs",
+            "InteractivePerformancePipelineProvider",
+            "new ReferenceQualityPipelineProvider()",
+            "new InteractivePerformancePipelineProvider()",
+            "new ComicSurfacePipelineProvider()");
+    }
+
     [Fact]
     public void Interactive_artifact_keys_use_frame_signatures()
     {
@@ -261,6 +321,58 @@ public sealed class InteractivePerformanceSourceContractTests
             "InteractivePerformance.toneSourceFaces",
             "InteractivePerformance.toneRegions",
             "InteractivePerformance.toneCoverageRatioPercent");
+    }
+
+
+    [Fact]
+    public void Interactive_output_health_is_reported_to_diagnostics_counters()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputHealthAnalyzer.cs",
+            "InteractiveOutputHealthStatus",
+            "ReturningReferenceFallback",
+            "ReturningInteractivePreview");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs",
+            "CaptureOutputHealth",
+            "InteractiveOutputHealthAnalyzer.Analyze");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.outputHealthStatus",
+            "InteractivePerformance.outputHealthScore",
+            "InteractivePerformance.outputHealthWarningCount");
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportRenderBridge.cs",
+            "InteractivePerformance.outputHealthStatus",
+            "FormatInteractiveOutputHealth",
+            "Health {FormatInteractiveOutputHealth");
+    }
+
+    [Fact]
+    public void Build_fix_contract_keeps_viewport_pipeline_selector_and_scene_panel_warning_free()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
+            "using STFU.Rendering.Abstractions.Execution;",
+            "NprRenderContentKind contentKind");
+
+        var scenePanelPath = Path.Combine(repo, "src/runtime/STFU.UI.Bridge/Scene/ScenePanelViewModel.cs");
+        Assert.True(File.Exists(scenePanelPath), $"Missing file: {scenePanelPath}");
+        var scenePanel = File.ReadAllText(scenePanelPath);
+        Assert.DoesNotContain("_suspendEntityCommit", scenePanel);
+        Assert.Contains("if (_isRefreshing)", scenePanel);
     }
 
     private static void AssertFileContains(string repo, string relativePath, params string[] expected)
@@ -504,6 +616,166 @@ public sealed class InteractivePerformanceSourceContractTests
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
             "InteractivePerformance.projectionBuiltSelfContained",
             "InteractivePerformance.visibilityUsedProjectedTriangles");
+    }
+
+
+
+    [Fact]
+    public void Interactive_preview_policy_exposes_decision_contract()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewDecisionKind.cs",
+            "SelectedInteractiveFrame",
+            "ReferenceFallbackRequired",
+            "PreviewOutputDisabled",
+            "MissingToneCoverage");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
+            "public static InteractivePreviewDecision Decide",
+            "ForceReferenceFallback",
+            "UseReferenceFallbackForFinalFrame",
+            "EnableInteractivePreviewOutput",
+            "RequireToneCoverageForInteractivePreview");
+    }
+
+    [Fact]
+    public void Interactive_preview_output_is_environment_gated_for_viewport()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportInteractivePerformanceOptionsResolver.cs",
+            "STFU_INTERACTIVE_PREVIEW_OUTPUT",
+            "STFU_INTERACTIVE_FORCE_REFERENCE_FALLBACK",
+            "STFU_INTERACTIVE_PREVIEW_REQUIRE_TONE",
+            "STFU_INTERACTIVE_PREVIEW_MAX_SEGMENTS",
+            "STFU_INTERACTIVE_PREFER_SELF_CONTAINED_PROJECTION");
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
+            "ViewportInteractivePerformanceOptionsResolver.Create",
+            "ForceReferenceFallback",
+            "EnableInteractiveOutputContract",
+            "EnableProjectedTriangleVisibility");
+    }
+
+    [Fact]
+    public void Interactive_preview_decision_is_written_to_diagnostics()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs",
+            "InteractivePreviewPolicy.Decide",
+            "result.Diagnostics.PreviewDecision",
+            "ReturnedInteractiveFramePaths",
+            "ReturnedInteractiveFrameSegments");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.previewDecision",
+            "InteractivePerformance.returnedInteractiveFramePaths",
+            "InteractivePerformance.returnedInteractiveFrameSegments");
+    }
+
+
+
+    [Fact]
+    public void Interactive_output_selector_exposes_readiness_ladder()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputReadiness.cs",
+            "ProjectionReady",
+            "VisibilityReady",
+            "CandidateEdgesReady",
+            "StrokeFrameReady",
+            "PreviewReady");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputSelector.cs",
+            "ResolveReadiness",
+            "ToReadinessScore",
+            "InteractiveOutputReadiness.PreviewReady");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.outputReadiness",
+            "InteractivePerformance.outputReadinessScore");
+    }
+
+
+
+    [Fact]
+    public void Interactive_preview_output_gates_are_documented()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "docs/interactive-performance-preview-output.md",
+            "STFU_INTERACTIVE_PREVIEW_OUTPUT",
+            "STFU_INTERACTIVE_FORCE_REFERENCE_FALLBACK",
+            "InteractivePreviewDecisionKind",
+            "Readiness ladder");
+    }
+
+
+
+    [Fact]
+    public void Interactive_artifact_store_pruning_contract_is_visible()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactStore.cs",
+            "PruneFrameOrCameraArtifacts",
+            "PruneFrameOrCameraArtifactsPerKind",
+            "PruneTotalFrameOrCameraArtifacts");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveFrameOrchestrator.cs",
+            "PruneArtifactStore",
+            "MaxFrameOrCameraArtifactsPerKind",
+            "MaxTotalFrameOrCameraArtifacts");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.prunedFrameOrCameraArtifacts");
+    }
+
+    [Fact]
+    public void Interactive_artifact_store_pruning_options_are_exposed_to_viewport()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.Abstractions/FramePipelineStrategyOptions.cs",
+            "MaxFrameOrCameraArtifactsPerKind",
+            "MaxTotalFrameOrCameraArtifacts");
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportInteractivePerformanceOptionsResolver.cs",
+            "STFU_INTERACTIVE_MAX_FRAME_ARTIFACTS_PER_KIND",
+            "STFU_INTERACTIVE_MAX_FRAME_ARTIFACTS_TOTAL");
     }
 
     private static string FindRepositoryRoot()

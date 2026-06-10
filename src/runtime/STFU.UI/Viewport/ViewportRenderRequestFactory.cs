@@ -40,6 +40,7 @@ internal sealed class ViewportRenderRequestFactory
 {
     private readonly UiEngineSession _session;
     private readonly NprRenderOptimizerMode _optimizerMode;
+    private readonly ViewportFramePipelineSelector _pipelineSelector = new();
 
     public ViewportRenderRequestFactory(
         UiEngineSession session,
@@ -90,6 +91,7 @@ internal sealed class ViewportRenderRequestFactory
             EnableGpuTiming: renderer.EnableGpuTimings,
             WorkerBudgetMode: renderer.WorkerBudgetMode);
         var presetState = _session.ActivePreset;
+        var pipelineSelection = _pipelineSelector.Select(contentKind, presetState, runtimePlan);
         var debugOverlay = _session.Workspace.Viewport.DebugOverlay;
         var includeDebugFrame = contentKind == NprRenderContentKind.NprPipeline &&
             debugOverlay != DebugOverlayKind.None;
@@ -108,9 +110,9 @@ internal sealed class ViewportRenderRequestFactory
             EntityStyles: _session.EntityStyles,
             Analysis: _session.Analysis,
             FrameHistoryState: _session.FrameHistory,
-            Pipeline: contentKind == NprRenderContentKind.NprPipeline ? presetState.ActivePipeline : null,
+            Pipeline: pipelineSelection.Pipeline,
             ActivePresetId: presetState.ActivePreset.Metadata.Id,
-            ActivePipelineId: presetState.ActivePreset.PipelineId,
+            ActivePipelineId: pipelineSelection.PipelineId,
             FrameId: _session.FrameHistory.PeekNextFrameId(),
             TimeSeconds: revision / 60f,
             PreviousFrame: _session.FrameHistory.GetPreviousFrame(),
@@ -120,7 +122,7 @@ internal sealed class ViewportRenderRequestFactory
             ShowGrid: _session.Workspace.Viewport.ShowGrid && viewportRenderMode == ViewportRenderMode.Mesh,
             IncludeDebugFrame: includeDebugFrame,
             DebugOverlay: debugOverlay,
-            PipelineStrategy: runtimePlan.PipelineStrategy,
+            PipelineStrategy: pipelineSelection.Strategy,
             DiagnosticsOptions: CreateViewportDiagnosticsOptions(renderer),
             OptimizerMode: _optimizerMode);
 

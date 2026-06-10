@@ -99,6 +99,7 @@ public sealed class InteractiveFrameOrchestrator
 
         var output = SelectOutput();
         diagnostics.CaptureOutput(output.Summary);
+        PruneArtifactStore(diagnostics);
         CaptureArtifactStoreStats(diagnostics);
         _previousDiagnostics = diagnostics;
 
@@ -127,6 +128,13 @@ public sealed class InteractiveFrameOrchestrator
         diagnostics.SceneArtifactCount = stats.SceneCount;
         diagnostics.SessionArtifactCount = stats.SessionCount;
         diagnostics.FrameOrCameraArtifactCount = stats.FrameOrCameraCount;
+    }
+
+    private void PruneArtifactStore(InteractiveFrameDiagnostics diagnostics)
+    {
+        diagnostics.PrunedFrameOrCameraArtifactCount = _artifacts.PruneFrameOrCameraArtifacts(
+            _options.MaxFrameOrCameraArtifactsPerKind,
+            _options.MaxTotalFrameOrCameraArtifacts);
     }
 
     private static TimeSpan ExecuteTimed(
