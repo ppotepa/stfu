@@ -31,8 +31,12 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
 
         var intent = InteractiveFrameIntentFactory.FromContext(context, _options);
 
-        var result = _orchestrator.Execute(intent, context);
+        // MVP bridge: keep Reference Quality as the image source, then harvest
+        // populated reference graph artifacts for the Interactive Performance path.
+        // Later packages can replace this with direct interactive presentation once
+        // projection/visibility/stroke/tone artifacts are self-sufficient.
         var frame = _referenceFallback.Execute(context);
+        var result = _orchestrator.Execute(intent, context);
 
         InteractiveDiagnosticsBridge.WriteToContext(context, result.Diagnostics);
 

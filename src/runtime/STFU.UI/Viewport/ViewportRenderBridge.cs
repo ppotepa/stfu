@@ -608,6 +608,14 @@ internal sealed class ViewportFrameCoordinator : IDisposable
         counters.TryGetValue("InteractivePerformance.visibleFaces", out var visibleFaces);
         counters.TryGetValue("InteractivePerformance.totalEdges", out var totalEdges);
         counters.TryGetValue("InteractivePerformance.candidateEdges", out var candidateEdges);
+        counters.TryGetValue("InteractivePerformance.totalStrokeCandidates", out var totalStrokeCandidates);
+        counters.TryGetValue("InteractivePerformance.strokeCommands", out var strokeCommands);
+        counters.TryGetValue("InteractivePerformance.toneSourceFaces", out var toneSourceFaces);
+        counters.TryGetValue("InteractivePerformance.toneRegions", out var toneRegions);
+        counters.TryGetValue("InteractivePerformance.workClass", out var workClass);
+        counters.TryGetValue("InteractivePerformance.qualityMode", out var qualityMode);
+        counters.TryGetValue("InteractivePerformance.cacheHits", out var cacheHits);
+        counters.TryGetValue("InteractivePerformance.cacheMisses", out var cacheMisses);
 
         var faces = totalFaces > 0
             ? $"Faces {totalFaces:n0}->{visibleFaces:n0}"
@@ -617,8 +625,47 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             : totalEdgesOnly > 0
                 ? $"Edges {totalEdgesOnly:n0}"
                 : "Edges pending";
+        var strokes = totalStrokeCandidates > 0
+            ? $"; Strokes {totalStrokeCandidates:n0}->{strokeCommands:n0}"
+            : string.Empty;
+        var tones = toneSourceFaces > 0
+            ? $"; Tones {toneSourceFaces:n0}->{toneRegions:n0}"
+            : string.Empty;
+        var runtime = workClass > 0 || qualityMode > 0
+            ? $"; Work {FormatInteractiveWorkClass(workClass)}/{FormatInteractiveQualityMode(qualityMode)}"
+            : string.Empty;
+        var cache = cacheHits > 0 || cacheMisses > 0
+            ? $"; Cache {cacheHits:n0}/{cacheMisses:n0}"
+            : string.Empty;
 
-        return $" | IP {faces}; {edges}";
+        return $" | IP {faces}; {edges}{strokes}{tones}{runtime}{cache}";
+    }
+
+
+    private static string FormatInteractiveWorkClass(long value)
+    {
+        return value switch
+        {
+            0 => "ReuseOnly",
+            1 => "ProjectionOnly",
+            2 => "VisibilityRefresh",
+            3 => "StrokeCandidateRefresh",
+            4 => "FullVisibleStrokeRefresh",
+            5 => "ReferenceFallback",
+            _ => value.ToString()
+        };
+    }
+
+    private static string FormatInteractiveQualityMode(long value)
+    {
+        return value switch
+        {
+            0 => "Auto",
+            1 => "FastPreview",
+            2 => "BalancedViewport",
+            3 => "QualityViewport",
+            _ => value.ToString()
+        };
     }
 
     private void LogFrameIfNeeded(NprRenderResult result)

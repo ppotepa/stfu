@@ -21,13 +21,7 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         var totalEdges = graph.DefaultFragments.Count > 0
             ? graph.DefaultFragments.Count
             : graph.TopologyEdges.Count;
-        var key = new ArtifactKey(
-            ArtifactKind.CandidateEdges,
-            ContentHash: (ulong)totalEdges,
-            CameraHash: 0,
-            StyleHash: 0,
-            Width: context.Intent.Width,
-            Height: context.Intent.Height);
+        var key = ArtifactKeyFactory.CandidateEdges(context.Intent, totalEdges);
 
         if (context.Artifacts.TryGet<CandidateEdgeArtifact>(key, out var cached))
         {
@@ -58,13 +52,7 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
 
     private static HashSet<int> LoadVisibleFaceSet(InteractiveFrameContext context)
     {
-        var key = new ArtifactKey(
-            ArtifactKind.VisibleFaces,
-            ContentHash: (ulong)context.ReferenceContext.Graph.Triangles.Count,
-            CameraHash: 0,
-            StyleHash: 0,
-            Width: context.Intent.Width,
-            Height: context.Intent.Height);
+        var key = ArtifactKeyFactory.VisibleFaces(context.Intent, context.ReferenceContext.Graph.Triangles.Count);
 
         return context.Artifacts.TryGet<VisibleFaceSetArtifact>(key, out var visibleFaces)
             ? visibleFaces.VisibleFaceIndices.ToHashSet()
@@ -97,6 +85,10 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
                 FaceA: fragment.FirstTriangleIndex,
                 FaceB: fragment.SecondTriangleIndex,
                 Role: (int)fragment.Type,
+                X0: fragment.P0.X,
+                Y0: fragment.P0.Y,
+                X1: fragment.P1.X,
+                Y1: fragment.P1.Y,
                 ProjectedLength: Distance(fragment.P0.X, fragment.P0.Y, fragment.P1.X, fragment.P1.Y),
                 Depth: fragment.Depth,
                 Importance: 1f));

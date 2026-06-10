@@ -15,19 +15,21 @@ public static class InteractiveFrameIntentFactory
         var width = Math.Max(1, context.Width);
         var height = Math.Max(1, context.Height);
         var targetMs = options.TargetFrameMs > 0 ? options.TargetFrameMs : 16.6;
+        var signature = InteractiveFrameSignatureFactory.FromContext(context, width, height);
 
         return new InteractiveFrameIntent(
             FrameId: context.FrameId,
             Width: width,
             Height: height,
             Strategy: FramePipelineStrategy.InteractivePerformance,
-            QualityMode: InteractiveQualityMode.BalancedViewport,
+            QualityMode: InteractiveQualityMode.Auto,
             FrameBudget: TimeSpan.FromMilliseconds(targetMs),
             CameraChanged: true,
-            SceneChanged: false,
+            SceneChanged: true,
             AnimationChanged: false,
-            StyleChanged: false,
+            StyleChanged: true,
             ViewportSizeChanged: false,
-            DebugOverlayChanged: context.IncludeDebugFrame);
+            DebugOverlayChanged: false,
+            Signature: signature);
     }
 }

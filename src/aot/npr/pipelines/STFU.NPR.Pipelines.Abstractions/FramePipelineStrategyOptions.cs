@@ -10,7 +10,7 @@ public sealed record FramePipelineStrategyOptions
     public bool EnableProjectionStage { get; init; } = true;
     public bool EnableVisibilityStage { get; init; } = true;
     public bool EnableCandidateEdgeStage { get; init; } = true;
-    public bool EnableStrokePlanningStage { get; init; }
-    public bool EnableTonePlanningStage { get; init; }
+    public bool EnableStrokePlanningStage { get; init; } = true;
+    public bool EnableTonePlanningStage { get; init; } = true;
     public double TargetFrameMs { get; init; } = 16.6;
 }

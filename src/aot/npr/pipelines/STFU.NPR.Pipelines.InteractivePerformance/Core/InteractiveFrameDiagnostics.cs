@@ -10,6 +10,27 @@ public sealed class InteractiveFrameDiagnostics
     public FramePipelineStrategy Strategy { get; set; }
     public InteractiveWorkClass WorkClass { get; set; }
 
+    public long FrameId { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public ulong ContentHash { get; set; }
+    public ulong CameraHash { get; set; }
+    public ulong StyleHash { get; set; }
+    public ulong ViewportHash { get; set; }
+    public ulong DebugHash { get; set; }
+    public bool CameraChanged { get; set; }
+    public bool SceneChanged { get; set; }
+    public bool AnimationChanged { get; set; }
+    public bool StyleChanged { get; set; }
+    public bool ViewportSizeChanged { get; set; }
+    public bool DebugOverlayChanged { get; set; }
+    public InteractiveQualityMode QualityMode { get; set; }
+    public int ArtifactStoreItemCount { get; set; }
+    public int FrameOrCameraArtifactCount { get; set; }
+    public int StaticArtifactCount { get; set; }
+    public int SceneArtifactCount { get; set; }
+    public int SessionArtifactCount { get; set; }
+
     public double ProjectionMs { get; set; }
     public double VisibilityMs { get; set; }
     public double CandidateMs { get; set; }
@@ -29,12 +50,42 @@ public sealed class InteractiveFrameDiagnostics
     public int CandidateEdges { get; set; }
     public double CandidateReductionPercent { get; set; }
     public int VisibleSegments { get; set; }
+    public int TotalStrokeCandidates { get; set; }
     public int StrokeCommands { get; set; }
+    public double StrokeCommandReductionPercent { get; set; }
+    public int ToneSourceFaces { get; set; }
+    public int ToneRegions { get; set; }
+    public double ToneCoverageRatioPercent { get; set; }
+    public int ToneHighlightRegions { get; set; }
+    public int ToneMidtoneRegions { get; set; }
+    public int ToneShadowRegions { get; set; }
 
     public bool UsedReferenceFallback { get; set; }
     public string FallbackReason { get; set; } = string.Empty;
 
     public IReadOnlyDictionary<string, double> StageTimingsMs => _stageTimingsMs;
+
+
+    public void CaptureIntent(InteractiveFrameIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+
+        FrameId = intent.FrameId;
+        Width = intent.Width;
+        Height = intent.Height;
+        ContentHash = intent.Signature.ContentHash;
+        CameraHash = intent.Signature.CameraHash;
+        StyleHash = intent.Signature.StyleHash;
+        ViewportHash = intent.Signature.ViewportHash;
+        DebugHash = intent.Signature.DebugHash;
+        CameraChanged = intent.CameraChanged;
+        SceneChanged = intent.SceneChanged;
+        AnimationChanged = intent.AnimationChanged;
+        StyleChanged = intent.StyleChanged;
+        ViewportSizeChanged = intent.ViewportSizeChanged;
+        DebugOverlayChanged = intent.DebugOverlayChanged;
+        QualityMode = intent.QualityMode;
+    }
 
     public void AddStageTiming(string stageName, TimeSpan elapsed)
     {

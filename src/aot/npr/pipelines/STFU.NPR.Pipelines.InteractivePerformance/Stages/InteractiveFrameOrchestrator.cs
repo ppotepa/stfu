@@ -10,7 +10,10 @@ public sealed class InteractiveFrameOrchestrator
 {
     private readonly FramePipelineStrategyOptions _options;
     private readonly InteractiveFrameScheduler _scheduler = new();
+    private readonly AdaptiveBudgetController _budgetController = new();
+    private readonly InteractiveFrameChangeTracker _changeTracker = new();
     private readonly ArtifactStore _artifacts = new();
+    private InteractiveFrameDiagnostics _previousDiagnostics = new();
     private readonly IInteractivePipelineStage[] _stages;
 
     public InteractiveFrameOrchestrator()
@@ -59,10 +62,13 @@ public sealed class InteractiveFrameOrchestrator
         ArgumentNullException.ThrowIfNull(intent);
         ArgumentNullException.ThrowIfNull(referenceContext);
 
+        intent = ResolveIntent(intent);
+
         var diagnostics = new InteractiveFrameDiagnostics
         {
             Strategy = FramePipelineStrategy.InteractivePerformance
         };
+        diagnostics.CaptureIntent(intent);
 
         var context = new InteractiveFrameContext
         {
@@ -72,7 +78,7 @@ public sealed class InteractiveFrameOrchestrator
             Diagnostics = diagnostics
         };
 
-        context.WorkClass = _scheduler.SelectWork(intent, diagnostics);
+        context.WorkClass = _scheduler.SelectWork(intent, _previousDiagnostics);
         diagnostics.WorkClass = context.WorkClass;
 
         foreach (var stage in _stages)
@@ -81,7 +87,27 @@ public sealed class InteractiveFrameOrchestrator
             diagnostics.AddStageTiming(stage.Name, elapsed);
         }
 
+        CaptureArtifactStoreStats(diagnostics);
+        _previousDiagnostics = diagnostics;
+
         return new InteractivePipelineResult(diagnostics);
+    }
+
+    private InteractiveFrameIntent ResolveIntent(InteractiveFrameIntent intent)
+    {
+        var qualityMode = _budgetController.ResolveQualityMode(intent, _previousDiagnostics);
+        intent = intent with { QualityMode = qualityMode };
+        return _changeTracker.Resolve(intent);
+    }
+
+    private void CaptureArtifactStoreStats(InteractiveFrameDiagnostics diagnostics)
+    {
+        var stats = _artifacts.SnapshotStats();
+        diagnostics.ArtifactStoreItemCount = stats.TotalCount;
+        diagnostics.StaticArtifactCount = stats.StaticCount;
+        diagnostics.SceneArtifactCount = stats.SceneCount;
+        diagnostics.SessionArtifactCount = stats.SessionCount;
+        diagnostics.FrameOrCameraArtifactCount = stats.FrameOrCameraCount;
     }
 
     private static TimeSpan ExecuteTimed(

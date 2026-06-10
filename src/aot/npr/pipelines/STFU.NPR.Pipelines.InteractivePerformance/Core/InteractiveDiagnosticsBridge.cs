@@ -12,15 +12,44 @@ public static class InteractiveDiagnosticsBridge
 
         HarvestReferenceGraph(context, diagnostics);
 
+        context.Counters.Set("InteractivePerformance.frameId", diagnostics.FrameId);
+        context.Counters.Set("InteractivePerformance.workClass", (long)diagnostics.WorkClass);
+        context.Counters.Set("InteractivePerformance.qualityMode", (long)diagnostics.QualityMode);
+        context.Counters.Set("InteractivePerformance.cameraChanged", diagnostics.CameraChanged ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.sceneChanged", diagnostics.SceneChanged ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.styleChanged", diagnostics.StyleChanged ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.viewportSizeChanged", diagnostics.ViewportSizeChanged ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.debugOverlayChanged", diagnostics.DebugOverlayChanged ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.contentHash", ToCounterValue(diagnostics.ContentHash));
+        context.Counters.Set("InteractivePerformance.cameraHash", ToCounterValue(diagnostics.CameraHash));
+        context.Counters.Set("InteractivePerformance.styleHash", ToCounterValue(diagnostics.StyleHash));
+        context.Counters.Set("InteractivePerformance.viewportHash", ToCounterValue(diagnostics.ViewportHash));
+        context.Counters.Set("InteractivePerformance.artifactStoreItems", diagnostics.ArtifactStoreItemCount);
+        context.Counters.Set("InteractivePerformance.frameOrCameraArtifacts", diagnostics.FrameOrCameraArtifactCount);
+
         context.Counters.Set("InteractivePerformance.totalFaces", diagnostics.TotalFaces);
         context.Counters.Set("InteractivePerformance.visibleFaces", diagnostics.VisibleFaces);
         context.Counters.Set("InteractivePerformance.visibleFaceRatioPercent", (long)Math.Round(diagnostics.VisibleFaceRatioPercent));
         context.Counters.Set("InteractivePerformance.totalEdges", diagnostics.TotalEdges);
         context.Counters.Set("InteractivePerformance.candidateEdges", diagnostics.CandidateEdges);
         context.Counters.Set("InteractivePerformance.candidateReductionPercent", (long)Math.Round(diagnostics.CandidateReductionPercent));
+        context.Counters.Set("InteractivePerformance.totalStrokeCandidates", diagnostics.TotalStrokeCandidates);
+        context.Counters.Set("InteractivePerformance.strokeCommands", diagnostics.StrokeCommands);
+        context.Counters.Set("InteractivePerformance.strokeCommandReductionPercent", (long)Math.Round(diagnostics.StrokeCommandReductionPercent));
+        context.Counters.Set("InteractivePerformance.toneSourceFaces", diagnostics.ToneSourceFaces);
+        context.Counters.Set("InteractivePerformance.toneRegions", diagnostics.ToneRegions);
+        context.Counters.Set("InteractivePerformance.toneCoverageRatioPercent", (long)Math.Round(diagnostics.ToneCoverageRatioPercent));
+        context.Counters.Set("InteractivePerformance.toneHighlightRegions", diagnostics.ToneHighlightRegions);
+        context.Counters.Set("InteractivePerformance.toneMidtoneRegions", diagnostics.ToneMidtoneRegions);
+        context.Counters.Set("InteractivePerformance.toneShadowRegions", diagnostics.ToneShadowRegions);
         context.Counters.Set("InteractivePerformance.cacheHits", diagnostics.CacheHits);
         context.Counters.Set("InteractivePerformance.cacheMisses", diagnostics.CacheMisses);
         context.Counters.Set("InteractivePerformance.usedReferenceFallback", diagnostics.UsedReferenceFallback ? 1 : 0);
+    }
+
+    private static long ToCounterValue(ulong value)
+    {
+        return unchecked((long)value);
     }
 
     private static void HarvestReferenceGraph(NprContext context, InteractiveFrameDiagnostics diagnostics)

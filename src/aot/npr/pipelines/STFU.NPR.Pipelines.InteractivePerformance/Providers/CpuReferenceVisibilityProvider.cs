@@ -15,13 +15,7 @@ public sealed class CpuReferenceVisibilityProvider : IInteractiveVisibilityProvi
         var faceCount = graph.Triangles.Count;
         var visibleFaces = ExtractVisibleFaces(graph.DefaultFaceIdVisibility?.FaceVisible, faceCount);
 
-        var key = new ArtifactKey(
-            ArtifactKind.VisibleFaces,
-            ContentHash: (ulong)faceCount,
-            CameraHash: 0,
-            StyleHash: 0,
-            Width: context.Intent.Width,
-            Height: context.Intent.Height);
+        var key = ArtifactKeyFactory.VisibleFaces(context.Intent, faceCount);
 
         return new VisibleFaceSetArtifact
         {

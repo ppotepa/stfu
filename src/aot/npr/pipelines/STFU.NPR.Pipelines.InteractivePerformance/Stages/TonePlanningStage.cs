@@ -10,35 +10,77 @@ public sealed class TonePlanningStage : IInteractivePipelineStage
 
     public bool ShouldRun(InteractiveFrameContext context)
     {
-        return context.WorkClass is InteractiveWorkClass.FullVisibleStrokeRefresh;
+        return context.WorkClass is
+            InteractiveWorkClass.StrokeCandidateRefresh or
+            InteractiveWorkClass.FullVisibleStrokeRefresh;
     }
 
     public void Execute(InteractiveFrameContext context)
     {
-        var key = new ArtifactKey(
-            ArtifactKind.ToneCoverage,
-            ContentHash: 0,
-            CameraHash: 0,
-            StyleHash: 0,
-            Width: context.Intent.Width,
-            Height: context.Intent.Height);
+        var visibleFaces = LoadVisibleFaceSet(context);
+        var sourceVisibleFaceCount = ResolveSourceVisibleFaceCount(context, visibleFaces);
+        var key = ArtifactKeyFactory.ToneCoverage(context.Intent, context.ReferenceContext.Graph.Triangles.Count, sourceVisibleFaceCount);
 
-        if (context.Artifacts.TryGet<ToneCoverageArtifact>(key, out _))
+        if (context.Artifacts.TryGet<ToneCoverageArtifact>(key, out var cached))
         {
             context.Diagnostics.CacheHits++;
+            WriteDiagnostics(context, cached);
             return;
         }
 
-        var artifact = new ToneCoverageArtifact
-        {
-            Key = key,
-            Revision = context.Intent.FrameId,
-            LastBuildTime = TimeSpan.Zero,
-            RegionCount = 0,
-            Note = "Interactive tone coverage placeholder; real visible face grouping is not implemented yet."
-        };
+        var artifact = ToneCoveragePlanner.BuildCoverage(context, visibleFaces, key);
 
         context.Artifacts.Set(artifact);
         context.Diagnostics.CacheMisses++;
+        WriteDiagnostics(context, artifact);
+    }
+
+    private static VisibleFaceSetArtifact? LoadVisibleFaceSet(InteractiveFrameContext context)
+    {
+        var key = ArtifactKeyFactory.VisibleFaces(context.Intent, context.ReferenceContext.Graph.Triangles.Count);
+
+        return context.Artifacts.TryGet<VisibleFaceSetArtifact>(key, out var visibleFaces)
+            ? visibleFaces
+            : null;
+    }
+
+    private static int ResolveSourceVisibleFaceCount(
+        InteractiveFrameContext context,
+        VisibleFaceSetArtifact? visibleFaces)
+    {
+        if (visibleFaces is not null)
+        {
+            return visibleFaces.VisibleFaceCount;
+        }
+
+        var graph = context.ReferenceContext.Graph;
+        var faceVisible = graph.DefaultFaceIdVisibility?.FaceVisible;
+        if (faceVisible is null || faceVisible.Length == 0)
+        {
+            return graph.Triangles.Count;
+        }
+
+        var limit = Math.Min(graph.Triangles.Count, faceVisible.Length);
+        var count = 0;
+        for (var i = 0; i < limit; i++)
+        {
+            if (faceVisible[i])
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+
+    private static void WriteDiagnostics(InteractiveFrameContext context, ToneCoverageArtifact artifact)
+    {
+        context.Diagnostics.ToneSourceFaces = artifact.SourceVisibleFaceCount;
+        context.Diagnostics.ToneRegions = artifact.RegionCount;
+        context.Diagnostics.ToneCoverageRatioPercent = artifact.CoverageRatioPercent;
+        context.Diagnostics.ToneHighlightRegions = artifact.HighlightRegionCount;
+        context.Diagnostics.ToneMidtoneRegions = artifact.MidtoneRegionCount;
+        context.Diagnostics.ToneShadowRegions = artifact.ShadowRegionCount;
     }
 }

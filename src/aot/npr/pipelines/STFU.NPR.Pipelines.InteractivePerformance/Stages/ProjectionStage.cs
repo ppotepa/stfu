@@ -19,7 +19,7 @@ public sealed class ProjectionStage : IInteractivePipelineStage
 
     public void Execute(InteractiveFrameContext context)
     {
-        var key = BuildProjectionSummaryKey(context);
+        var key = ArtifactKeyFactory.ProjectionSummary(context.Intent);
 
         if (context.Artifacts.TryGet<ProjectionSummaryArtifact>(key, out _))
         {
@@ -45,15 +45,4 @@ public sealed class ProjectionStage : IInteractivePipelineStage
         context.Diagnostics.ProjectedVertices = 0;
     }
 
-    private static ArtifactKey BuildProjectionSummaryKey(InteractiveFrameContext context)
-    {
-        // For projection, we care about geometry, camera, and viewport size.
-        return new ArtifactKey(
-            ArtifactKind.ProjectionSummary,
-            ContentHash: 0, // mesh hash should go here
-            CameraHash: 0,  // camera hash should go here
-            StyleHash: 0,   // style doesn't affect projection
-            Width: context.Intent.Width,
-            Height: context.Intent.Height);
-    }
 }

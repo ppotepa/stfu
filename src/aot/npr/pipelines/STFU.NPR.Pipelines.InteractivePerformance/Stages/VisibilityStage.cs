@@ -32,13 +32,7 @@ public sealed class VisibilityStage : IInteractivePipelineStage
     public void Execute(InteractiveFrameContext context)
     {
         var faceCount = context.ReferenceContext.Graph.Triangles.Count;
-        var key = new ArtifactKey(
-            ArtifactKind.VisibleFaces,
-            ContentHash: (ulong)faceCount,
-            CameraHash: 0,
-            StyleHash: 0,
-            Width: context.Intent.Width,
-            Height: context.Intent.Height);
+        var key = ArtifactKeyFactory.VisibleFaces(context.Intent, faceCount);
 
         if (context.Artifacts.TryGet<VisibleFaceSetArtifact>(key, out var cached))
         {

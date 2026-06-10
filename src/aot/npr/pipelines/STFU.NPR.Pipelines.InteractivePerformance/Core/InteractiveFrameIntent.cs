@@ -15,4 +15,5 @@ public sealed record InteractiveFrameIntent(
     bool AnimationChanged,
     bool StyleChanged,
     bool ViewportSizeChanged,
-    bool DebugOverlayChanged);
+    bool DebugOverlayChanged,
+    InteractiveFrameSignature Signature = default);
