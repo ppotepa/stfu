@@ -1,11 +1,24 @@
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
 using STFU.NPR.Pipeline.InteractivePerformance.Scheduling;
+using STFU.NPR.Pipelines.Abstractions;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Stages;
 
 public sealed class CandidateEdgeStage : IInteractivePipelineStage
 {
+    private readonly FramePipelineStrategyOptions _options;
+
+    public CandidateEdgeStage()
+        : this(FramePipelineStrategyOptions.Default)
+    {
+    }
+
+    public CandidateEdgeStage(FramePipelineStrategyOptions options)
+    {
+        _options = options ?? FramePipelineStrategyOptions.Default;
+    }
+
     public string Name => "InteractiveCandidateEdges";
 
     public bool ShouldRun(InteractiveFrameContext context)
@@ -24,23 +37,26 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         if (context.Artifacts.TryGet<CandidateEdgeArtifact>(key, out var cached))
         {
             context.Diagnostics.CacheHits++;
-            WriteDiagnostics(context, cached, source);
+            WriteDiagnostics(context, cached, source, cached.CandidateEdgeCount, cached.CandidateEdgeCount);
             return;
         }
 
-        var edges = BuildCandidateEdges(context, visibleFaces, source);
+        var sourceEdges = BuildCandidateEdges(context, visibleFaces, source);
+        var budgetedEdges = InteractiveBudgetLimiter.LimitCandidateEdges(
+            sourceEdges,
+            _options.MaxInteractiveCandidateEdges);
         var artifact = new CandidateEdgeArtifact
         {
             Key = key,
             Revision = context.Intent.FrameId,
             LastBuildTime = TimeSpan.Zero,
-            TotalEdgeCount = Math.Max(source.TotalEdgeCount, edges.Length),
-            Edges = edges
+            TotalEdgeCount = Math.Max(source.TotalEdgeCount, sourceEdges.Length),
+            Edges = budgetedEdges
         };
 
         context.Artifacts.Set(artifact);
         context.Diagnostics.CacheMisses++;
-        WriteDiagnostics(context, artifact, source);
+        WriteDiagnostics(context, artifact, source, sourceEdges.Length, budgetedEdges.Length);
     }
 
     private static CandidateEdgeSourceInfo ResolveSource(InteractiveFrameContext context)
@@ -151,7 +167,9 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
     private static void WriteDiagnostics(
         InteractiveFrameContext context,
         CandidateEdgeArtifact artifact,
-        CandidateEdgeSourceInfo source)
+        CandidateEdgeSourceInfo source,
+        int beforeBudget,
+        int afterBudget)
     {
         context.Diagnostics.TotalEdges = artifact.TotalEdgeCount;
         context.Diagnostics.CandidateEdges = artifact.CandidateEdgeCount;
@@ -159,6 +177,9 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         context.Diagnostics.CandidateEdgeSource = (long)source.Source;
         context.Diagnostics.CandidateEdgeSourceReferenceFragments = source.ReferenceFragmentCount;
         context.Diagnostics.CandidateEdgeSourceProjectedTriangles = source.ProjectedTriangleCount;
+        context.Diagnostics.CandidateEdgesBeforeBudget = beforeBudget;
+        context.Diagnostics.CandidateEdgesAfterBudget = afterBudget;
+        context.Diagnostics.CandidateEdgeBudgetApplied = beforeBudget > afterBudget;
     }
 
     private static float Distance(float x0, float y0, float x1, float y1)

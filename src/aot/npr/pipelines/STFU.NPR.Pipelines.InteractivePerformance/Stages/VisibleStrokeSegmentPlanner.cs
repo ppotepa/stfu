@@ -7,7 +7,8 @@ public static class VisibleStrokeSegmentPlanner
 {
     public static InteractiveVisibleStrokeSegment[] BuildSegments(
         IReadOnlyList<InteractiveStrokeCommand> commands,
-        InteractiveQualityMode qualityMode)
+        InteractiveQualityMode qualityMode,
+        int explicitMaxSegments = 0)
     {
         if (commands.Count == 0)
         {
@@ -15,6 +16,10 @@ public static class VisibleStrokeSegmentPlanner
         }
 
         var maxSegments = ResolveMaxSegments(commands.Count, qualityMode);
+        if (explicitMaxSegments > 0)
+        {
+            maxSegments = Math.Min(maxSegments, explicitMaxSegments);
+        }
         var stride = ResolveStride(commands.Count, maxSegments);
         var segments = new List<InteractiveVisibleStrokeSegment>(Math.Min(commands.Count, maxSegments));
 

@@ -20,11 +20,16 @@ public sealed record FramePipelineStrategyOptions
     public bool EnableTonePlanningStage { get; init; } = true;
     public bool EnableInteractiveOutputContract { get; init; } = true;
     public bool EnableInteractivePreviewOutput { get; init; }
+    public bool EnableReferenceFreeInteractivePreview { get; init; }
     public bool UseReferenceFallbackForFinalFrame { get; init; } = true;
     public bool RequireToneCoverageForInteractivePreview { get; init; }
     public int InteractivePreviewMaxStrokeSegments { get; init; }
 
     public int InteractivePreviewMinReadinessScore { get; init; }
+    public int MaxInteractiveCandidateEdges { get; init; }
+    public int MaxInteractiveStrokeCommands { get; init; }
+    public int MaxInteractiveVisibleStrokeSegments { get; init; }
+    public bool DeferToneCoverageWhenPreviewDoesNotRequireTone { get; init; }
     public int MaxFrameOrCameraArtifactsPerKind { get; init; } = 3;
     public int MaxTotalFrameOrCameraArtifacts { get; init; } = 64;
     public double TargetFrameMs { get; init; } = 16.6;

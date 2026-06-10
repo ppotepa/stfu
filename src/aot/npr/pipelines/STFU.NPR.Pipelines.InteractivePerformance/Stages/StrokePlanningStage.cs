@@ -1,11 +1,24 @@
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
 using STFU.NPR.Pipeline.InteractivePerformance.Scheduling;
+using STFU.NPR.Pipelines.Abstractions;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Stages;
 
 public sealed class StrokePlanningStage : IInteractivePipelineStage
 {
+    private readonly FramePipelineStrategyOptions _options;
+
+    public StrokePlanningStage()
+        : this(FramePipelineStrategyOptions.Default)
+    {
+    }
+
+    public StrokePlanningStage(FramePipelineStrategyOptions options)
+    {
+        _options = options ?? FramePipelineStrategyOptions.Default;
+    }
+
     public string Name => "InteractiveStrokePlanning";
 
     public bool ShouldRun(InteractiveFrameContext context)
@@ -24,13 +37,16 @@ public sealed class StrokePlanningStage : IInteractivePipelineStage
         if (context.Artifacts.TryGet<StrokeCommandArtifact>(key, out var cached))
         {
             context.Diagnostics.CacheHits++;
-            WriteDiagnostics(context, cached);
+            WriteDiagnostics(context, cached, cached.CommandCount, cached.CommandCount);
             return;
         }
 
-        var commands = candidateArtifact is null
+        var sourceCommands = candidateArtifact is null
             ? []
             : StrokeCommandPlanner.BuildCommands(candidateArtifact.Edges);
+        var commands = InteractiveBudgetLimiter.LimitStrokeCommands(
+            sourceCommands,
+            _options.MaxInteractiveStrokeCommands);
 
         var artifact = new StrokeCommandArtifact
         {
@@ -43,7 +59,7 @@ public sealed class StrokePlanningStage : IInteractivePipelineStage
 
         context.Artifacts.Set(artifact);
         context.Diagnostics.CacheMisses++;
-        WriteDiagnostics(context, artifact);
+        WriteDiagnostics(context, artifact, sourceCommands.Length, commands.Length);
     }
 
     private static CandidateEdgeArtifact? LoadCandidateEdges(InteractiveFrameContext context)
@@ -53,10 +69,17 @@ public sealed class StrokePlanningStage : IInteractivePipelineStage
             : null;
     }
 
-    private static void WriteDiagnostics(InteractiveFrameContext context, StrokeCommandArtifact artifact)
+    private static void WriteDiagnostics(
+        InteractiveFrameContext context,
+        StrokeCommandArtifact artifact,
+        int beforeBudget,
+        int afterBudget)
     {
         context.Diagnostics.TotalStrokeCandidates = artifact.SourceCandidateCount;
         context.Diagnostics.StrokeCommands = artifact.CommandCount;
         context.Diagnostics.StrokeCommandReductionPercent = artifact.CommandReductionPercent;
+        context.Diagnostics.StrokeCommandsBeforeBudget = beforeBudget;
+        context.Diagnostics.StrokeCommandsAfterBudget = afterBudget;
+        context.Diagnostics.StrokeCommandBudgetApplied = beforeBudget > afterBudget;
     }
 }

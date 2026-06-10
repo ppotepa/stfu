@@ -39,17 +39,17 @@ public sealed class InteractiveFrameOrchestrator
 
         if (_options.EnableCandidateEdgeStage)
         {
-            stages.Add(new CandidateEdgeStage());
+            stages.Add(new CandidateEdgeStage(_options));
         }
 
         if (_options.EnableStrokePlanningStage)
         {
-            stages.Add(new StrokePlanningStage());
+            stages.Add(new StrokePlanningStage(_options));
         }
 
         if (_options.EnableVisibleStrokeSegmentStage)
         {
-            stages.Add(new VisibleStrokeSegmentStage());
+            stages.Add(new VisibleStrokeSegmentStage(_options));
         }
 
         if (_options.EnableInteractiveStrokeFrameStage)
@@ -59,7 +59,7 @@ public sealed class InteractiveFrameOrchestrator
 
         if (_options.EnableTonePlanningStage)
         {
-            stages.Add(new TonePlanningStage());
+            stages.Add(new TonePlanningStage(_options));
         }
 
         stages.Add(new ReferenceFallbackStage());

@@ -95,16 +95,23 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
             context,
             ref referenceFrame,
             ref referenceFrameAvailable);
+        var referenceFallbackUnavailable = !referenceFrameAvailable;
 
         result.Diagnostics.ReturnedInteractiveFrame = false;
         result.Diagnostics.ReturnedReferenceFallback = true;
         result.Diagnostics.ReturnedInteractiveFramePaths = 0;
         result.Diagnostics.ReturnedInteractiveFrameSegments = 0;
-        if (string.IsNullOrWhiteSpace(result.Diagnostics.FallbackReason))
+        if (referenceFallbackUnavailable)
+        {
+            result.Diagnostics.ReferenceFallbackUnavailable = true;
+            result.Diagnostics.FallbackReason = "Reference fallback frame is unavailable; returning an empty frame for the gated interactive preview path.";
+        }
+        else if (string.IsNullOrWhiteSpace(result.Diagnostics.FallbackReason))
         {
             result.Diagnostics.FallbackReason = decision.Reason;
         }
 
+        result.Diagnostics.ReferenceFallbackEmptyFrame = referenceFrame.Paths.Count == 0;
         context.Frame = referenceFrame;
         result.Diagnostics.CaptureReferenceExecution(
             _referenceExecutionPolicy,

@@ -126,7 +126,9 @@ $referencePolicyText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU
 foreach ($marker in @(
     "STFU_INTERACTIVE_REFERENCE_EXECUTION",
     "BeforeInteractive",
-    "LateFallback"
+    "LateFallback",
+    "DisabledForViewportPreview",
+    "ReferenceDisabledForPreview"
 )) {
     if ($referencePolicyText -notlike "*$marker*") {
         throw "Missing Interactive Performance reference execution marker: $marker"
@@ -161,7 +163,12 @@ foreach ($marker in @(
 $optionsText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.Abstractions/FramePipelineStrategyOptions.cs"
 foreach ($option in @(
     "MaxFrameOrCameraArtifactsPerKind",
-    "MaxTotalFrameOrCameraArtifacts"
+    "MaxTotalFrameOrCameraArtifacts",
+    "EnableReferenceFreeInteractivePreview",
+    "MaxInteractiveCandidateEdges",
+    "MaxInteractiveStrokeCommands",
+    "MaxInteractiveVisibleStrokeSegments",
+    "DeferToneCoverageWhenPreviewDoesNotRequireTone"
 )) {
     if ($optionsText -notlike "*$option*") {
         throw "Missing Interactive Performance artifact retention option: $option"
@@ -192,6 +199,26 @@ foreach ($counter in @(
         throw "Missing Interactive Performance candidate edge counter: $counter"
     }
     Write-ReportLine "  ok $counter"
+}
+Write-ReportLine ""
+
+Write-ReportLine "[contract] checking interactive budget markers"
+foreach ($marker in @(
+    "InteractiveBudgetLimiter",
+    "CandidateEdgeBudgetApplied",
+    "StrokeCommandBudgetApplied",
+    "VisibleSegmentBudgetApplied",
+    "TonePlanningDeferred",
+    "STFU_INTERACTIVE_REFERENCE_FREE_PREVIEW",
+    "STFU_INTERACTIVE_MAX_CANDIDATE_EDGES",
+    "STFU_INTERACTIVE_MAX_STROKE_COMMANDS",
+    "STFU_INTERACTIVE_MAX_VISIBLE_SEGMENTS"
+)) {
+    $found = (Get-ChildItem -Path src -Recurse -File -Include *.cs | Select-String -SimpleMatch $marker -Quiet)
+    if (-not $found) {
+        throw "Missing Interactive Performance budget/reference-free marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
 }
 Write-ReportLine ""
 

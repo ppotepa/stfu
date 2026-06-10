@@ -66,9 +66,15 @@ public sealed class InteractiveFrameDiagnostics
     public int CandidateEdgeSourceReferenceFragments { get; set; }
     public int CandidateEdgeSourceProjectedTriangles { get; set; }
     public bool CandidateEdgesBuiltFromProjectedTriangles => CandidateEdgeSource == (long)InteractiveCandidateEdgeSource.ProjectedTriangleEdges;
+    public int CandidateEdgesBeforeBudget { get; set; }
+    public int CandidateEdgesAfterBudget { get; set; }
+    public bool CandidateEdgeBudgetApplied { get; set; }
     public int VisibleSegments { get; set; }
     public int VisibleSegmentSourceCommands { get; set; }
     public double VisibleSegmentCoveragePercent { get; set; }
+    public int VisibleSegmentsBeforeBudget { get; set; }
+    public int VisibleSegmentsAfterBudget { get; set; }
+    public bool VisibleSegmentBudgetApplied { get; set; }
     public int InteractiveStrokeFrameSourceSegments { get; set; }
     public int InteractiveStrokeFramePaths { get; set; }
     public int InteractiveStrokeFrameSegments { get; set; }
@@ -76,6 +82,10 @@ public sealed class InteractiveFrameDiagnostics
     public int TotalStrokeCandidates { get; set; }
     public int StrokeCommands { get; set; }
     public double StrokeCommandReductionPercent { get; set; }
+    public int StrokeCommandsBeforeBudget { get; set; }
+    public int StrokeCommandsAfterBudget { get; set; }
+    public bool StrokeCommandBudgetApplied { get; set; }
+    public bool TonePlanningDeferred { get; set; }
     public int ToneSourceFaces { get; set; }
     public int ToneRegions { get; set; }
     public double ToneCoverageRatioPercent { get; set; }
@@ -120,7 +130,10 @@ public sealed class InteractiveFrameDiagnostics
     public bool ReferenceExecutedBeforeInteractive { get; set; }
     public bool ReferenceExecutedAfterInteractive { get; set; }
     public bool ReferenceExecutionSkipped { get; set; }
+    public bool ReferenceExecutionDisabledForPreview { get; set; }
     public bool ReferenceFallbackFrameAvailable { get; set; }
+    public bool ReferenceFallbackUnavailable { get; set; }
+    public bool ReferenceFallbackEmptyFrame { get; set; }
     public string ReferenceExecutionReason { get; set; } = string.Empty;
 
     public IReadOnlyDictionary<string, double> StageTimingsMs => _stageTimingsMs;
@@ -160,7 +173,9 @@ public sealed class InteractiveFrameDiagnostics
         ReferenceExecutedBeforeInteractive = executedBeforeInteractive;
         ReferenceExecutedAfterInteractive = executedAfterInteractive;
         ReferenceExecutionSkipped = !executedBeforeInteractive && !executedAfterInteractive;
+        ReferenceExecutionDisabledForPreview = policy.ReferenceDisabledForPreview;
         ReferenceFallbackFrameAvailable = fallbackFrameAvailable;
+        ReferenceFallbackUnavailable = ReferenceFallbackUnavailable || (!fallbackFrameAvailable && !executedBeforeInteractive && !executedAfterInteractive);
         ReferenceExecutionReason = policy.Reason;
     }
 

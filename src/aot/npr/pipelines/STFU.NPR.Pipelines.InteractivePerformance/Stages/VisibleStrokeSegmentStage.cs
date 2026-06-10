@@ -1,11 +1,24 @@
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
 using STFU.NPR.Pipeline.InteractivePerformance.Scheduling;
+using STFU.NPR.Pipelines.Abstractions;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Stages;
 
 public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
 {
+    private readonly FramePipelineStrategyOptions _options;
+
+    public VisibleStrokeSegmentStage()
+        : this(FramePipelineStrategyOptions.Default)
+    {
+    }
+
+    public VisibleStrokeSegmentStage(FramePipelineStrategyOptions options)
+    {
+        _options = options ?? FramePipelineStrategyOptions.Default;
+    }
+
     public string Name => "InteractiveVisibleStrokeSegments";
 
     public bool ShouldRun(InteractiveFrameContext context)
@@ -24,13 +37,19 @@ public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
         if (context.Artifacts.TryGet<VisibleStrokeSegmentArtifact>(key, out var cached))
         {
             context.Diagnostics.CacheHits++;
-            WriteDiagnostics(context, cached);
+            WriteDiagnostics(context, cached, cached.SegmentCount, cached.SegmentCount);
             return;
         }
 
-        var segments = strokeCommands is null
+        var sourceSegments = strokeCommands is null
             ? []
-            : VisibleStrokeSegmentPlanner.BuildSegments(strokeCommands.Commands, context.Intent.QualityMode);
+            : VisibleStrokeSegmentPlanner.BuildSegments(
+                strokeCommands.Commands,
+                context.Intent.QualityMode,
+                _options.MaxInteractiveVisibleStrokeSegments);
+        var segments = InteractiveBudgetLimiter.LimitVisibleSegments(
+            sourceSegments,
+            _options.MaxInteractiveVisibleStrokeSegments);
 
         var artifact = new VisibleStrokeSegmentArtifact
         {
@@ -46,7 +65,7 @@ public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
 
         context.Artifacts.Set(artifact);
         context.Diagnostics.CacheMisses++;
-        WriteDiagnostics(context, artifact);
+        WriteDiagnostics(context, artifact, sourceSegments.Length, segments.Length);
     }
 
     private static StrokeCommandArtifact? LoadStrokeCommands(InteractiveFrameContext context)
@@ -56,10 +75,17 @@ public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
             : null;
     }
 
-    private static void WriteDiagnostics(InteractiveFrameContext context, VisibleStrokeSegmentArtifact artifact)
+    private static void WriteDiagnostics(
+        InteractiveFrameContext context,
+        VisibleStrokeSegmentArtifact artifact,
+        int beforeBudget,
+        int afterBudget)
     {
         context.Diagnostics.VisibleSegments = artifact.SegmentCount;
         context.Diagnostics.VisibleSegmentSourceCommands = artifact.SourceCommandCount;
         context.Diagnostics.VisibleSegmentCoveragePercent = artifact.SegmentCoveragePercent;
+        context.Diagnostics.VisibleSegmentsBeforeBudget = beforeBudget;
+        context.Diagnostics.VisibleSegmentsAfterBudget = afterBudget;
+        context.Diagnostics.VisibleSegmentBudgetApplied = beforeBudget > afterBudget;
     }
 }

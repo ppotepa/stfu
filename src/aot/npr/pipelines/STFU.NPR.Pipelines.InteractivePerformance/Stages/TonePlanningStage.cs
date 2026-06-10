@@ -1,15 +1,36 @@
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
 using STFU.NPR.Pipeline.InteractivePerformance.Scheduling;
+using STFU.NPR.Pipelines.Abstractions;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Stages;
 
 public sealed class TonePlanningStage : IInteractivePipelineStage
 {
+    private readonly FramePipelineStrategyOptions _options;
+
+    public TonePlanningStage()
+        : this(FramePipelineStrategyOptions.Default)
+    {
+    }
+
+    public TonePlanningStage(FramePipelineStrategyOptions options)
+    {
+        _options = options ?? FramePipelineStrategyOptions.Default;
+    }
+
     public string Name => "InteractiveTonePlanning";
 
     public bool ShouldRun(InteractiveFrameContext context)
     {
+        if (_options.DeferToneCoverageWhenPreviewDoesNotRequireTone &&
+            !_options.RequireToneCoverageForInteractivePreview &&
+            context.WorkClass != InteractiveWorkClass.FullVisibleStrokeRefresh)
+        {
+            context.Diagnostics.TonePlanningDeferred = true;
+            return false;
+        }
+
         return context.WorkClass is
             InteractiveWorkClass.StrokeCandidateRefresh or
             InteractiveWorkClass.FullVisibleStrokeRefresh;
@@ -72,9 +93,9 @@ public sealed class TonePlanningStage : IInteractivePipelineStage
         return count;
     }
 
-
     private static void WriteDiagnostics(InteractiveFrameContext context, ToneCoverageArtifact artifact)
     {
+        context.Diagnostics.TonePlanningDeferred = false;
         context.Diagnostics.ToneSourceFaces = artifact.SourceVisibleFaceCount;
         context.Diagnostics.ToneRegions = artifact.RegionCount;
         context.Diagnostics.ToneCoverageRatioPercent = artifact.CoverageRatioPercent;
