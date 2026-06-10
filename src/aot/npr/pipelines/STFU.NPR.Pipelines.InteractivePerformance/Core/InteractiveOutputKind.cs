@@ -9,6 +9,7 @@ public enum InteractiveOutputKind
     CandidateEdges,
     StrokeCommands,
     VisibleStrokeSegments,
+    InteractiveStrokeFrame,
     ToneCoverage,
     InteractivePreviewCandidate
 }

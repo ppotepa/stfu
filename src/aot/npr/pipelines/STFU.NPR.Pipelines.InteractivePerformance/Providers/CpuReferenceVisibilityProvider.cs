@@ -13,6 +13,9 @@ public sealed class CpuReferenceVisibilityProvider : IInteractiveVisibilityProvi
 
         var graph = context.ReferenceContext.Graph;
         var faceCount = graph.Triangles.Count;
+        var source = graph.DefaultFaceIdVisibility?.FaceVisible is { Length: > 0 }
+            ? InteractiveVisibilitySource.ReferenceFaceIdBuffer
+            : InteractiveVisibilitySource.ApproximateAllFaces;
         var visibleFaces = ExtractVisibleFaces(graph.DefaultFaceIdVisibility?.FaceVisible, faceCount);
 
         var key = ArtifactKeyFactory.VisibleFaces(context.Intent, faceCount);
@@ -25,7 +28,12 @@ public sealed class CpuReferenceVisibilityProvider : IInteractiveVisibilityProvi
             FaceCount = faceCount,
             VisibleFaceCount = visibleFaces.Length,
             VisibleFaceIndices = visibleFaces,
-            ProviderName = Name
+            Source = source,
+            SourceProjectedTriangleCount = 0,
+            ProviderName = Name,
+            Note = source == InteractiveVisibilitySource.ReferenceFaceIdBuffer
+                ? "Visible faces harvested from the Reference Quality face-id visibility buffer."
+                : "Reference visibility buffer was missing; treating all faces as visible."
         };
     }
 

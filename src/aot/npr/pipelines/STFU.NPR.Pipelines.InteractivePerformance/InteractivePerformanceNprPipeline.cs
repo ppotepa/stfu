@@ -31,18 +31,45 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
 
         var intent = InteractiveFrameIntentFactory.FromContext(context, _options);
 
-        // MVP bridge: keep Reference Quality as the image source, then harvest
-        // populated reference graph artifacts for the Interactive Performance path.
-        // Later packages can replace this with direct interactive presentation once
-        // projection/visibility/stroke/tone artifacts are self-sufficient.
-        var frame = _referenceFallback.Execute(context);
+        // MVP bridge: keep Reference Quality as a populated graph source, then harvest
+        // projection/visibility/stroke/tone artifacts for the Interactive Performance path.
+        // IP-012/IP-013 can optionally return an assembled interactive StrokeFrame while
+        // the Reference Quality pipeline remains the safe default and export baseline.
+        var referenceFrame = _referenceFallback.Execute(context);
         var result = _orchestrator.Execute(intent, context);
+        var finalFrame = SelectFinalFrame(context, referenceFrame, result);
 
         InteractiveDiagnosticsBridge.WriteToContext(context, result.Diagnostics);
+        return finalFrame;
+    }
 
-        // IP-011 exposes a typed interactive output contract through diagnostics and
-        // InteractivePipelineResult. The final StrokeFrame still comes from Reference
-        // Quality until IP-012/IP-013 build and enable a self-contained viewport frame.
-        return frame;
+    private StrokeFrame SelectFinalFrame(
+        NprContext context,
+        StrokeFrame referenceFrame,
+        InteractivePipelineResult result)
+    {
+        if (InteractivePreviewPolicy.TrySelectInteractiveFrame(
+                _options,
+                result,
+                out var interactiveFrame,
+                out var interactiveReason))
+        {
+            context.Frame = interactiveFrame;
+            result.Diagnostics.ReturnedInteractiveFrame = true;
+            result.Diagnostics.ReturnedReferenceFallback = false;
+            result.Diagnostics.FinalOutputReason = interactiveReason;
+            return interactiveFrame;
+        }
+
+        result.Diagnostics.ReturnedInteractiveFrame = false;
+        result.Diagnostics.ReturnedReferenceFallback = true;
+        result.Diagnostics.FinalOutputReason = interactiveReason;
+        if (string.IsNullOrWhiteSpace(result.Diagnostics.FallbackReason))
+        {
+            result.Diagnostics.FallbackReason = interactiveReason;
+        }
+
+        context.Frame = referenceFrame;
+        return referenceFrame;
     }
 }

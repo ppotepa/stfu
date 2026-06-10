@@ -18,5 +18,7 @@ public sealed class InteractiveOutputSelection
 
     public VisibleStrokeSegmentArtifact? VisibleStrokeSegments { get; init; }
 
+    public InteractiveStrokeFrameArtifact? InteractiveStrokeFrame { get; init; }
+
     public ToneCoverageArtifact? ToneCoverage { get; init; }
 }

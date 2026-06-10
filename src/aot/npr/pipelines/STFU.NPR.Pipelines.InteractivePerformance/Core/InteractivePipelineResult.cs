@@ -1,4 +1,5 @@
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
+using STFU.Strokes;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Core;
 
@@ -29,9 +30,15 @@ public sealed class InteractivePipelineResult
 
     public VisibleStrokeSegmentArtifact? VisibleStrokeSegments => Output.VisibleStrokeSegments;
 
+    public InteractiveStrokeFrameArtifact? InteractiveStrokeFrameArtifact => Output.InteractiveStrokeFrame;
+
+    public StrokeFrame? InteractiveStrokeFrame => Output.InteractiveStrokeFrame?.Frame;
+
     public ToneCoverageArtifact? ToneCoverage => Output.ToneCoverage;
 
     public bool RequiresReferenceFallback => Diagnostics.UsedReferenceFallback;
 
     public bool HasInteractivePreviewCandidate => Output.Summary.IsInteractivePreviewCandidate;
+
+    public bool HasInteractiveStrokeFrame => Output.InteractiveStrokeFrame?.HasRenderableFrame == true;
 }

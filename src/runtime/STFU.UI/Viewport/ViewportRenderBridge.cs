@@ -607,28 +607,38 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             return string.Empty;
         }
 
+        counters.TryGetValue("InteractivePerformance.projectionSource", out var projectionSource);
+        counters.TryGetValue("InteractivePerformance.projectionBuiltSelfContained", out var projectionBuiltSelfContained);
         counters.TryGetValue("InteractivePerformance.projectedVertices", out var projectedVertices);
         counters.TryGetValue("InteractivePerformance.projectedTriangles", out var projectedTriangles);
         counters.TryGetValue("InteractivePerformance.visibleProjectedTriangles", out var visibleProjectedTriangles);
+        counters.TryGetValue("InteractivePerformance.visibilitySource", out var visibilitySource);
+        counters.TryGetValue("InteractivePerformance.visibilityUsedProjectedTriangles", out var visibilityUsedProjectedTriangles);
         counters.TryGetValue("InteractivePerformance.visibleFaces", out var visibleFaces);
         counters.TryGetValue("InteractivePerformance.totalEdges", out var totalEdges);
         counters.TryGetValue("InteractivePerformance.candidateEdges", out var candidateEdges);
         counters.TryGetValue("InteractivePerformance.totalStrokeCandidates", out var totalStrokeCandidates);
         counters.TryGetValue("InteractivePerformance.strokeCommands", out var strokeCommands);
         counters.TryGetValue("InteractivePerformance.visibleSegments", out var visibleSegments);
+        counters.TryGetValue("InteractivePerformance.interactiveStrokeFramePaths", out var interactiveStrokeFramePaths);
+        counters.TryGetValue("InteractivePerformance.interactiveStrokeFrameSegments", out var interactiveStrokeFrameSegments);
         counters.TryGetValue("InteractivePerformance.toneSourceFaces", out var toneSourceFaces);
         counters.TryGetValue("InteractivePerformance.toneRegions", out var toneRegions);
         counters.TryGetValue("InteractivePerformance.workClass", out var workClass);
         counters.TryGetValue("InteractivePerformance.qualityMode", out var qualityMode);
         counters.TryGetValue("InteractivePerformance.cacheHits", out var cacheHits);
         counters.TryGetValue("InteractivePerformance.cacheMisses", out var cacheMisses);
+        counters.TryGetValue("InteractivePerformance.returnedInteractiveFrame", out var returnedInteractiveFrame);
+        counters.TryGetValue("InteractivePerformance.returnedReferenceFallback", out var returnedReferenceFallback);
 
+        var projectionLabel = FormatInteractiveProjectionSource(projectionSource, projectionBuiltSelfContained);
         var projection = projectedVertices > 0 || projectedTriangles > 0
-            ? $"Proj V{projectedVertices:n0}/T{projectedTriangles:n0}->{visibleProjectedTriangles:n0}"
-            : "Proj pending";
+            ? $"Proj {projectionLabel} V{projectedVertices:n0}/T{projectedTriangles:n0}->{visibleProjectedTriangles:n0}"
+            : $"Proj {projectionLabel} pending";
+        var visibilityLabel = FormatInteractiveVisibilitySource(visibilitySource, visibilityUsedProjectedTriangles);
         var faces = totalFaces > 0
-            ? $"Faces {totalFaces:n0}->{visibleFaces:n0}"
-            : "Faces pending";
+            ? $"Faces {visibilityLabel} {totalFaces:n0}->{visibleFaces:n0}"
+            : $"Faces {visibilityLabel} pending";
         var edges = totalEdges > 0
             ? $"Edges {totalEdges:n0}->{candidateEdges:n0}"
             : totalEdgesOnly > 0
@@ -639,9 +649,17 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             : visibleSegments > 0
                 ? $"; Segments {visibleSegments:n0}"
                 : string.Empty;
+        var frame = interactiveStrokeFrameSegments > 0
+            ? $"; Frame {interactiveStrokeFramePaths:n0}/{interactiveStrokeFrameSegments:n0}"
+            : string.Empty;
         var tones = toneSourceFaces > 0
             ? $"; Tones {toneSourceFaces:n0}->{toneRegions:n0}"
             : string.Empty;
+        var output = returnedInteractiveFrame > 0
+            ? "; Output interactive"
+            : returnedReferenceFallback > 0
+                ? "; Output reference"
+                : string.Empty;
         var runtime = workClass > 0 || qualityMode > 0
             ? $"; Work {FormatInteractiveWorkClass(workClass)}/{FormatInteractiveQualityMode(qualityMode)}"
             : string.Empty;
@@ -649,9 +667,32 @@ internal sealed class ViewportFrameCoordinator : IDisposable
             ? $"; Cache {cacheHits:n0}/{cacheMisses:n0}"
             : string.Empty;
 
-        return $" | IP {projection}; {faces}; {edges}{strokes}{tones}{runtime}{cache}";
+        return $" | IP {projection}; {faces}; {edges}{strokes}{frame}{tones}{output}{runtime}{cache}";
     }
 
+
+
+    private static string FormatInteractiveProjectionSource(long value, long selfContained)
+    {
+        return value switch
+        {
+            1 => "Ref",
+            2 => selfContained > 0 ? "Scratch" : "Scratch",
+            3 => "Cache",
+            _ => "?"
+        };
+    }
+
+    private static string FormatInteractiveVisibilitySource(long value, long projectedTriangles)
+    {
+        return value switch
+        {
+            1 => projectedTriangles > 0 ? "ProjTri" : "ProjTri",
+            2 => "RefFace",
+            3 => "Approx",
+            _ => "?"
+        };
+    }
 
     private static string FormatInteractiveWorkClass(long value)
     {

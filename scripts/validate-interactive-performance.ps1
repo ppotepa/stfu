@@ -25,6 +25,18 @@ Write-ReportLine "STFU Interactive Performance validation"
 Write-ReportLine "Repository: $repoRoot"
 Write-ReportLine "Configuration: $Configuration"
 Write-ReportLine "StartedAt: $((Get-Date).ToString('O'))"
+if (-not [string]::IsNullOrWhiteSpace($env:RPACK_PACKAGE_ID)) {
+    Write-ReportLine "RPACK_PACKAGE_ID: $env:RPACK_PACKAGE_ID"
+    Write-ReportLine "RPACK_APPLY_ID: $env:RPACK_APPLY_ID"
+}
+if (-not [string]::IsNullOrWhiteSpace($env:RPACK_CHANGED_FILES)) {
+    Write-ReportLine "RPACK_CHANGED_FILES:"
+    foreach ($changedFile in $env:RPACK_CHANGED_FILES.Split([System.IO.Path]::PathSeparator)) {
+        if (-not [string]::IsNullOrWhiteSpace($changedFile)) {
+            Write-ReportLine "  - $changedFile"
+        }
+    }
+}
 Write-ReportLine ""
 
 $dotnetVersion = dotnet --version
@@ -45,6 +57,20 @@ Write-ReportLine "[test] dotnet test tests/STFU.NPR.Pipelines.Tests/STFU.NPR.Pip
 dotnet test tests/STFU.NPR.Pipelines.Tests/STFU.NPR.Pipelines.Tests.csproj -c $Configuration --filter Interactive 2>&1 | Tee-Object -FilePath $reportPath -Append
 if ($LASTEXITCODE -ne 0) {
     throw "Interactive pipeline tests failed with exit code $LASTEXITCODE"
+}
+Write-ReportLine ""
+
+Write-ReportLine "[contract] checking IP-012/IP-013 source markers"
+$requiredMarkers = @(
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveStrokeFrameBuilder.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveStrokeFrameStage.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs"
+)
+foreach ($marker in $requiredMarkers) {
+    if (-not (Test-Path -LiteralPath $marker)) {
+        throw "Missing expected Interactive Performance source marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
 }
 Write-ReportLine ""
 

@@ -30,6 +30,9 @@ public static class InteractiveFrameIntentFactory
             StyleChanged: true,
             ViewportSizeChanged: false,
             DebugOverlayChanged: false,
-            Signature: signature);
+            Signature: signature)
+        {
+            Options = options
+        };
     }
 }

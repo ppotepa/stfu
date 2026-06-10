@@ -1,11 +1,24 @@
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
 using STFU.NPR.Pipeline.InteractivePerformance.Scheduling;
+using STFU.NPR.Pipelines.Abstractions;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Stages;
 
 public sealed class ProjectionStage : IInteractivePipelineStage
 {
+    private readonly FramePipelineStrategyOptions _options;
+
+    public ProjectionStage()
+        : this(FramePipelineStrategyOptions.Default)
+    {
+    }
+
+    public ProjectionStage(FramePipelineStrategyOptions options)
+    {
+        _options = options ?? FramePipelineStrategyOptions.Default;
+    }
+
     public string Name => "InteractiveProjection";
 
     public bool ShouldRun(InteractiveFrameContext context)
@@ -19,10 +32,13 @@ public sealed class ProjectionStage : IInteractivePipelineStage
 
     public void Execute(InteractiveFrameContext context)
     {
-        var graph = context.ReferenceContext.Graph;
+        var referenceGraph = context.ReferenceContext.Graph;
+        var projectedVertexCount = ResolveProjectedVertexKeyCount(context, referenceGraph.Vertices.Count);
+        var projectedTriangleCount = ResolveProjectedTriangleKeyCount(context, referenceGraph.Triangles.Count);
+
         var summaryKey = ArtifactKeyFactory.ProjectionSummary(context.Intent);
-        var verticesKey = ArtifactKeyFactory.ProjectedVertices(context.Intent, graph.Vertices.Count);
-        var trianglesKey = ArtifactKeyFactory.ProjectedTriangles(context.Intent, graph.Triangles.Count);
+        var verticesKey = ArtifactKeyFactory.ProjectedVertices(context.Intent, projectedVertexCount);
+        var trianglesKey = ArtifactKeyFactory.ProjectedTriangles(context.Intent, projectedTriangleCount);
 
         var hadSummary = context.Artifacts.TryGet<ProjectionSummaryArtifact>(summaryKey, out var summary);
         var hadVertices = context.Artifacts.TryGet<ProjectedVertexArtifact>(verticesKey, out var vertices);
@@ -31,71 +47,57 @@ public sealed class ProjectionStage : IInteractivePipelineStage
         if (hadSummary && hadVertices && hadTriangles)
         {
             context.Diagnostics.CacheHits++;
-            WriteDiagnostics(context, vertices, triangles);
+            context.Diagnostics.ProjectionSource = (long)summary.Source;
+            WriteDiagnostics(context, summary, vertices, triangles);
             return;
         }
 
-        if (!hadVertices)
-        {
-            vertices = ProjectionArtifactBuilder.BuildVertices(context, verticesKey);
-            context.Artifacts.Set(vertices);
-            context.Diagnostics.CacheMisses++;
-        }
-        else
-        {
-            context.Diagnostics.CacheHits++;
-        }
+        var built = ProjectionArtifactBuilder.BuildAll(context, summaryKey, verticesKey, trianglesKey, _options);
+        context.Artifacts.Set(built.Vertices);
+        context.Artifacts.Set(built.Triangles);
+        context.Artifacts.Set(built.Summary);
 
-        if (!hadTriangles)
-        {
-            triangles = ProjectionArtifactBuilder.BuildTriangles(context, trianglesKey);
-            context.Artifacts.Set(triangles);
-            context.Diagnostics.CacheMisses++;
-        }
-        else
-        {
-            context.Diagnostics.CacheHits++;
-        }
-
-        if (!hadSummary)
-        {
-            summary = BuildSummary(context, summaryKey, vertices, triangles);
-            context.Artifacts.Set(summary);
-            context.Diagnostics.CacheMisses++;
-        }
-        else
-        {
-            context.Diagnostics.CacheHits++;
-        }
-
-        WriteDiagnostics(context, vertices, triangles);
+        context.Diagnostics.CacheMisses += CountMisses(hadSummary, hadVertices, hadTriangles);
+        WriteDiagnostics(context, built.Summary, built.Vertices, built.Triangles);
     }
 
-    private static ProjectionSummaryArtifact BuildSummary(
-        InteractiveFrameContext context,
-        ArtifactKey key,
-        ProjectedVertexArtifact vertices,
-        ProjectedTriangleArtifact triangles)
+    private static int ResolveProjectedVertexKeyCount(InteractiveFrameContext context, int referenceCount)
     {
-        var fullProjectionAvailable = vertices.VertexCount > 0 || triangles.TriangleCount > 0;
-        var note = fullProjectionAvailable
-            ? "Interactive projection artifacts harvested from the Reference Quality graph."
-            : "Interactive projection artifacts are empty because the Reference Quality graph had no projected geometry.";
-
-        return new ProjectionSummaryArtifact
+        if (referenceCount > 0)
         {
-            Key = key,
-            Revision = context.Intent.FrameId,
-            Width = context.Intent.Width,
-            Height = context.Intent.Height,
-            FullProjectionAvailable = fullProjectionAvailable,
-            LastBuildTime = TimeSpan.Zero,
-            Note = note
-        };
+            return referenceCount;
+        }
+
+        return context.ReferenceContext.Scene.Entities.Count;
+    }
+
+    private static int ResolveProjectedTriangleKeyCount(InteractiveFrameContext context, int referenceCount)
+    {
+        if (referenceCount > 0)
+        {
+            return referenceCount;
+        }
+
+        return context.ReferenceContext.Scene.Entities.Count;
+    }
+
+    private static int CountMisses(params bool[] hits)
+    {
+        var misses = 0;
+        foreach (var hit in hits)
+        {
+            if (!hit)
+            {
+                misses++;
+            }
+        }
+
+        return misses;
     }
 
     private static void WriteDiagnostics(
         InteractiveFrameContext context,
+        ProjectionSummaryArtifact summary,
         ProjectedVertexArtifact vertices,
         ProjectedTriangleArtifact triangles)
     {
@@ -104,5 +106,9 @@ public sealed class ProjectionStage : IInteractivePipelineStage
         context.Diagnostics.VisibleProjectedVertices = vertices.VisibleVertexCount;
         context.Diagnostics.VisibleProjectedTriangles = triangles.VisibleTriangleCount;
         context.Diagnostics.FrontFacingProjectedTriangles = triangles.FrontFacingTriangleCount;
+        context.Diagnostics.ProjectionSource = (long)summary.Source;
+        context.Diagnostics.ProjectionSourceEntities = summary.SourceEntityCount;
+        context.Diagnostics.ProjectionMeshes = summary.ProjectedMeshCount;
+        context.Diagnostics.ProjectionBuiltSelfContained = summary.IsSelfContained;
     }
 }

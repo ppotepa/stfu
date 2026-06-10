@@ -14,6 +14,7 @@ public static class InteractiveOutputSelector
         artifacts.TryGetLatest(ArtifactKind.CandidateEdges, out CandidateEdgeArtifact? candidateEdges);
         artifacts.TryGetLatest(ArtifactKind.StrokeCommands, out StrokeCommandArtifact? strokeCommands);
         artifacts.TryGetLatest(ArtifactKind.VisibleStrokeSegments, out VisibleStrokeSegmentArtifact? visibleStrokeSegments);
+        artifacts.TryGetLatest(ArtifactKind.InteractiveStrokeFrame, out InteractiveStrokeFrameArtifact? interactiveStrokeFrame);
         artifacts.TryGetLatest(ArtifactKind.ToneCoverage, out ToneCoverageArtifact? toneCoverage);
 
         var summary = BuildSummary(
@@ -23,6 +24,7 @@ public static class InteractiveOutputSelector
             candidateEdges,
             strokeCommands,
             visibleStrokeSegments,
+            interactiveStrokeFrame,
             toneCoverage);
 
         return new InteractiveOutputSelection
@@ -34,6 +36,7 @@ public static class InteractiveOutputSelector
             CandidateEdges = candidateEdges,
             StrokeCommands = strokeCommands,
             VisibleStrokeSegments = visibleStrokeSegments,
+            InteractiveStrokeFrame = interactiveStrokeFrame,
             ToneCoverage = toneCoverage
         };
     }
@@ -45,6 +48,7 @@ public static class InteractiveOutputSelector
         CandidateEdgeArtifact? candidateEdges,
         StrokeCommandArtifact? strokeCommands,
         VisibleStrokeSegmentArtifact? visibleStrokeSegments,
+        InteractiveStrokeFrameArtifact? interactiveStrokeFrame,
         ToneCoverageArtifact? toneCoverage)
     {
         var kind = ResolveKind(
@@ -53,6 +57,7 @@ public static class InteractiveOutputSelector
             candidateEdges,
             strokeCommands,
             visibleStrokeSegments,
+            interactiveStrokeFrame,
             toneCoverage);
 
         return new InteractiveOutputSummary
@@ -63,6 +68,7 @@ public static class InteractiveOutputSelector
             HasCandidateEdges = candidateEdges is not null,
             HasStrokeCommands = strokeCommands is not null,
             HasVisibleStrokeSegments = visibleStrokeSegments is not null,
+            HasInteractiveStrokeFrame = interactiveStrokeFrame is not null,
             HasToneCoverage = toneCoverage is not null,
             ProjectedVertexCount = projectedVertices?.VertexCount ?? 0,
             ProjectedTriangleCount = projectedTriangles?.TriangleCount ?? 0,
@@ -70,6 +76,8 @@ public static class InteractiveOutputSelector
             CandidateEdgeCount = candidateEdges?.CandidateEdgeCount ?? 0,
             StrokeCommandCount = strokeCommands?.CommandCount ?? 0,
             VisibleStrokeSegmentCount = visibleStrokeSegments?.SegmentCount ?? 0,
+            InteractiveStrokeFramePathCount = interactiveStrokeFrame?.PathCount ?? 0,
+            InteractiveStrokeFrameSegmentCount = interactiveStrokeFrame?.FrameSegmentCount ?? 0,
             ToneRegionCount = toneCoverage?.RegionCount ?? 0,
             Reason = BuildReason(kind)
         };
@@ -81,11 +89,17 @@ public static class InteractiveOutputSelector
         CandidateEdgeArtifact? candidateEdges,
         StrokeCommandArtifact? strokeCommands,
         VisibleStrokeSegmentArtifact? visibleStrokeSegments,
+        InteractiveStrokeFrameArtifact? interactiveStrokeFrame,
         ToneCoverageArtifact? toneCoverage)
     {
-        if ((visibleStrokeSegments?.SegmentCount ?? 0) > 0 && (toneCoverage?.RegionCount ?? 0) > 0)
+        if (interactiveStrokeFrame?.HasRenderableFrame == true && (toneCoverage?.RegionCount ?? 0) > 0)
         {
             return InteractiveOutputKind.InteractivePreviewCandidate;
+        }
+
+        if (interactiveStrokeFrame?.HasRenderableFrame == true)
+        {
+            return InteractiveOutputKind.InteractiveStrokeFrame;
         }
 
         if ((visibleStrokeSegments?.SegmentCount ?? 0) > 0)
@@ -125,8 +139,9 @@ public static class InteractiveOutputSelector
     {
         return kind switch
         {
-            InteractiveOutputKind.InteractivePreviewCandidate => "Interactive visible stroke and tone artifacts are available for a future viewport preview output.",
-            InteractiveOutputKind.VisibleStrokeSegments => "Interactive visible stroke segments are available, but tone coverage is missing or empty.",
+            InteractiveOutputKind.InteractivePreviewCandidate => "Interactive stroke frame and tone coverage are available for viewport preview output.",
+            InteractiveOutputKind.InteractiveStrokeFrame => "Interactive stroke frame is available; tone coverage is missing or empty.",
+            InteractiveOutputKind.VisibleStrokeSegments => "Interactive visible stroke segments are available, but stroke frame assembly has not produced output.",
             InteractiveOutputKind.ToneCoverage => "Interactive tone coverage is available, but visible stroke segments are missing or empty.",
             InteractiveOutputKind.StrokeCommands => "Interactive stroke commands are available, but visible segment clipping has not produced output.",
             InteractiveOutputKind.CandidateEdges => "Interactive candidate edges are available, but stroke command planning has not produced output.",

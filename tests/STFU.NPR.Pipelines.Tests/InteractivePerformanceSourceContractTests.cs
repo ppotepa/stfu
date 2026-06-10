@@ -88,7 +88,7 @@ public sealed class InteractivePerformanceSourceContractTests
         Assert.True(File.Exists(path), $"Missing file: {path}");
 
         var text = File.ReadAllText(path);
-        var fallbackIndex = text.IndexOf("var frame = _referenceFallback.Execute(context);", StringComparison.Ordinal);
+        var fallbackIndex = text.IndexOf("_referenceFallback.Execute(context)", StringComparison.Ordinal);
         var orchestratorIndex = text.IndexOf("var result = _orchestrator.Execute(intent, context);", StringComparison.Ordinal);
 
         Assert.True(fallbackIndex >= 0, "Reference fallback execution was not found.");
@@ -286,22 +286,30 @@ public sealed class InteractivePerformanceSourceContractTests
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/ProjectionStage.cs",
             "ArtifactKeyFactory.ProjectedVertices",
             "ArtifactKeyFactory.ProjectedTriangles",
-            "ProjectionArtifactBuilder.BuildVertices",
-            "ProjectionArtifactBuilder.BuildTriangles");
+            "ProjectionArtifactBuilder.BuildAll");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/ProjectionArtifactBuilder.cs",
+            "EnableSelfContainedProjection",
+            "PreferSelfContainedProjection",
+            "InteractiveProjectionScratchBuilder.Build");
 
         AssertFileContains(
             repo,
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ProjectedVertexArtifact.cs",
             "InteractiveProjectedVertex",
             "VisibleVertexCount",
-            "VisibleVertexRatioPercent");
+            "VisibleVertexRatioPercent",
+            "InteractiveProjectionSource");
 
         AssertFileContains(
             repo,
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ProjectedTriangleArtifact.cs",
             "InteractiveProjectedTriangle",
             "FrontFacingTriangleCount",
-            "VisibleTriangleCount");
+            "VisibleTriangleCount",
+            "InteractiveProjectionSource");
     }
 
     [Fact]
@@ -379,6 +387,123 @@ public sealed class InteractivePerformanceSourceContractTests
             "InteractivePerformance.outputKind",
             "InteractivePerformance.interactivePreviewCandidate",
             "InteractivePerformance.outputVisibleStrokeSegments");
+    }
+
+
+    [Fact]
+    public void Interactive_pipeline_builds_stroke_frame_from_visible_segments()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.Abstractions/FramePipelineStrategyOptions.cs",
+            "EnableInteractiveStrokeFrameStage { get; init; } = true",
+            "InteractivePreviewMaxStrokeSegments");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveFrameOrchestrator.cs",
+            "EnableInteractiveStrokeFrameStage",
+            "InteractiveStrokeFrameStage");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveStrokeFrameBuilder.cs",
+            "BuildFrame",
+            "StrokeSegmentPathList",
+            "InteractivePerformance",
+            "ResolveMaxSegments");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/InteractiveStrokeFrameArtifact.cs",
+            "StrokeFrame",
+            "HasRenderableFrame",
+            "StrokeFrameCoveragePercent");
+    }
+
+    [Fact]
+    public void Interactive_pipeline_can_optionally_return_interactive_preview_frame()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs",
+            "InteractivePreviewPolicy.TrySelectInteractiveFrame",
+            "ReturnedInteractiveFrame",
+            "ReturnedReferenceFallback",
+            "UseReferenceFallbackForFinalFrame");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
+            "EnableInteractivePreviewOutput",
+            "RequireToneCoverageForInteractivePreview",
+            "UseReferenceFallbackForFinalFrame");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputSelector.cs",
+            "InteractiveStrokeFrame",
+            "InteractivePreviewCandidate",
+            "HasRenderableFrame");
+    }
+
+    [Fact]
+    public void Viewport_summary_reports_interactive_frame_and_output_source()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.UI/Viewport/ViewportRenderBridge.cs",
+            "InteractivePerformance.interactiveStrokeFrameSegments",
+            "Output interactive",
+            "Output reference",
+            "Frame {interactiveStrokeFramePaths");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.interactiveStrokeFramePaths",
+            "InteractivePerformance.returnedInteractiveFrame",
+            "InteractivePerformance.returnedReferenceFallback");
+    }
+
+
+    [Fact]
+    public void Interactive_projection_and_visibility_can_run_from_self_contained_artifacts()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.Abstractions/FramePipelineStrategyOptions.cs",
+            "EnableSelfContainedProjection",
+            "PreferSelfContainedProjection",
+            "EnableProjectedTriangleVisibility");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionScratchBuilder.cs",
+            "ProjectMeshStep",
+            "BuildProjectedTrianglesStep",
+            "ScratchProjection");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Providers/ProjectedTriangleVisibilityProvider.cs",
+            "BuildVisibleFaces",
+            "ProjectedTriangles",
+            "InteractiveVisibilitySource.ProjectedTriangles");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.projectionBuiltSelfContained",
+            "InteractivePerformance.visibilityUsedProjectedTriangles");
     }
 
     private static string FindRepositoryRoot()

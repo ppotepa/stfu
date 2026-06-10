@@ -41,11 +41,19 @@ public sealed class InteractiveFrameDiagnostics
 
     public int CacheHits { get; set; }
     public int CacheMisses { get; set; }
+    public long ProjectionSource { get; set; }
+    public bool ProjectionBuiltSelfContained { get; set; }
+    public int ProjectionSourceEntities { get; set; }
+    public int ProjectionMeshes { get; set; }
     public int ProjectedVertices { get; set; }
     public int ProjectedTriangles { get; set; }
     public int VisibleProjectedVertices { get; set; }
     public int VisibleProjectedTriangles { get; set; }
     public int FrontFacingProjectedTriangles { get; set; }
+    public long VisibilitySource { get; set; }
+    public string VisibilityProviderName { get; set; } = string.Empty;
+    public int VisibilitySourceProjectedTriangles { get; set; }
+    public bool VisibilityUsedProjectedTriangles => VisibilitySource == (long)InteractiveVisibilitySource.ProjectedTriangles;
     public int TotalFaces { get; set; }
     public int VisibleFaces { get; set; }
     public double VisibleFaceRatioPercent { get; set; }
@@ -55,6 +63,10 @@ public sealed class InteractiveFrameDiagnostics
     public int VisibleSegments { get; set; }
     public int VisibleSegmentSourceCommands { get; set; }
     public double VisibleSegmentCoveragePercent { get; set; }
+    public int InteractiveStrokeFrameSourceSegments { get; set; }
+    public int InteractiveStrokeFramePaths { get; set; }
+    public int InteractiveStrokeFrameSegments { get; set; }
+    public double InteractiveStrokeFrameCoveragePercent { get; set; }
     public int TotalStrokeCandidates { get; set; }
     public int StrokeCommands { get; set; }
     public double StrokeCommandReductionPercent { get; set; }
@@ -72,8 +84,14 @@ public sealed class InteractiveFrameDiagnostics
     public int OutputCandidateEdges { get; set; }
     public int OutputStrokeCommands { get; set; }
     public int OutputVisibleStrokeSegments { get; set; }
+    public int OutputInteractiveStrokeFramePaths { get; set; }
+    public int OutputInteractiveStrokeFrameSegments { get; set; }
     public int OutputToneRegions { get; set; }
     public string OutputReason { get; set; } = string.Empty;
+
+    public bool ReturnedInteractiveFrame { get; set; }
+    public bool ReturnedReferenceFallback { get; set; }
+    public string FinalOutputReason { get; set; } = string.Empty;
 
     public bool UsedReferenceFallback { get; set; }
     public string FallbackReason { get; set; } = string.Empty;
@@ -114,6 +132,8 @@ public sealed class InteractiveFrameDiagnostics
         OutputCandidateEdges = output.CandidateEdgeCount;
         OutputStrokeCommands = output.StrokeCommandCount;
         OutputVisibleStrokeSegments = output.VisibleStrokeSegmentCount;
+        OutputInteractiveStrokeFramePaths = output.InteractiveStrokeFramePathCount;
+        OutputInteractiveStrokeFrameSegments = output.InteractiveStrokeFrameSegmentCount;
         OutputToneRegions = output.ToneRegionCount;
         OutputReason = output.Reason;
     }
@@ -143,6 +163,9 @@ public sealed class InteractiveFrameDiagnostics
                 StrokePlanMs = ms;
                 break;
             case "InteractiveVisibleStrokeSegments":
+                StrokePlanMs += ms;
+                break;
+            case "InteractiveStrokeFrame":
                 StrokePlanMs += ms;
                 break;
             case "InteractiveTonePlanning":

@@ -20,6 +20,8 @@ public sealed class InteractiveOutputSummary
 
     public bool HasVisibleStrokeSegments { get; init; }
 
+    public bool HasInteractiveStrokeFrame { get; init; }
+
     public bool HasToneCoverage { get; init; }
 
     public int ProjectedVertexCount { get; init; }
@@ -34,11 +36,17 @@ public sealed class InteractiveOutputSummary
 
     public int VisibleStrokeSegmentCount { get; init; }
 
+    public int InteractiveStrokeFramePathCount { get; init; }
+
+    public int InteractiveStrokeFrameSegmentCount { get; init; }
+
     public int ToneRegionCount { get; init; }
 
     public string Reason { get; init; } = string.Empty;
 
-    public bool IsInteractivePreviewCandidate => Kind == InteractiveOutputKind.InteractivePreviewCandidate;
+    public bool IsInteractivePreviewCandidate => Kind is
+        InteractiveOutputKind.InteractivePreviewCandidate or
+        InteractiveOutputKind.InteractiveStrokeFrame;
 
-    public bool HasRenderableStrokeData => HasVisibleStrokeSegments || HasStrokeCommands;
+    public bool HasRenderableStrokeData => HasInteractiveStrokeFrame || HasVisibleStrokeSegments || HasStrokeCommands;
 }

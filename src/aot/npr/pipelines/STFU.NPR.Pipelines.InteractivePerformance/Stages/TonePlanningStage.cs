@@ -19,7 +19,8 @@ public sealed class TonePlanningStage : IInteractivePipelineStage
     {
         var visibleFaces = LoadVisibleFaceSet(context);
         var sourceVisibleFaceCount = ResolveSourceVisibleFaceCount(context, visibleFaces);
-        var key = ArtifactKeyFactory.ToneCoverage(context.Intent, context.ReferenceContext.Graph.Triangles.Count, sourceVisibleFaceCount);
+        var totalFaceCount = visibleFaces?.FaceCount ?? context.ReferenceContext.Graph.Triangles.Count;
+        var key = ArtifactKeyFactory.ToneCoverage(context.Intent, totalFaceCount, sourceVisibleFaceCount);
 
         if (context.Artifacts.TryGet<ToneCoverageArtifact>(key, out var cached))
         {
@@ -37,9 +38,7 @@ public sealed class TonePlanningStage : IInteractivePipelineStage
 
     private static VisibleFaceSetArtifact? LoadVisibleFaceSet(InteractiveFrameContext context)
     {
-        var key = ArtifactKeyFactory.VisibleFaces(context.Intent, context.ReferenceContext.Graph.Triangles.Count);
-
-        return context.Artifacts.TryGet<VisibleFaceSetArtifact>(key, out var visibleFaces)
+        return context.Artifacts.TryGetLatest(ArtifactKind.VisibleFaces, out VisibleFaceSetArtifact visibleFaces)
             ? visibleFaces
             : null;
     }

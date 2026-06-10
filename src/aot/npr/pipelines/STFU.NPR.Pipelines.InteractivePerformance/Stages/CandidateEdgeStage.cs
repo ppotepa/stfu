@@ -52,9 +52,7 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
 
     private static HashSet<int>? LoadVisibleFaceSet(InteractiveFrameContext context)
     {
-        var key = ArtifactKeyFactory.VisibleFaces(context.Intent, context.ReferenceContext.Graph.Triangles.Count);
-
-        return context.Artifacts.TryGet<VisibleFaceSetArtifact>(key, out var visibleFaces)
+        return context.Artifacts.TryGetLatest(ArtifactKind.VisibleFaces, out VisibleFaceSetArtifact visibleFaces)
             ? visibleFaces.VisibleFaceIndices.ToHashSet()
             : null;
     }

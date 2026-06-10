@@ -22,7 +22,10 @@ public sealed class CpuApproxVisibilityProvider : IInteractiveVisibilityProvider
             FaceCount = faceCount,
             VisibleFaceCount = visibleFaces.Length,
             VisibleFaceIndices = visibleFaces,
-            ProviderName = Name
+            Source = InteractiveVisibilitySource.ApproximateAllFaces,
+            SourceProjectedTriangleCount = 0,
+            ProviderName = Name,
+            Note = "Approximate fallback visibility provider treated all faces as visible."
         };
     }
 }

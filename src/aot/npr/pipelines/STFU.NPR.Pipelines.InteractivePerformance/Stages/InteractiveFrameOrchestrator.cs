@@ -29,12 +29,12 @@ public sealed class InteractiveFrameOrchestrator
 
         if (_options.EnableProjectionStage)
         {
-            stages.Add(new ProjectionStage());
+            stages.Add(new ProjectionStage(_options));
         }
 
         if (_options.EnableVisibilityStage)
         {
-            stages.Add(new VisibilityStage());
+            stages.Add(new VisibilityStage(_options));
         }
 
         if (_options.EnableCandidateEdgeStage)
@@ -50,6 +50,11 @@ public sealed class InteractiveFrameOrchestrator
         if (_options.EnableVisibleStrokeSegmentStage)
         {
             stages.Add(new VisibleStrokeSegmentStage());
+        }
+
+        if (_options.EnableInteractiveStrokeFrameStage)
+        {
+            stages.Add(new InteractiveStrokeFrameStage());
         }
 
         if (_options.EnableTonePlanningStage)

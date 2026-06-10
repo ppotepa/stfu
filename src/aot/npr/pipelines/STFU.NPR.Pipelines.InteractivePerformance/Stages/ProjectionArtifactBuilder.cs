@@ -1,18 +1,96 @@
 using STFU.NPR.Graph;
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
+using STFU.NPR.Pipelines.Abstractions;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Stages;
 
 public static class ProjectionArtifactBuilder
 {
+    public static InteractiveProjectionArtifactSet BuildAll(
+        InteractiveFrameContext context,
+        ArtifactKey summaryKey,
+        ArtifactKey verticesKey,
+        ArtifactKey trianglesKey,
+        FramePipelineStrategyOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        options ??= FramePipelineStrategyOptions.Default;
+
+        var snapshot = ResolveProjectionSnapshot(context, options);
+        var vertices = BuildVerticesFromSnapshot(context, verticesKey, snapshot);
+        var triangles = BuildTrianglesFromSnapshot(context, trianglesKey, snapshot);
+        var summary = BuildSummary(context, summaryKey, snapshot, vertices, triangles);
+        return new InteractiveProjectionArtifactSet(summary, vertices, triangles);
+    }
+
     public static ProjectedVertexArtifact BuildVertices(
         InteractiveFrameContext context,
         ArtifactKey key)
     {
-        ArgumentNullException.ThrowIfNull(context);
+        return BuildAll(
+            context,
+            ArtifactKeyFactory.ProjectionSummary(context.Intent),
+            key,
+            ArtifactKeyFactory.ProjectedTriangles(context.Intent, context.ReferenceContext.Graph.Triangles.Count),
+            FramePipelineStrategyOptions.Default).Vertices;
+    }
 
-        var graphVertices = context.ReferenceContext.Graph.Vertices;
+    public static ProjectedTriangleArtifact BuildTriangles(
+        InteractiveFrameContext context,
+        ArtifactKey key)
+    {
+        return BuildAll(
+            context,
+            ArtifactKeyFactory.ProjectionSummary(context.Intent),
+            ArtifactKeyFactory.ProjectedVertices(context.Intent, context.ReferenceContext.Graph.Vertices.Count),
+            key,
+            FramePipelineStrategyOptions.Default).Triangles;
+    }
+
+    private static InteractiveProjectionSnapshot ResolveProjectionSnapshot(
+        InteractiveFrameContext context,
+        FramePipelineStrategyOptions options)
+    {
+        if (options.EnableSelfContainedProjection && options.PreferSelfContainedProjection)
+        {
+            var scratch = InteractiveProjectionScratchBuilder.Build(context);
+            if (scratch.ProjectedVertexCount > 0 || scratch.ProjectedTriangleCount > 0)
+            {
+                return scratch;
+            }
+        }
+
+        var reference = BuildReferenceGraphSnapshot(context);
+        if (reference.ProjectedVertexCount > 0 || reference.ProjectedTriangleCount > 0 || !options.EnableSelfContainedProjection)
+        {
+            return reference;
+        }
+
+        return InteractiveProjectionScratchBuilder.Build(context);
+    }
+
+    private static InteractiveProjectionSnapshot BuildReferenceGraphSnapshot(InteractiveFrameContext context)
+    {
+        var graph = context.ReferenceContext.Graph;
+        return new InteractiveProjectionSnapshot(
+            graph,
+            InteractiveProjectionSource.ReferenceGraph,
+            SourceEntityCount: context.ReferenceContext.Scene.Entities.Count,
+            ProjectedMeshCount: graph.Meshes.Count,
+            ProjectedVertexCount: graph.Vertices.Count,
+            ProjectedTriangleCount: graph.Triangles.Count,
+            Note: graph.Vertices.Count > 0 || graph.Triangles.Count > 0
+                ? "Projected geometry harvested from the populated Reference Quality graph."
+                : "Reference Quality graph did not contain projected geometry.");
+    }
+
+    private static ProjectedVertexArtifact BuildVerticesFromSnapshot(
+        InteractiveFrameContext context,
+        ArtifactKey key,
+        InteractiveProjectionSnapshot snapshot)
+    {
+        var graphVertices = snapshot.Graph.Vertices;
         if (graphVertices.Count == 0)
         {
             return new ProjectedVertexArtifact
@@ -22,7 +100,8 @@ public static class ProjectionArtifactBuilder
                 LastBuildTime = TimeSpan.Zero,
                 VisibleVertexCount = 0,
                 Vertices = [],
-                Note = "Reference graph did not contain projected vertices."
+                Source = snapshot.Source,
+                Note = snapshot.Note
             };
         }
 
@@ -46,17 +125,17 @@ public static class ProjectionArtifactBuilder
             LastBuildTime = TimeSpan.Zero,
             VisibleVertexCount = visibleCount,
             Vertices = vertices,
-            Note = "Projected vertices harvested from the Reference Quality graph."
+            Source = snapshot.Source,
+            Note = snapshot.Note
         };
     }
 
-    public static ProjectedTriangleArtifact BuildTriangles(
+    private static ProjectedTriangleArtifact BuildTrianglesFromSnapshot(
         InteractiveFrameContext context,
-        ArtifactKey key)
+        ArtifactKey key,
+        InteractiveProjectionSnapshot snapshot)
     {
-        ArgumentNullException.ThrowIfNull(context);
-
-        var graphTriangles = context.ReferenceContext.Graph.Triangles;
+        var graphTriangles = snapshot.Graph.Triangles;
         if (graphTriangles.Count == 0)
         {
             return new ProjectedTriangleArtifact
@@ -67,7 +146,8 @@ public static class ProjectionArtifactBuilder
                 FrontFacingTriangleCount = 0,
                 VisibleTriangleCount = 0,
                 Triangles = [],
-                Note = "Reference graph did not contain projected triangles."
+                Source = snapshot.Source,
+                Note = snapshot.Note
             };
         }
 
@@ -98,7 +178,35 @@ public static class ProjectionArtifactBuilder
             FrontFacingTriangleCount = frontFacingCount,
             VisibleTriangleCount = visibleCount,
             Triangles = triangles,
-            Note = "Projected triangles harvested from the Reference Quality graph."
+            Source = snapshot.Source,
+            Note = snapshot.Note
+        };
+    }
+
+    private static ProjectionSummaryArtifact BuildSummary(
+        InteractiveFrameContext context,
+        ArtifactKey key,
+        InteractiveProjectionSnapshot snapshot,
+        ProjectedVertexArtifact vertices,
+        ProjectedTriangleArtifact triangles)
+    {
+        var fullProjectionAvailable = vertices.VertexCount > 0 || triangles.TriangleCount > 0;
+        return new ProjectionSummaryArtifact
+        {
+            Key = key,
+            Revision = context.Intent.FrameId,
+            Width = context.Intent.Width,
+            Height = context.Intent.Height,
+            FullProjectionAvailable = fullProjectionAvailable,
+            LastBuildTime = TimeSpan.Zero,
+            Source = snapshot.Source,
+            SourceEntityCount = snapshot.SourceEntityCount,
+            ProjectedMeshCount = snapshot.ProjectedMeshCount,
+            ProjectedVertexCount = vertices.VertexCount,
+            ProjectedTriangleCount = triangles.TriangleCount,
+            Note = fullProjectionAvailable
+                ? snapshot.Note
+                : "Interactive projection artifacts are empty because no projectable geometry was found."
         };
     }
 

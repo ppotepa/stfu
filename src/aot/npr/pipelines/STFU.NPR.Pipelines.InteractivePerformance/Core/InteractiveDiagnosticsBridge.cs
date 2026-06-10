@@ -26,12 +26,19 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.viewportHash", ToCounterValue(diagnostics.ViewportHash));
         context.Counters.Set("InteractivePerformance.artifactStoreItems", diagnostics.ArtifactStoreItemCount);
         context.Counters.Set("InteractivePerformance.frameOrCameraArtifacts", diagnostics.FrameOrCameraArtifactCount);
+        context.Counters.Set("InteractivePerformance.projectionSource", diagnostics.ProjectionSource);
+        context.Counters.Set("InteractivePerformance.projectionBuiltSelfContained", diagnostics.ProjectionBuiltSelfContained ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.projectionSourceEntities", diagnostics.ProjectionSourceEntities);
+        context.Counters.Set("InteractivePerformance.projectionMeshes", diagnostics.ProjectionMeshes);
         context.Counters.Set("InteractivePerformance.projectedVertices", diagnostics.ProjectedVertices);
         context.Counters.Set("InteractivePerformance.projectedTriangles", diagnostics.ProjectedTriangles);
         context.Counters.Set("InteractivePerformance.visibleProjectedVertices", diagnostics.VisibleProjectedVertices);
         context.Counters.Set("InteractivePerformance.visibleProjectedTriangles", diagnostics.VisibleProjectedTriangles);
         context.Counters.Set("InteractivePerformance.frontFacingProjectedTriangles", diagnostics.FrontFacingProjectedTriangles);
 
+        context.Counters.Set("InteractivePerformance.visibilitySource", diagnostics.VisibilitySource);
+        context.Counters.Set("InteractivePerformance.visibilityUsedProjectedTriangles", diagnostics.VisibilityUsedProjectedTriangles ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.visibilitySourceProjectedTriangles", diagnostics.VisibilitySourceProjectedTriangles);
         context.Counters.Set("InteractivePerformance.totalFaces", diagnostics.TotalFaces);
         context.Counters.Set("InteractivePerformance.visibleFaces", diagnostics.VisibleFaces);
         context.Counters.Set("InteractivePerformance.visibleFaceRatioPercent", (long)Math.Round(diagnostics.VisibleFaceRatioPercent));
@@ -44,6 +51,10 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.visibleSegments", diagnostics.VisibleSegments);
         context.Counters.Set("InteractivePerformance.visibleSegmentSourceCommands", diagnostics.VisibleSegmentSourceCommands);
         context.Counters.Set("InteractivePerformance.visibleSegmentCoveragePercent", (long)Math.Round(diagnostics.VisibleSegmentCoveragePercent));
+        context.Counters.Set("InteractivePerformance.interactiveStrokeFrameSourceSegments", diagnostics.InteractiveStrokeFrameSourceSegments);
+        context.Counters.Set("InteractivePerformance.interactiveStrokeFramePaths", diagnostics.InteractiveStrokeFramePaths);
+        context.Counters.Set("InteractivePerformance.interactiveStrokeFrameSegments", diagnostics.InteractiveStrokeFrameSegments);
+        context.Counters.Set("InteractivePerformance.interactiveStrokeFrameCoveragePercent", (long)Math.Round(diagnostics.InteractiveStrokeFrameCoveragePercent));
         context.Counters.Set("InteractivePerformance.toneSourceFaces", diagnostics.ToneSourceFaces);
         context.Counters.Set("InteractivePerformance.toneRegions", diagnostics.ToneRegions);
         context.Counters.Set("InteractivePerformance.toneCoverageRatioPercent", (long)Math.Round(diagnostics.ToneCoverageRatioPercent));
@@ -58,7 +69,11 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.outputCandidateEdges", diagnostics.OutputCandidateEdges);
         context.Counters.Set("InteractivePerformance.outputStrokeCommands", diagnostics.OutputStrokeCommands);
         context.Counters.Set("InteractivePerformance.outputVisibleStrokeSegments", diagnostics.OutputVisibleStrokeSegments);
+        context.Counters.Set("InteractivePerformance.outputInteractiveStrokeFramePaths", diagnostics.OutputInteractiveStrokeFramePaths);
+        context.Counters.Set("InteractivePerformance.outputInteractiveStrokeFrameSegments", diagnostics.OutputInteractiveStrokeFrameSegments);
         context.Counters.Set("InteractivePerformance.outputToneRegions", diagnostics.OutputToneRegions);
+        context.Counters.Set("InteractivePerformance.returnedInteractiveFrame", diagnostics.ReturnedInteractiveFrame ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.returnedReferenceFallback", diagnostics.ReturnedReferenceFallback ? 1 : 0);
         context.Counters.Set("InteractivePerformance.cacheHits", diagnostics.CacheHits);
         context.Counters.Set("InteractivePerformance.cacheMisses", diagnostics.CacheMisses);
         context.Counters.Set("InteractivePerformance.usedReferenceFallback", diagnostics.UsedReferenceFallback ? 1 : 0);
@@ -79,12 +94,20 @@ public static class InteractiveDiagnosticsBridge
             : graph.TopologyEdges.Count;
         var candidateEdges = CountCandidateEdgesForVisibleFaces(graph.DefaultFragments, graph.DefaultFaceIdVisibility?.FaceVisible);
 
-        diagnostics.TotalFaces = totalFaces;
-        diagnostics.VisibleFaces = visibleFaces;
-        diagnostics.VisibleFaceRatioPercent = totalFaces <= 0 ? 0d : visibleFaces * 100d / totalFaces;
-        diagnostics.TotalEdges = totalEdges;
-        diagnostics.CandidateEdges = candidateEdges;
-        diagnostics.CandidateReductionPercent = totalEdges <= 0 ? 0d : (totalEdges - candidateEdges) * 100d / totalEdges;
+        if (diagnostics.VisibilitySource == (long)InteractiveVisibilitySource.None)
+        {
+            diagnostics.TotalFaces = totalFaces;
+            diagnostics.VisibleFaces = visibleFaces;
+            diagnostics.VisibleFaceRatioPercent = totalFaces <= 0 ? 0d : visibleFaces * 100d / totalFaces;
+            diagnostics.VisibilitySource = (long)InteractiveVisibilitySource.ReferenceFaceIdBuffer;
+        }
+
+        if (diagnostics.TotalEdges <= 0 && diagnostics.CandidateEdges <= 0)
+        {
+            diagnostics.TotalEdges = totalEdges;
+            diagnostics.CandidateEdges = candidateEdges;
+            diagnostics.CandidateReductionPercent = totalEdges <= 0 ? 0d : (totalEdges - candidateEdges) * 100d / totalEdges;
+        }
     }
 
     private static int CountVisibleFaces(bool[]? faceVisible, int totalFaces)

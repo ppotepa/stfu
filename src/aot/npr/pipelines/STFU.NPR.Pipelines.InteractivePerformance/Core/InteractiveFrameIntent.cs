@@ -16,4 +16,7 @@ public sealed record InteractiveFrameIntent(
     bool StyleChanged,
     bool ViewportSizeChanged,
     bool DebugOverlayChanged,
-    InteractiveFrameSignature Signature = default);
+    InteractiveFrameSignature Signature = default)
+{
+    public FramePipelineStrategyOptions Options { get; init; } = FramePipelineStrategyOptions.Default;
+}

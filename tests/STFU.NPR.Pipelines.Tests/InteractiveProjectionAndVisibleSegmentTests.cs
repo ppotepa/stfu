@@ -1,6 +1,7 @@
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
 using STFU.NPR.Pipeline.InteractivePerformance.Scheduling;
+using STFU.NPR.Pipeline.InteractivePerformance.Providers;
 using STFU.NPR.Pipeline.InteractivePerformance.Stages;
 using Xunit;
 
@@ -196,6 +197,54 @@ public sealed class InteractiveProjectionAndVisibleSegmentTests
 
         Assert.Equal(2, artifact.SegmentCount);
         Assert.Equal(50d, artifact.SegmentCoveragePercent);
+    }
+
+
+    [Fact]
+    public void Projected_triangle_visibility_provider_derives_visible_faces_from_projected_triangles()
+    {
+        var triangles = new[]
+        {
+            CreateTriangle(0, frontFacing: true, visible: true),
+            CreateTriangle(1, frontFacing: false, visible: true),
+            CreateTriangle(2, frontFacing: true, visible: false),
+            CreateTriangle(3, frontFacing: true, visible: true)
+        };
+
+        var strictVisible = ProjectedTriangleVisibilityProvider.BuildVisibleFaces(triangles, requireFrontFacing: true);
+        var permissiveVisible = ProjectedTriangleVisibilityProvider.BuildVisibleFaces(triangles, requireFrontFacing: false);
+
+        Assert.Equal([0, 3], strictVisible);
+        Assert.Equal([0, 1, 3], permissiveVisible);
+    }
+
+    [Fact]
+    public void Projected_artifacts_track_source_kind()
+    {
+        var vertexArtifact = new ProjectedVertexArtifact
+        {
+            Key = CreateKey(ArtifactKind.ProjectedVertices),
+            Revision = 1,
+            VisibleVertexCount = 0,
+            Source = InteractiveProjectionSource.ScratchProjection,
+            Vertices = []
+        };
+        var faceArtifact = new VisibleFaceSetArtifact
+        {
+            Key = CreateKey(ArtifactKind.VisibleFaces),
+            Revision = 1,
+            FaceCount = 4,
+            VisibleFaceCount = 2,
+            VisibleFaceIndices = [0, 3],
+            Source = InteractiveVisibilitySource.ProjectedTriangles,
+            SourceProjectedTriangleCount = 4,
+            ProviderName = "ProjectedTriangleVisibility"
+        };
+
+        Assert.True(vertexArtifact.IsSelfContained);
+        Assert.Equal(InteractiveProjectionSource.ScratchProjection, vertexArtifact.Source);
+        Assert.Equal(InteractiveVisibilitySource.ProjectedTriangles, faceArtifact.Source);
+        Assert.Equal(50d, faceArtifact.VisibleFaceRatioPercent);
     }
 
     private static InteractiveProjectedTriangle CreateTriangle(int sourceIndex, bool frontFacing, bool visible)
