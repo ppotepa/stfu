@@ -8,14 +8,14 @@ public static class InteractiveOutputSelector
     {
         ArgumentNullException.ThrowIfNull(artifacts);
 
-        artifacts.TryGetLatest(ArtifactKind.ProjectedVertices, out ProjectedVertexArtifact? projectedVertices);
-        artifacts.TryGetLatest(ArtifactKind.ProjectedTriangles, out ProjectedTriangleArtifact? projectedTriangles);
-        artifacts.TryGetLatest(ArtifactKind.VisibleFaces, out VisibleFaceSetArtifact? visibleFaces);
-        artifacts.TryGetLatest(ArtifactKind.CandidateEdges, out CandidateEdgeArtifact? candidateEdges);
-        artifacts.TryGetLatest(ArtifactKind.StrokeCommands, out StrokeCommandArtifact? strokeCommands);
-        artifacts.TryGetLatest(ArtifactKind.VisibleStrokeSegments, out VisibleStrokeSegmentArtifact? visibleStrokeSegments);
-        artifacts.TryGetLatest(ArtifactKind.InteractiveStrokeFrame, out InteractiveStrokeFrameArtifact? interactiveStrokeFrame);
-        artifacts.TryGetLatest(ArtifactKind.ToneCoverage, out ToneCoverageArtifact? toneCoverage);
+        var projectedVertices = TryGetLatest<ProjectedVertexArtifact>(artifacts, ArtifactKind.ProjectedVertices);
+        var projectedTriangles = TryGetLatest<ProjectedTriangleArtifact>(artifacts, ArtifactKind.ProjectedTriangles);
+        var visibleFaces = TryGetLatest<VisibleFaceSetArtifact>(artifacts, ArtifactKind.VisibleFaces);
+        var candidateEdges = TryGetLatest<CandidateEdgeArtifact>(artifacts, ArtifactKind.CandidateEdges);
+        var strokeCommands = TryGetLatest<StrokeCommandArtifact>(artifacts, ArtifactKind.StrokeCommands);
+        var visibleStrokeSegments = TryGetLatest<VisibleStrokeSegmentArtifact>(artifacts, ArtifactKind.VisibleStrokeSegments);
+        var interactiveStrokeFrame = TryGetLatest<InteractiveStrokeFrameArtifact>(artifacts, ArtifactKind.InteractiveStrokeFrame);
+        var toneCoverage = TryGetLatest<ToneCoverageArtifact>(artifacts, ArtifactKind.ToneCoverage);
 
         var summary = BuildSummary(
             projectedVertices,
@@ -39,6 +39,14 @@ public static class InteractiveOutputSelector
             InteractiveStrokeFrame = interactiveStrokeFrame,
             ToneCoverage = toneCoverage
         };
+    }
+
+    private static T? TryGetLatest<T>(ArtifactStore artifacts, ArtifactKind kind)
+        where T : class, IInteractiveArtifact
+    {
+        return artifacts.TryGetLatest(kind, out T artifact)
+            ? artifact
+            : null;
     }
 
     private static InteractiveOutputSummary BuildSummary(

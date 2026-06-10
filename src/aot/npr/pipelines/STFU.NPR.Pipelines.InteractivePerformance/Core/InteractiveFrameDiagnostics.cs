@@ -62,6 +62,10 @@ public sealed class InteractiveFrameDiagnostics
     public int TotalEdges { get; set; }
     public int CandidateEdges { get; set; }
     public double CandidateReductionPercent { get; set; }
+    public long CandidateEdgeSource { get; set; }
+    public int CandidateEdgeSourceReferenceFragments { get; set; }
+    public int CandidateEdgeSourceProjectedTriangles { get; set; }
+    public bool CandidateEdgesBuiltFromProjectedTriangles => CandidateEdgeSource == (long)InteractiveCandidateEdgeSource.ProjectedTriangleEdges;
     public int VisibleSegments { get; set; }
     public int VisibleSegmentSourceCommands { get; set; }
     public double VisibleSegmentCoveragePercent { get; set; }

@@ -17,37 +17,61 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
 
     public void Execute(InteractiveFrameContext context)
     {
-        var graph = context.ReferenceContext.Graph;
-        var totalEdges = graph.DefaultFragments.Count > 0
-            ? graph.DefaultFragments.Count
-            : graph.TopologyEdges.Count;
-        var key = ArtifactKeyFactory.CandidateEdges(context.Intent, totalEdges);
+        var visibleFaces = LoadVisibleFaceSet(context);
+        var source = ResolveSource(context);
+        var key = ArtifactKeyFactory.CandidateEdges(context.Intent, source.TotalEdgeCount);
 
         if (context.Artifacts.TryGet<CandidateEdgeArtifact>(key, out var cached))
         {
             context.Diagnostics.CacheHits++;
-            context.Diagnostics.TotalEdges = cached.TotalEdgeCount;
-            context.Diagnostics.CandidateEdges = cached.CandidateEdgeCount;
-            context.Diagnostics.CandidateReductionPercent = cached.CandidateReductionPercent;
+            WriteDiagnostics(context, cached, source);
             return;
         }
 
-        var visibleFaces = LoadVisibleFaceSet(context);
-        var edges = BuildCandidateEdges(context, visibleFaces);
+        var edges = BuildCandidateEdges(context, visibleFaces, source);
         var artifact = new CandidateEdgeArtifact
         {
             Key = key,
             Revision = context.Intent.FrameId,
             LastBuildTime = TimeSpan.Zero,
-            TotalEdgeCount = totalEdges,
+            TotalEdgeCount = Math.Max(source.TotalEdgeCount, edges.Length),
             Edges = edges
         };
 
         context.Artifacts.Set(artifact);
         context.Diagnostics.CacheMisses++;
-        context.Diagnostics.TotalEdges = artifact.TotalEdgeCount;
-        context.Diagnostics.CandidateEdges = artifact.CandidateEdgeCount;
-        context.Diagnostics.CandidateReductionPercent = artifact.CandidateReductionPercent;
+        WriteDiagnostics(context, artifact, source);
+    }
+
+    private static CandidateEdgeSourceInfo ResolveSource(InteractiveFrameContext context)
+    {
+        var graph = context.ReferenceContext.Graph;
+        if (graph.DefaultFragments.Count > 0)
+        {
+            return new CandidateEdgeSourceInfo(
+                InteractiveCandidateEdgeSource.ReferenceFragments,
+                graph.DefaultFragments.Count,
+                ReferenceFragmentCount: graph.DefaultFragments.Count,
+                ProjectedTriangleCount: 0);
+        }
+
+        if (context.Artifacts.TryGetLatest(ArtifactKind.ProjectedTriangles, out ProjectedTriangleArtifact projectedTriangles) &&
+            context.Artifacts.TryGetLatest(ArtifactKind.ProjectedVertices, out ProjectedVertexArtifact projectedVertices) &&
+            projectedTriangles.TriangleCount > 0 &&
+            projectedVertices.VertexCount > 0)
+        {
+            return new CandidateEdgeSourceInfo(
+                InteractiveCandidateEdgeSource.ProjectedTriangleEdges,
+                ProjectedTriangleCandidateEdgeBuilder.EstimateTotalEdgeCount(projectedTriangles),
+                ReferenceFragmentCount: 0,
+                ProjectedTriangleCount: projectedTriangles.TriangleCount);
+        }
+
+        return new CandidateEdgeSourceInfo(
+            InteractiveCandidateEdgeSource.None,
+            graph.TopologyEdges.Count,
+            ReferenceFragmentCount: 0,
+            ProjectedTriangleCount: 0);
     }
 
     private static HashSet<int>? LoadVisibleFaceSet(InteractiveFrameContext context)
@@ -58,6 +82,19 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
     }
 
     private static InteractiveCandidateEdge[] BuildCandidateEdges(
+        InteractiveFrameContext context,
+        IReadOnlySet<int>? visibleFaces,
+        CandidateEdgeSourceInfo source)
+    {
+        return source.Source switch
+        {
+            InteractiveCandidateEdgeSource.ReferenceFragments => BuildFromReferenceFragments(context, visibleFaces),
+            InteractiveCandidateEdgeSource.ProjectedTriangleEdges => BuildFromProjectedTriangles(context, visibleFaces),
+            _ => []
+        };
+    }
+
+    private static InteractiveCandidateEdge[] BuildFromReferenceFragments(
         InteractiveFrameContext context,
         IReadOnlySet<int>? visibleFaces)
     {
@@ -95,10 +132,45 @@ public sealed class CandidateEdgeStage : IInteractivePipelineStage
         return candidates.ToArray();
     }
 
+    private static InteractiveCandidateEdge[] BuildFromProjectedTriangles(
+        InteractiveFrameContext context,
+        IReadOnlySet<int>? visibleFaces)
+    {
+        if (!context.Artifacts.TryGetLatest(ArtifactKind.ProjectedTriangles, out ProjectedTriangleArtifact projectedTriangles) ||
+            !context.Artifacts.TryGetLatest(ArtifactKind.ProjectedVertices, out ProjectedVertexArtifact projectedVertices))
+        {
+            return [];
+        }
+
+        return ProjectedTriangleCandidateEdgeBuilder.BuildEdges(
+            projectedTriangles.Triangles,
+            projectedVertices.Vertices,
+            visibleFaces);
+    }
+
+    private static void WriteDiagnostics(
+        InteractiveFrameContext context,
+        CandidateEdgeArtifact artifact,
+        CandidateEdgeSourceInfo source)
+    {
+        context.Diagnostics.TotalEdges = artifact.TotalEdgeCount;
+        context.Diagnostics.CandidateEdges = artifact.CandidateEdgeCount;
+        context.Diagnostics.CandidateReductionPercent = artifact.CandidateReductionPercent;
+        context.Diagnostics.CandidateEdgeSource = (long)source.Source;
+        context.Diagnostics.CandidateEdgeSourceReferenceFragments = source.ReferenceFragmentCount;
+        context.Diagnostics.CandidateEdgeSourceProjectedTriangles = source.ProjectedTriangleCount;
+    }
+
     private static float Distance(float x0, float y0, float x1, float y1)
     {
         var dx = x1 - x0;
         var dy = y1 - y0;
         return MathF.Sqrt(dx * dx + dy * dy);
     }
+
+    private readonly record struct CandidateEdgeSourceInfo(
+        InteractiveCandidateEdgeSource Source,
+        int TotalEdgeCount,
+        int ReferenceFragmentCount,
+        int ProjectedTriangleCount);
 }

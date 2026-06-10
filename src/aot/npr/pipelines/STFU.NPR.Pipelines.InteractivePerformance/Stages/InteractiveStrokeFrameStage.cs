@@ -14,7 +14,7 @@ public sealed class InteractiveStrokeFrameStage : IInteractivePipelineStage
 
         return context.Artifacts.TryGetLatest(
             ArtifactKind.VisibleStrokeSegments,
-            out VisibleStrokeSegmentArtifact? visibleSegments) &&
+            out VisibleStrokeSegmentArtifact visibleSegments) &&
             visibleSegments.SegmentCount > 0;
     }
 
@@ -24,7 +24,7 @@ public sealed class InteractiveStrokeFrameStage : IInteractivePipelineStage
 
         if (!context.Artifacts.TryGetLatest(
                 ArtifactKind.VisibleStrokeSegments,
-                out VisibleStrokeSegmentArtifact? visibleSegments))
+                out VisibleStrokeSegmentArtifact visibleSegments))
         {
             WriteEmptyDiagnostics(context);
             return;

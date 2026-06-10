@@ -47,6 +47,10 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.totalEdges", diagnostics.TotalEdges);
         context.Counters.Set("InteractivePerformance.candidateEdges", diagnostics.CandidateEdges);
         context.Counters.Set("InteractivePerformance.candidateReductionPercent", (long)Math.Round(diagnostics.CandidateReductionPercent));
+        context.Counters.Set("InteractivePerformance.candidateEdgeSource", diagnostics.CandidateEdgeSource);
+        context.Counters.Set("InteractivePerformance.candidateEdgesBuiltFromProjectedTriangles", diagnostics.CandidateEdgesBuiltFromProjectedTriangles ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.candidateEdgeSourceReferenceFragments", diagnostics.CandidateEdgeSourceReferenceFragments);
+        context.Counters.Set("InteractivePerformance.candidateEdgeSourceProjectedTriangles", diagnostics.CandidateEdgeSourceProjectedTriangles);
         context.Counters.Set("InteractivePerformance.totalStrokeCandidates", diagnostics.TotalStrokeCandidates);
         context.Counters.Set("InteractivePerformance.strokeCommands", diagnostics.StrokeCommands);
         context.Counters.Set("InteractivePerformance.strokeCommandReductionPercent", (long)Math.Round(diagnostics.StrokeCommandReductionPercent));

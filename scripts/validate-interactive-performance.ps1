@@ -67,6 +67,8 @@ $requiredMarkers = @(
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractivePreviewPolicy.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveOutputHealthAnalyzer.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveReferenceExecutionPolicy.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveCandidateEdgeSource.cs",
+    "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/ProjectedTriangleCandidateEdgeBuilder.cs",
     "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Artifacts/ArtifactStore.cs",
     "src/runtime/STFU.UI/Viewport/ViewportFramePipelineSelector.cs",
     "src/runtime/STFU.UI.Bridge/Scene/ScenePanelViewModel.cs"
@@ -148,6 +150,31 @@ foreach ($option in @(
         throw "Missing Interactive Performance artifact retention option: $option"
     }
     Write-ReportLine "  ok $option"
+}
+Write-ReportLine ""
+
+Write-ReportLine "[contract] checking self-contained candidate edge markers"
+$candidateStageText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/CandidateEdgeStage.cs"
+foreach ($marker in @(
+    "InteractiveCandidateEdgeSource.ProjectedTriangleEdges",
+    "ProjectedTriangleCandidateEdgeBuilder.BuildEdges",
+    "CandidateEdgesBuiltFromProjectedTriangles"
+)) {
+    if ($candidateStageText -notlike "*$marker*") {
+        throw "Missing Interactive Performance self-contained candidate marker: $marker"
+    }
+    Write-ReportLine "  ok $marker"
+}
+$diagnosticsBridgeText = Get-Content -Raw -LiteralPath "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs"
+foreach ($counter in @(
+    "InteractivePerformance.candidateEdgeSource",
+    "InteractivePerformance.candidateEdgesBuiltFromProjectedTriangles",
+    "InteractivePerformance.candidateEdgeSourceProjectedTriangles"
+)) {
+    if ($diagnosticsBridgeText -notlike "*$counter*") {
+        throw "Missing Interactive Performance candidate edge counter: $counter"
+    }
+    Write-ReportLine "  ok $counter"
 }
 Write-ReportLine ""
 

@@ -51,25 +51,8 @@ public sealed class VisibleStrokeSegmentStage : IInteractivePipelineStage
 
     private static StrokeCommandArtifact? LoadStrokeCommands(InteractiveFrameContext context)
     {
-        var candidateArtifact = LoadCandidateEdges(context);
-        var sourceCandidateCount = candidateArtifact?.CandidateEdgeCount ?? 0;
-        var key = ArtifactKeyFactory.StrokeCommands(context.Intent, sourceCandidateCount);
-
-        return context.Artifacts.TryGet<StrokeCommandArtifact>(key, out var commands)
+        return context.Artifacts.TryGetLatest(ArtifactKind.StrokeCommands, out StrokeCommandArtifact commands)
             ? commands
-            : null;
-    }
-
-    private static CandidateEdgeArtifact? LoadCandidateEdges(InteractiveFrameContext context)
-    {
-        var graph = context.ReferenceContext.Graph;
-        var totalEdges = graph.DefaultFragments.Count > 0
-            ? graph.DefaultFragments.Count
-            : graph.TopologyEdges.Count;
-        var key = ArtifactKeyFactory.CandidateEdges(context.Intent, totalEdges);
-
-        return context.Artifacts.TryGet<CandidateEdgeArtifact>(key, out var candidates)
-            ? candidates
             : null;
     }
 

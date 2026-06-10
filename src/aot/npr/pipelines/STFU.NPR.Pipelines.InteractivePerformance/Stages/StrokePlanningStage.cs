@@ -48,13 +48,7 @@ public sealed class StrokePlanningStage : IInteractivePipelineStage
 
     private static CandidateEdgeArtifact? LoadCandidateEdges(InteractiveFrameContext context)
     {
-        var graph = context.ReferenceContext.Graph;
-        var totalEdges = graph.DefaultFragments.Count > 0
-            ? graph.DefaultFragments.Count
-            : graph.TopologyEdges.Count;
-        var key = ArtifactKeyFactory.CandidateEdges(context.Intent, totalEdges);
-
-        return context.Artifacts.TryGet<CandidateEdgeArtifact>(key, out var candidates)
+        return context.Artifacts.TryGetLatest(ArtifactKind.CandidateEdges, out CandidateEdgeArtifact candidates)
             ? candidates
             : null;
     }
