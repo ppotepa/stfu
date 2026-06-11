@@ -5,7 +5,9 @@ public sealed class CpuRasterizationCounters
     public long TileCacheHits;
     public long TileCacheMisses;
     public long StrokeSegmentsInput;
+    public long StrokeTileCount;
     public long StrokeTileRefs;
+    public long StrokeMaxRefsPerTile;
     public long StrokeTilesTouched;
     public long StrokePixelTests;
     public long StrokePixelWrites;
@@ -21,7 +23,9 @@ public sealed class CpuRasterizationCounters
         TileCacheHits = 0;
         TileCacheMisses = 0;
         StrokeSegmentsInput = 0;
+        StrokeTileCount = 0;
         StrokeTileRefs = 0;
+        StrokeMaxRefsPerTile = 0;
         StrokeTilesTouched = 0;
         StrokePixelTests = 0;
         StrokePixelWrites = 0;
@@ -35,6 +39,6 @@ public sealed class CpuRasterizationCounters
 
     public string ToDiagnosticString()
     {
-        return $"tiles: cacheHits={TileCacheHits}, cacheMisses={TileCacheMisses}, strokeSegments={StrokeSegmentsInput}, tileRefs={StrokeTileRefs}, tilesTouched={StrokeTilesTouched}, pixelTests={StrokePixelTests}, pixelWrites={StrokePixelWrites}, tileBinCapacity={TileBinCapacity}; tone: pixels={TonePixels}, coordCacheHits={ToneSourceCoordCacheHits}, coordCacheMisses={ToneSourceCoordCacheMisses}, sameSizeFastPath={ToneSameSizeFastPath}, layerScratchReused={LayerScratchReused}";
+        return $"tiles: cacheHits={TileCacheHits}, cacheMisses={TileCacheMisses}, strokeSegments={StrokeSegmentsInput}, tileCount={StrokeTileCount}, tileRefs={StrokeTileRefs}, maxRefsPerTile={StrokeMaxRefsPerTile}, tilesTouched={StrokeTilesTouched}, pixelTests={StrokePixelTests}, pixelWrites={StrokePixelWrites}, tileBinCapacity={TileBinCapacity}; tone: pixels={TonePixels}, coordCacheHits={ToneSourceCoordCacheHits}, coordCacheMisses={ToneSourceCoordCacheMisses}, sameSizeFastPath={ToneSameSizeFastPath}, layerScratchReused={LayerScratchReused}";
     }
 }

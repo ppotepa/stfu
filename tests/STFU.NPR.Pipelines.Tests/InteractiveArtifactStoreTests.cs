@@ -32,7 +32,7 @@ public sealed class InteractiveArtifactStoreTests
         var artifact = new MockArtifact { Key = key, Revision = 42 };
 
         store.Set(artifact);
-        
+
         Assert.True(store.TryGet<MockArtifact>(key, out var retrieved));
         Assert.Equal(42, retrieved.Revision);
     }
@@ -45,7 +45,6 @@ public sealed class InteractiveArtifactStoreTests
 
         Assert.False(store.TryGet<MockArtifact>(key, out _));
     }
-
 
     [Fact]
     public void RevisionHash_clamps_non_positive_revisions_to_zero()

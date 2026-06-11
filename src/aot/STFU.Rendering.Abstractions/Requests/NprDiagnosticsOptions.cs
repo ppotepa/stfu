@@ -6,7 +6,8 @@ public sealed record NprDiagnosticsOptions(
     bool EnableDetailedStepNotes = false,
     bool EnableMemoryLogs = false,
     bool EnablePixelHash = false,
-    bool EnableFrameHash = false)
+    bool EnableFrameHash = false,
+    bool EnableRangeTimings = false)
 {
     public static NprDiagnosticsOptions Default { get; } = new();
 
@@ -16,7 +17,8 @@ public sealed record NprDiagnosticsOptions(
         EnableDetailedStepNotes: false,
         EnableMemoryLogs: false,
         EnablePixelHash: false,
-        EnableFrameHash: false);
+        EnableFrameHash: false,
+        EnableRangeTimings: false);
 
     public static NprDiagnosticsOptions InteractiveViewportTimings { get; } = new(
         EnablePassTimings: true,
@@ -24,7 +26,8 @@ public sealed record NprDiagnosticsOptions(
         EnableDetailedStepNotes: false,
         EnableMemoryLogs: false,
         EnablePixelHash: false,
-        EnableFrameHash: false);
+        EnableFrameHash: false,
+        EnableRangeTimings: false);
 
     public static NprDiagnosticsOptions Smoke { get; } = new(
         EnablePassTimings: true,
@@ -32,7 +35,8 @@ public sealed record NprDiagnosticsOptions(
         EnableDetailedStepNotes: false,
         EnableMemoryLogs: false,
         EnablePixelHash: false,
-        EnableFrameHash: false);
+        EnableFrameHash: false,
+        EnableRangeTimings: false);
 
     public static NprDiagnosticsOptions Benchmark { get; } = new(
         EnablePassTimings: true,
@@ -40,7 +44,8 @@ public sealed record NprDiagnosticsOptions(
         EnableDetailedStepNotes: true,
         EnableMemoryLogs: true,
         EnablePixelHash: false,
-        EnableFrameHash: false);
+        EnableFrameHash: false,
+        EnableRangeTimings: false);
 
     public static NprDiagnosticsOptions Parity { get; } = new(
         EnablePassTimings: true,
@@ -48,5 +53,6 @@ public sealed record NprDiagnosticsOptions(
         EnableDetailedStepNotes: true,
         EnableMemoryLogs: false,
         EnablePixelHash: true,
-        EnableFrameHash: true);
+        EnableFrameHash: true,
+        EnableRangeTimings: false);
 }

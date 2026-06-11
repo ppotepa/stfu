@@ -43,6 +43,19 @@ public sealed class DirectXReadbackContractSourceTests
     }
 
     [Fact]
+    public void DirectXGpuTimer_LabelsCpuWallFallbackExplicitly()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.Rendering.DirectX/Diagnostics/DirectXGpuTimer.cs",
+            "UsesGpuTimestampQueries",
+            "CpuWallFallback",
+            "GpuTimestamp");
+    }
+
+    [Fact]
     public void ViewportBridge_DisablesReadbackForDirectPresenter()
     {
         var repo = FindRepositoryRoot();

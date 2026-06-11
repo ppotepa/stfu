@@ -27,10 +27,11 @@ public sealed class FramePipelineRegistryTests
         var registry = new FramePipelineRegistry(all);
 
         var provider = registry.Get(FramePipelineStrategy.ReferenceQuality);
-        
+
         Assert.NotNull(provider);
         Assert.Equal(FramePipelineStrategy.ReferenceQuality, provider.Strategy);
     }
+
     [Fact]
     public void BuiltInNprPipelines_registers_strategy_pipeline_providers()
     {

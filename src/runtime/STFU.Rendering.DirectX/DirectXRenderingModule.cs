@@ -2,9 +2,11 @@ using STFU.Abstractions.Modules;
 using STFU.Logging;
 using STFU.Rendering.Abstractions.Backend;
 using STFU.Rendering.Abstractions.Execution;
+using STFU.Rendering.Abstractions.Visibility;
 using STFU.Rendering.Abstractions.Surfaces;
 using STFU.Rendering.DirectX.Backend;
 using STFU.Rendering.DirectX.Device;
+using STFU.Rendering.DirectX.Visibility;
 
 namespace STFU.Rendering.DirectX;
 
@@ -47,6 +49,7 @@ public sealed class DirectXRenderingModule : IEngineModule
         context.Services.AddSingleton(surfacePool);
         context.Services.AddSingleton(device);
         context.Services.AddSingleton<IGpuRenderBackend>(gpuBackend);
+        context.Services.AddSingleton<IVisibilityBufferProvider>(new Dx11VisibilityBufferProvider(device));
         context.Services.AddSingleton(renderer);
         context.Services.AddSingleton(worker);
         context.Services.AddSingleton<INprRenderer>(renderer);

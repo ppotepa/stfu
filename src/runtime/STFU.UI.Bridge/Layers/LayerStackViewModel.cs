@@ -87,7 +87,9 @@ public sealed class LayerStackViewModel : BindableObject
 
     public int VisibleLayerCount => Layers.Count(layer => layer.Visible);
 
-    public int StrokeOutputCount => _session.Strokes.CurrentFrame.Paths.Count;
+    public int StrokeOutputCount => _session.Strokes.CurrentFrame.Segments.Count;
+
+    public int StrokePathOutputCount => _session.Strokes.CurrentFrame.Paths.Count;
 
     public int ToneOutputCount => _session.NprFrames.CurrentFrame.Layers.Sum(layer => layer.Tones.Count + layer.Shading.Count);
 
@@ -413,48 +415,37 @@ public sealed class LayerStackViewModel : BindableObject
             return;
         }
 
+        _intentCountFrame = frame;
         _intentCounts.Clear();
         _intentLayerCounts.Clear();
         _intentUnlayeredCounts.Clear();
 
-        if (frame.Segments is { } segments)
+        var segments = frame.Segments;
+        for (var i = 0; i < segments.Count; i++)
         {
-            foreach (var segment in segments)
-            {
-                AccumulateIntentCount(segment.Metadata);
-            }
+            AccumulateIntentCount(segments[i].Metadata);
         }
-        else
-        {
-            foreach (var path in frame.Paths)
-            {
-                AccumulateIntentCount(path.Metadata);
-            }
-        }
-
-        _intentCountFrame = frame;
     }
 
     private void AccumulateIntentCount(StrokeMetadata? metadata)
     {
-        if (metadata is not { Intent: { } intent } value)
+        var intent = metadata?.Intent ?? "Unknown";
+        Increment(_intentCounts, intent);
+
+        var layer = metadata?.Layer;
+        if (string.IsNullOrWhiteSpace(layer))
         {
+            Increment(_intentUnlayeredCounts, intent);
             return;
         }
 
-        _intentCounts[intent] = _intentCounts.TryGetValue(intent, out var count) ? count + 1 : 1;
+        Increment(_intentLayerCounts, intent + "|" + layer);
+    }
 
-        if (value.Layer is { } layer)
-        {
-            var key = intent + "\u001f" + layer;
-            _intentLayerCounts[key] = _intentLayerCounts.TryGetValue(key, out var layerCount) ? layerCount + 1 : 1;
-        }
-        else
-        {
-            _intentUnlayeredCounts[intent] = _intentUnlayeredCounts.TryGetValue(intent, out var unlayeredCount)
-                ? unlayeredCount + 1
-                : 1;
-        }
+    private static void Increment(Dictionary<string, int> dictionary, string key)
+    {
+        dictionary.TryGetValue(key, out var value);
+        dictionary[key] = value + 1;
     }
 
     private int CountIntent(string intentName, Dictionary<string, HashSet<string>> routedLayerIdsByIntent)
@@ -462,16 +453,15 @@ public sealed class LayerStackViewModel : BindableObject
         RebuildIntentCountsIfNeeded();
         if (!routedLayerIdsByIntent.TryGetValue(intentName, out var layerIds) || layerIds.Count == 0)
         {
-            return _intentCounts.TryGetValue(intentName, out var count) ? count : 0;
+            _intentUnlayeredCounts.TryGetValue(intentName, out var unlayered);
+            return unlayered;
         }
 
-        var total = _intentUnlayeredCounts.TryGetValue(intentName, out var unlayeredCount) ? unlayeredCount : 0;
+        var total = 0;
         foreach (var layerId in layerIds)
         {
-            if (_intentLayerCounts.TryGetValue(intentName + "\u001f" + layerId, out var count))
-            {
-                total += count;
-            }
+            _intentLayerCounts.TryGetValue(intentName + "|" + layerId, out var count);
+            total += count;
         }
 
         return total;

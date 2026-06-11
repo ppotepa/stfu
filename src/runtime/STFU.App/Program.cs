@@ -451,8 +451,9 @@ static void SmokeFullCpu(string[] args)
     var width = TryParsePositiveInt(args, 1, 800);
     var height = TryParsePositiveInt(args, 2, 600);
     var optimizerMode = ResolveRenderOptimizerMode(args);
+    var enableRangeTimings = HasFlag(args, "--npr-range-timings");
 
-    WriteLog($"Running Full CPU smoke test at {width}x{height}.");
+    WriteLog($"Running Full CPU smoke test at {width}x{height}. rangeTimings={enableRangeTimings}");
 
     var engine = StfuRuntimeBootstrap.CreateEngine();
     var renderer = engine.Registry.GetRequired<INprRenderer>();
@@ -506,7 +507,7 @@ static void SmokeFullCpu(string[] args)
             Budget: new NprFrameBudget(),
             Theme: NprRenderTheme.Light,
             ShowGrid: contentKind == NprRenderContentKind.MeshWireframe,
-            DiagnosticsOptions: CreateSmokeDiagnosticsOptions(),
+            DiagnosticsOptions: CreateSmokeDiagnosticsOptions(enableRangeTimings),
             OptimizerMode: optimizerMode);
 
         using var result = renderer.RenderAsync(request, CancellationToken.None).AsTask().GetAwaiter().GetResult();
@@ -547,8 +548,9 @@ static void SmokeGpuReadback(string[] args)
     var height = TryParsePositiveInt(args, 2, 600);
     var optimizerMode = ResolveRenderOptimizerMode(args);
     var useGpuVisibility = HasFlag(args, "--gpu-visibility");
+    var enableRangeTimings = HasFlag(args, "--npr-range-timings");
 
-    WriteLog($"Running GPU readback smoke test at {width}x{height}. gpuVisibility={useGpuVisibility}");
+    WriteLog($"Running GPU readback smoke test at {width}x{height}. gpuVisibility={useGpuVisibility} rangeTimings={enableRangeTimings}");
 
     var engine = StfuRuntimeBootstrap.CreateEngine();
     if (!engine.Registry.TryGet<IGpuRenderBackend>(out var gpu) || !gpu.IsAvailable)
@@ -612,7 +614,7 @@ static void SmokeGpuReadback(string[] args)
             ShowGrid: contentKind == NprRenderContentKind.MeshWireframe,
             IncludeDebugFrame: debugOverlay != DebugOverlayKind.None,
             DebugOverlay: debugOverlay,
-            DiagnosticsOptions: CreateSmokeDiagnosticsOptions(),
+            DiagnosticsOptions: CreateSmokeDiagnosticsOptions(enableRangeTimings),
             OptimizerMode: optimizerMode);
 
         using var result = renderer.RenderAsync(request, CancellationToken.None).AsTask().GetAwaiter().GetResult();
@@ -697,8 +699,9 @@ static void SmokeGpuPresent(string[] args)
     var width = TryParsePositiveInt(args, 1, 800);
     var height = TryParsePositiveInt(args, 2, 600);
     var optimizerMode = ResolveRenderOptimizerMode(args);
+    var enableRangeTimings = HasFlag(args, "--npr-range-timings");
 
-    WriteLog($"Running GPU direct-present smoke test at {width}x{height}.");
+    WriteLog($"Running GPU direct-present smoke test at {width}x{height}. rangeTimings={enableRangeTimings}");
 
     var engine = StfuRuntimeBootstrap.CreateEngine();
     if (!engine.Registry.TryGet<IGpuRenderBackend>(out var gpu) || !gpu.IsAvailable)
@@ -771,7 +774,7 @@ static void SmokeGpuPresent(string[] args)
             ShowGrid: contentKind == NprRenderContentKind.MeshWireframe,
             IncludeDebugFrame: debugOverlay != DebugOverlayKind.None,
             DebugOverlay: debugOverlay,
-            DiagnosticsOptions: CreateSmokeDiagnosticsOptions(),
+            DiagnosticsOptions: CreateSmokeDiagnosticsOptions(enableRangeTimings),
             OptimizerMode: optimizerMode);
 
         using var result = renderer.RenderAsync(request, CancellationToken.None).AsTask().GetAwaiter().GetResult();
@@ -2434,9 +2437,13 @@ static NprRenderParitySnapshot CreateParitySnapshot(ParityScenario scenario, Npr
         ToneSurfaceCount: result.Diagnostics.ToneSurfaceCount);
 }
 
-static NprDiagnosticsOptions CreateSmokeDiagnosticsOptions()
+static NprDiagnosticsOptions CreateSmokeDiagnosticsOptions(bool enableRangeTimings = false)
 {
-    return NprDiagnosticsOptions.Smoke;
+    return NprDiagnosticsOptions.Smoke with
+    {
+        EnableRangeTimings = enableRangeTimings,
+        EnableDetailedStepNotes = enableRangeTimings || NprDiagnosticsOptions.Smoke.EnableDetailedStepNotes
+    };
 }
 
 static NprDiagnosticsOptions CreateBenchmarkDiagnosticsOptions()

@@ -134,7 +134,7 @@ Upload/recreate counters and allocation telemetry are present and used in diagno
 | Asset | Resolution | CPU faces | GPU faces | Match ratio | Fallback | Reason |
 |---|---|---|---|---|---|---|
 | suzanne.obj | 320x240 | 538 | 538 | `1.0000` | false | none |
-| walking.fbx | 320x240 | (not sampled in runtime smoke; parity tests passed for pipeline) | (not sampled) | TBD (not sampled) | TBD | TBD |
+| walking.fbx | 320x240 | (not sampled in runtime smoke; parity tests passed for pipeline) | (not sampled) | not sampled | not sampled | not sampled |
 
 ## Parity result
 
@@ -200,4 +200,3 @@ Upload/recreate counters and allocation telemetry are present and used in diagno
 - DirectX readback and visibility runtime contracts are verified via runtime diagnostics tests and smoke.
 - Hot-path audit accepted with minimal follow-up non-blocking exclusions.
 - Full extended sweep is recommended post-release for optimization headroom, but no blocker for hardening closure in this iteration.
-

@@ -74,6 +74,41 @@ public sealed class OptimizationHardeningSourceGuardTests
         AssertFileContains(repo, "src/aot/STFU.Rendering.Cpu/Rasterization/CpuToneRasterizer.cs", "ToneSameSizeFastPath");
     }
 
+    [Fact]
+    public void Source_does_not_use_raw_parallelism_outside_parallelism_library()
+    {
+        var root = FindRepositoryRoot();
+        var files = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Replace('\\', '/').EndsWith("src/aot/STFU.Parallelism/DeterministicParallel.cs", StringComparison.Ordinal))
+            .Where(path => !path.Replace('\\', '/').Contains("LatestNprRenderScheduler", StringComparison.Ordinal))
+            .Where(path => !path.Replace('\\', '/').Contains("src/runtime/STFU.Import.Fbx/", StringComparison.Ordinal))
+            .ToArray();
+
+        var forbidden = new[]
+        {
+            "Parallel.For(",
+            "Parallel.ForEach(",
+            "Parallel.Invoke(",
+            "Task.Run(",
+            "new Thread("
+        };
+
+        var violations = new List<string>();
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            foreach (var token in forbidden)
+            {
+                if (text.Contains(token, StringComparison.Ordinal))
+                {
+                    violations.Add($"{file}: {token}");
+                }
+            }
+        }
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
     private static void AssertFileContains(string repo, string relativePath, params string[] expected)
     {
         var path = Path.Combine(repo, relativePath.Replace('/', Path.DirectorySeparatorChar));

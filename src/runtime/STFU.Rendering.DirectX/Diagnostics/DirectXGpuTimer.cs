@@ -10,6 +10,8 @@ public sealed class DirectXGpuTimer : IDisposable
     private readonly bool _enableGpuTiming;
     private bool _disposed;
 
+    public bool UsesGpuTimestampQueries => _device is not null && _enableGpuTiming;
+
     public DirectXGpuTimer()
     {
     }

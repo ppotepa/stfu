@@ -25,7 +25,19 @@ public sealed class DirectXUploadAndReadbackContractTests
         var repo = FindRepositoryRoot();
         AssertFileContains(repo, "src/runtime/STFU.Rendering.DirectX/Upload/DxStrokeInstanceBuilder.cs", "PathSortEntry", "sortScratch");
         AssertFileContains(repo, "src/runtime/STFU.Rendering.DirectX/Upload/DxStrokeInstanceBuilder.cs", "EstimatePathInstanceCapacity", "Create");
-        AssertFileContains(repo, "src/runtime/STFU.Rendering.DirectX/Passes/DxStrokeRasterPass.cs", "StrokeInstanceUploads", "StrokeInstanceBufferRecreates");
+        AssertFileContains(repo, "src/runtime/STFU.Rendering.DirectX/Passes/DxStrokeRasterPass.cs", "StrokeInstanceUploads", "StrokeInstanceBufferRecreates", "instanceCacheHit", "instanceCacheMiss");
+    }
+
+    [Fact]
+    public void DirectXToneUpload_SourceFiles_ExposeCacheTelemetry()
+    {
+        var repo = FindRepositoryRoot();
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.Rendering.DirectX/Passes/DxToneSurfacePass.cs",
+            "cacheHits",
+            "cacheMisses",
+            "uploadedTones");
     }
 
     private static void AssertFileContains(string repo, string relativePath, params string[] expected)

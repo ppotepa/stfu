@@ -39,11 +39,11 @@ public sealed class DefaultSimplifyAndSortPathsStep : INprStep
         }
         else
         {
-            DeterministicParallel.ForRanges(
+            NprParallelTrace.ForRanges(
+                context,
+                nameof(DefaultSimplifyAndSortPathsStep),
                 0,
                 pathCount,
-                context.WorkerCount,
-                context.CancellationToken,
                 (startInclusive, endExclusive, rangeIndex, cancellationToken) =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();

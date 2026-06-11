@@ -487,7 +487,7 @@ public sealed class ScenePanelViewModel : BindableObject
     {
         return new Transform3D(
             new Vector3(entity.PositionX, entity.PositionY, entity.PositionZ),
-            new Vector3(    
+            new Vector3(
                 SceneTransformMath.ToRadians(entity.RotationX),
                 SceneTransformMath.ToRadians(entity.RotationY),
                 SceneTransformMath.ToRadians(entity.RotationZ)),

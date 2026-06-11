@@ -23,6 +23,10 @@ public sealed class DxStrokeRasterPass : IDisposable
     private ID3D11Buffer? _instanceBuffer;
     private ID3D11ShaderResourceView? _instanceBufferSrv;
     private int _instanceCapacity;
+    private int _lastSegmentCount;
+    private int _lastSegmentHash;
+    private int _lastLayerOpacityHash;
+    private bool _instanceCacheValid;
     private bool _disposed;
 
     public DirectXRenderCounters Counters { get; } = new();
@@ -36,13 +40,15 @@ public sealed class DxStrokeRasterPass : IDisposable
         var pixelShaderBytes = DirectXShaderCompiler.CompileFromFile("stroke_raster.hlsl", "PS", "ps_5_0");
 
         using (_device.Lock())
-        unsafe
         {
-            fixed (byte* vsPtr = vertexShaderBytes)
-            fixed (byte* psPtr = pixelShaderBytes)
+            unsafe
             {
-                _vertexShader = device.Device.CreateVertexShader(vsPtr, (nuint)vertexShaderBytes.Length);
-                _pixelShader = device.Device.CreatePixelShader(psPtr, (nuint)pixelShaderBytes.Length);
+                fixed (byte* vsPtr = vertexShaderBytes)
+                fixed (byte* psPtr = pixelShaderBytes)
+                {
+                    _vertexShader = device.Device.CreateVertexShader(vsPtr, (nuint)vertexShaderBytes.Length);
+                    _pixelShader = device.Device.CreatePixelShader(psPtr, (nuint)pixelShaderBytes.Length);
+                }
             }
         }
 
@@ -94,10 +100,33 @@ public sealed class DxStrokeRasterPass : IDisposable
         cancellationToken.ThrowIfCancellationRequested();
 
         var buildWatch = Stopwatch.StartNew();
-        var instances = DxStrokeInstanceBuilder.Build(
-            segments,
-            opacityScale,
-            _instances);
+        var segmentHash = ComputeSegmentHash(segments);
+        var opacityHash = opacityScale.GetHashCode();
+        if (!_instanceCacheValid ||
+            _lastSegmentCount != segments.Count ||
+            _lastSegmentHash != segmentHash ||
+            _lastLayerOpacityHash != opacityHash)
+        {
+            DxStrokeInstanceBuilder.Build(
+                segments,
+                opacityScale,
+                _instances);
+            _lastSegmentCount = segments.Count;
+            _lastSegmentHash = segmentHash;
+            _lastLayerOpacityHash = opacityHash;
+            _instanceCacheValid = true;
+            diagnostics.Counters["DxStrokeRasterPass.instanceCacheMiss"] = diagnostics.Counters.TryGetValue("DxStrokeRasterPass.instanceCacheMiss", out var miss)
+                ? miss + 1
+                : 1;
+        }
+        else
+        {
+            diagnostics.Counters["DxStrokeRasterPass.instanceCacheHit"] = diagnostics.Counters.TryGetValue("DxStrokeRasterPass.instanceCacheHit", out var hit)
+                ? hit + 1
+                : 1;
+        }
+
+        var instances = _instances;
         buildWatch.Stop();
         Counters.StrokeInstancesBuilt += instances.Count;
         diagnostics.AddTiming("GpuStrokeBuild", buildWatch.Elapsed.TotalMilliseconds, $"instances={instances.Count}, source=segments");
@@ -255,5 +284,24 @@ public sealed class DxStrokeRasterPass : IDisposable
         }
 
         return capacity;
+    }
+
+    private static int ComputeSegmentHash(IReadOnlyList<StrokeSegment2D> segments)
+    {
+        var hash = new HashCode();
+        hash.Add(segments.Count);
+        var step = Math.Max(1, segments.Count / 64);
+        for (var i = 0; i < segments.Count; i += step)
+        {
+            var segment = segments[i];
+            hash.Add(segment.Start.X);
+            hash.Add(segment.Start.Y);
+            hash.Add(segment.End.X);
+            hash.Add(segment.End.Y);
+            hash.Add(segment.Style.Thickness);
+            hash.Add(segment.Style.Color);
+        }
+
+        return hash.ToHashCode();
     }
 }

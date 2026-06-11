@@ -90,16 +90,14 @@ public sealed class InteractiveFrameSchedulerTests
         Assert.False(changed.StyleChanged);
     }
 
-
     [Fact]
     public void InteractiveFrameChangeTracker_treats_quality_change_as_style_change()
     {
         var tracker = new InteractiveFrameChangeTracker();
         _ = tracker.Resolve(CreateIntent(new InteractiveFrameSignature(1, 2, 3, 4, 5)));
 
-        var changed = tracker.Resolve(
-            CreateIntent(new InteractiveFrameSignature(1, 2, 3, 4, 5))
-                with { QualityMode = InteractiveQualityMode.QualityViewport });
+        var changedIntent = CreateIntent(new InteractiveFrameSignature(1, 2, 3, 4, 5)) with { QualityMode = InteractiveQualityMode.QualityViewport };
+        var changed = tracker.Resolve(changedIntent);
 
         Assert.True(changed.StyleChanged);
     }
@@ -140,8 +138,7 @@ public sealed class InteractiveFrameSchedulerTests
             MaxInteractiveStrokeCommands = 8_000,
             MaxInteractiveVisibleStrokeSegments = 6_000
         };
-        var intent = CreateIntent(new InteractiveFrameSignature(1, 2, 3, 4, 5))
-            with { QualityMode = InteractiveQualityMode.FastPreview };
+        var intent = CreateIntent(new InteractiveFrameSignature(1, 2, 3, 4, 5)) with { QualityMode = InteractiveQualityMode.FastPreview };
         var previous = new InteractiveFrameDiagnostics { ProjectionMs = 2, VisibilityMs = 2 };
 
         _ = controller.ResolveBudgetDecision(intent, previous, options);
@@ -171,5 +168,4 @@ public sealed class InteractiveFrameSchedulerTests
             DebugOverlayChanged: false,
             Signature: signature);
     }
-
 }

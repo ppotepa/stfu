@@ -4,6 +4,7 @@ public enum InteractivePreviewDecisionKind
 {
     Unknown,
     SelectedInteractiveFrame,
+    PreviewReady = SelectedInteractiveFrame,
     ForcedReferenceFallback,
     ReferenceFallbackRequired,
     PreviewOutputDisabled,

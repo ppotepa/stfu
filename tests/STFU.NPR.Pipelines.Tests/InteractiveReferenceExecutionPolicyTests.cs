@@ -4,6 +4,7 @@ using Xunit;
 
 namespace STFU.NPR.Pipelines.Tests;
 
+[Collection(InteractiveReferenceExecutionEnvironmentCollection.Name)]
 public sealed class InteractiveReferenceExecutionPolicyTests
 {
     [Fact]

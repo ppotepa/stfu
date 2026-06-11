@@ -8,6 +8,7 @@ namespace STFU.NPR.Pipeline.ReferenceQuality.Steps;
 
 public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INprStep
 {
+    private const int ParallelMinItemsPerRange = 256;
     private readonly List<EdgePartitionBuffer> _partitionBuffers = [];
     private int _lastFragmentCount;
     private int _lastDebugCurveCount;
@@ -32,7 +33,7 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         var counters = new EdgeRangeCounters
         {
             SourceEdges = edgeCount,
-            RangeCount = parallel ? DeterministicParallel.GetRangeCount(edgeCount, context.WorkerCount) : 1
+            RangeCount = parallel ? DeterministicParallel.GetRangeCount(edgeCount, context.WorkerCount, ParallelMinItemsPerRange) : 1
         };
 
         if (!parallel)
@@ -64,16 +65,16 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         }
         else
         {
-            var rangeCount = DeterministicParallel.GetRangeCount(edgeCount, context.WorkerCount);
+            var rangeCount = DeterministicParallel.GetRangeCount(edgeCount, context.WorkerCount, ParallelMinItemsPerRange);
             var partitionSize = (edgeCount + rangeCount - 1) / rangeCount;
             var includeVisibilityOutputs = context.IncludeDebugFrame;
             var partitions = RentPartitionBuffers(rangeCount, context.IncludeDebugFrame, partitionSize);
 
-            DeterministicParallel.ForRanges(
+            NprParallelTrace.ForRanges(
+                context,
+                nameof(DefaultClassifyEdgesToFragmentsStep),
                 0,
                 edgeCount,
-                context.WorkerCount,
-                context.CancellationToken,
                 (start, end, partitionIndex, cancellationToken) =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -90,7 +91,8 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
                         includeVisibilityOutputs ? partition.VisibilitySegments : null,
                         partition.Curves,
                         ref partition.Counters);
-                });
+                },
+                minItemsPerRange: ParallelMinItemsPerRange);
 
             var totalFragmentCount = 0;
             var totalCurveCount = 0;
@@ -144,6 +146,10 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.visibilitySamples", counters.VisibilitySamples);
         context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.fragmentsEmitted", counters.FragmentsEmitted);
         context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.debugCurvesEmitted", counters.DebugCurvesEmitted);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.earlyAccepted", counters.EarlyAccepted);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.earlyRejected", counters.EarlyRejected);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.adaptiveSampleReductions", counters.AdaptiveSampleReductions);
+        context.Counters.Set("DefaultClassifyEdgesToFragmentsStep.endpointVisibilityTests", counters.EndpointVisibilityTests);
     }
 
     private int EstimateFragmentCapacity(STFU.NPR.Pipeline.NprContext context)
@@ -356,47 +362,17 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         var scaleY = buffer.Height / (float)NumericMath.AtLeast(context.Height, 1);
         var maxX = buffer.Width - 1;
         var maxY = buffer.Height - 1;
-        var startVisible = TrySampleEdgeVisibility(
-            buffer,
-            start,
-            end,
-            firstAllowedFace,
-            secondAllowedFace,
-            scaleX,
-            scaleY,
-            maxX,
-            maxY,
-            0f,
-            out _);
-        counters.VisibilitySamples++;
-        var midVisible = TrySampleEdgeVisibility(
-            buffer,
-            start,
-            end,
-            firstAllowedFace,
-            secondAllowedFace,
-            scaleX,
-            scaleY,
-            maxX,
-            maxY,
-            0.5f,
-            out _);
-        counters.VisibilitySamples++;
-        var endVisible = TrySampleEdgeVisibility(
-            buffer,
-            start,
-            end,
-            firstAllowedFace,
-            secondAllowedFace,
-            scaleX,
-            scaleY,
-            maxX,
-            maxY,
-            1f,
-            out _);
-        counters.VisibilitySamples++;
+        var startPoint = start.Position;
+        var endPoint = end.Position;
+        var midpoint = new Point2D((startPoint.X + endPoint.X) * 0.5f, (startPoint.Y + endPoint.Y) * 0.5f);
+        var startVisible = SampleOwnedAtScreenFast(buffer, startPoint, firstAllowedFace, secondAllowedFace, scaleX, scaleY, maxX, maxY);
+        var midVisible = SampleOwnedAtScreenFast(buffer, midpoint, firstAllowedFace, secondAllowedFace, scaleX, scaleY, maxX, maxY);
+        var endVisible = SampleOwnedAtScreenFast(buffer, endPoint, firstAllowedFace, secondAllowedFace, scaleX, scaleY, maxX, maxY);
+        counters.EndpointVisibilityTests += 3;
+        counters.VisibilitySamples += 3;
         if (startVisible && midVisible && endVisible)
         {
+            counters.EarlyAccepted++;
             if (AppendFragment(
                 fragments,
                 visibilitySegments,
@@ -422,12 +398,24 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
             return;
         }
 
+        if (!startVisible && !midVisible && !endVisible && drawing.OcclusionStrictness >= 1f)
+        {
+            counters.EarlyRejected++;
+            return;
+        }
+
         if (length <= minSegmentLength * 2f && !startVisible && !midVisible && !endVisible)
         {
             return;
         }
 
-        var samples = NumericMath.AtMost(96, NumericMath.AtLeast((int)NumericMath.Ceiling(length / 4f), 3));
+        var sampleCount = ResolveVisibilitySampleCount(length, drawing);
+        var configuredSampleCount = NumericMath.AtLeast(drawing.OcclusionSamples, 1);
+        if (sampleCount < configuredSampleCount)
+        {
+            counters.AdaptiveSampleReductions += configuredSampleCount - sampleCount;
+        }
+
         var runStart = default(Point2D);
         var previousPoint = default(Point2D);
         var runStartT = 0f;
@@ -437,9 +425,9 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         var hasPreviousPoint = false;
         var fragmentIndex = 0;
 
-        for (var i = 0; i <= samples; i++)
+        for (var i = 0; i < sampleCount; i++)
         {
-            var t = i / (float)samples;
+            var t = sampleCount == 1 ? 0.5f : i / (float)(sampleCount - 1);
             var visible = TrySampleEdgeVisibility(
                 buffer,
                 start,
@@ -524,6 +512,27 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         }
     }
 
+    private static int ResolveVisibilitySampleCount(float length, STFU.NPR.Settings.DefaultDrawingSettings drawing)
+    {
+        var configured = NumericMath.AtLeast(drawing.OcclusionSamples, 1);
+        if (length <= 2f)
+        {
+            return NumericMath.AtMost(configured, 2);
+        }
+
+        if (length <= 8f)
+        {
+            return NumericMath.AtMost(configured, 4);
+        }
+
+        if (length <= 24f)
+        {
+            return NumericMath.AtMost(configured, 6);
+        }
+
+        return configured;
+    }
+
     private static bool TrySampleEdgeVisibility(
         DefaultFaceIdVisibilityBuffer buffer,
         ProjectedVertex start,
@@ -557,6 +566,21 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
             cy,
             firstAllowedFace,
             secondAllowedFace);
+    }
+
+    private static bool SampleOwnedAtScreenFast(
+        DefaultFaceIdVisibilityBuffer buffer,
+        Point2D point,
+        int firstAllowedFace,
+        int secondAllowedFace,
+        float scaleX,
+        float scaleY,
+        int maxX,
+        int maxY)
+    {
+        var cx = NumericMath.Clamp((int)NumericMath.Floor(point.X * scaleX), 0, maxX);
+        var cy = NumericMath.Clamp((int)NumericMath.Floor(point.Y * scaleY), 0, maxY);
+        return buffer.SampleOwnedFaceAtBuffer(cx, cy, firstAllowedFace, secondAllowedFace);
     }
 
     private static bool AppendFragment(
@@ -695,6 +719,10 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
         public long VisibilitySamples;
         public long FragmentsEmitted;
         public long DebugCurvesEmitted;
+        public long EarlyAccepted;
+        public long EarlyRejected;
+        public long AdaptiveSampleReductions;
+        public long EndpointVisibilityTests;
 
         public void Add(EdgeRangeCounters other)
         {
@@ -703,6 +731,10 @@ public sealed class DefaultClassifyEdgesToFragmentsStep : STFU.NPR.Pipeline.INpr
             VisibilitySamples += other.VisibilitySamples;
             FragmentsEmitted += other.FragmentsEmitted;
             DebugCurvesEmitted += other.DebugCurvesEmitted;
+            EarlyAccepted += other.EarlyAccepted;
+            EarlyRejected += other.EarlyRejected;
+            AdaptiveSampleReductions += other.AdaptiveSampleReductions;
+            EndpointVisibilityTests += other.EndpointVisibilityTests;
         }
     }
 }

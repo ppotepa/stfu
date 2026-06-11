@@ -21,6 +21,33 @@ public sealed class NprPipelineCounters
         Values[name] = old + delta;
     }
 
+    public bool TryGet(string name, out long value)
+    {
+        return Values.TryGetValue(name, out value);
+    }
+
+    public IReadOnlyDictionary<string, long> Snapshot()
+    {
+        return new Dictionary<string, long>(Values, StringComparer.Ordinal);
+    }
+
+    public void SetMax(string name, long value)
+    {
+        Values.TryGetValue(name, out var old);
+        if (value > old)
+        {
+            Values[name] = value;
+        }
+    }
+
+    public void SetMin(string name, long value)
+    {
+        if (!Values.TryGetValue(name, out var old) || value < old)
+        {
+            Values[name] = value;
+        }
+    }
+
     public string FormatStep(string prefix)
     {
         if (Values.Count == 0)

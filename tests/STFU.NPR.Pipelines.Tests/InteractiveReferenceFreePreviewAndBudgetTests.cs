@@ -7,6 +7,7 @@ using Xunit;
 
 namespace STFU.NPR.Pipelines.Tests;
 
+[Collection(InteractiveReferenceExecutionEnvironmentCollection.Name)]
 public sealed class InteractiveReferenceFreePreviewAndBudgetTests
 {
     [Fact]
@@ -108,7 +109,7 @@ public sealed class InteractiveReferenceFreePreviewAndBudgetTests
         Assert.Equal(3, segments.Length);
     }
 
-    private static InteractiveCandidateEdge CreateEdge(long id, float importance, float length)
+    private static InteractiveCandidateEdge CreateEdge(int id, float importance, float length)
     {
         return new InteractiveCandidateEdge(
             SourceEdgeId: id,

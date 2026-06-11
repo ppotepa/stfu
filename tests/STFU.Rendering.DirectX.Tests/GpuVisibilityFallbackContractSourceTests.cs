@@ -41,6 +41,57 @@ public sealed class GpuVisibilityFallbackContractSourceTests
             "UseGpuVisibilityBuffer");
     }
 
+    [Fact]
+    public void VisibilityProvider_ContractExistsWithoutDirectXTypes()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/STFU.Abstractions/Visibility/IVisibilityBufferProvider.cs",
+            "IVisibilityBufferProvider",
+            "VisibilityBufferRequest",
+            "VisibilityBufferResult");
+    }
+
+    [Fact]
+    public void Dx11VisibilityProvider_DoesNotFakeGpuSuccess()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.Rendering.DirectX/Visibility/Dx11VisibilityBufferProvider.cs",
+            "UsedGpu: false",
+            "UsedFallback: true",
+            "Array.Empty<int>()");
+    }
+
+    [Fact]
+    public void DirectXModule_RegistersVisibilityProvider()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/runtime/STFU.Rendering.DirectX/DirectXRenderingModule.cs",
+            "IVisibilityBufferProvider",
+            "Dx11VisibilityBufferProvider");
+    }
+
+    [Fact]
+    public void CpuReferenceVisibilityProvider_ExistsAsNeutralAdapter()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/STFU.NPR/Visibility/CpuReferenceVisibilityBufferProvider.cs",
+            "CpuReferenceVisibilityBufferProvider",
+            "UsedFallback: true",
+            "Array.Empty<int>()");
+    }
+
     private static void AssertFileContains(string repo, string relativePath, params string[] expected)
     {
         var path = Path.Combine(repo, relativePath.Replace('/', Path.DirectorySeparatorChar));

@@ -190,7 +190,7 @@ public sealed class InteractiveStrokeFrameBuilderTests
             out var reason);
 
         Assert.True(selected);
-        Assert.Equal(1, frame.Paths.Count);
+        Assert.Single(frame.Paths);
         Assert.Contains("selected", reason, StringComparison.OrdinalIgnoreCase);
     }
 

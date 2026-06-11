@@ -16,6 +16,7 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
     private int[] _tileOffsets = [];
     private int[] _tileWriteCursors = [];
     private int[] _tileTriangleIndices = [];
+    private int[] _weightedTileOrder = [];
     private long[] _tilePixelTests = [];
     private long[] _tilePixelWrites = [];
     private int _lastWidth;
@@ -107,11 +108,11 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         var triangles = context.Graph.Triangles;
         var vertices = context.Graph.Vertices;
 
-        DeterministicParallel.ForRanges(
+        NprParallelTrace.ForRanges(
+            context,
+            "DefaultBuildFaceIdVisibilityBufferStep.BuildRasterInfo",
             0,
             triangleCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, _, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -147,13 +148,14 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
                 validRasterInfoCount++;
             }
         }
+        var invalidRasterInfoCount = triangleCount - validRasterInfoCount;
 
         Array.Clear(_rangeTileCounts, 0, rangeCount * tileCount);
-        DeterministicParallel.ForRanges(
+        NprParallelTrace.ForRanges(
+            context,
+            "DefaultBuildFaceIdVisibilityBufferStep.CountTileRefs",
             0,
             triangleCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, rangeIndex, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -202,6 +204,18 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         }
 
         var totalRefs = PrefixSums.ExclusiveFromCounts(_tileCounts.AsSpan(0, tileCount), _tileOffsets.AsSpan(0, tileCount));
+        var maxRangeTileRefs = 0;
+        for (var rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++)
+        {
+            var rangeTotal = 0;
+            var rangeBase = rangeIndex * tileCount;
+            for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
+            {
+                rangeTotal += _rangeTileCounts[rangeBase + tileIndex];
+            }
+
+            maxRangeTileRefs = NumericMath.AtLeast(maxRangeTileRefs, rangeTotal);
+        }
         EnsureTileRefCapacity(totalRefs);
 
         for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
@@ -218,11 +232,11 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         Array.Copy(_rangeTileOffsets, _tileWriteCursors, _rangeTileOffsets.Length);
         Array.Clear(_tilePixelTests, 0, tileCount);
         Array.Clear(_tilePixelWrites, 0, tileCount);
-        DeterministicParallel.ForRanges(
+        NprParallelTrace.ForRanges(
+            context,
+            "DefaultBuildFaceIdVisibilityBufferStep.FillTileRefs",
             0,
             triangleCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, rangeIndex, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -254,21 +268,24 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
             },
             minItemsPerRange: 64);
 
-        DeterministicParallel.ForRanges(
+        EnsureWeightedTileOrderCapacity(tileCount);
+        BuildWeightedTileOrder(tileCount);
+        NprParallelTrace.ForRanges(
+            context,
+            "DefaultBuildFaceIdVisibilityBufferStep.RasterizeTiles",
             0,
             tileCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, _, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                for (var tileIndex = startInclusive; tileIndex < endExclusive; tileIndex++)
+                for (var orderIndex = startInclusive; orderIndex < endExclusive; orderIndex++)
                 {
-                    if ((tileIndex & 0x3FF) == 0)
+                    if ((orderIndex & 0x3FF) == 0)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
+                    var tileIndex = _weightedTileOrder[orderIndex];
                     long localPixelTests = 0;
                     long localPixelWrites = 0;
                     RasterizeTile(
@@ -302,7 +319,9 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.rangeCount", rangeCount);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.totalTileRefs", totalRefs);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.validRasterInfoCount", validRasterInfoCount);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.invalidRasterInfoCount", invalidRasterInfoCount);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRefsPerTile", maxRefsPerTile);
+        context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.maxRangeTileRefs", maxRangeTileRefs);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelTests", totalPixelTests);
         context.Counters.Set("DefaultBuildFaceIdVisibilityBufferStep.pixelWrites", totalPixelWrites);
         visibleFaces = CountVisibleFaces(buffer.FaceVisible);
@@ -414,6 +433,43 @@ public sealed class DefaultBuildFaceIdVisibilityBufferStep : STFU.NPR.Pipeline.I
         {
             _tileTriangleIndices = new int[totalRefs];
         }
+    }
+
+    private void EnsureWeightedTileOrderCapacity(int tileCount)
+    {
+        if (_weightedTileOrder.Length < tileCount)
+        {
+            _weightedTileOrder = new int[GrowCapacity(tileCount)];
+        }
+    }
+
+    private static int GrowCapacity(int required)
+    {
+        var capacity = 4;
+        while (capacity < required)
+        {
+            capacity = checked(capacity + (capacity >> 1));
+        }
+
+        return capacity;
+    }
+
+    private void BuildWeightedTileOrder(int tileCount)
+    {
+        for (var i = 0; i < tileCount; i++)
+        {
+            _weightedTileOrder[i] = i;
+        }
+
+        Array.Sort(
+            _weightedTileOrder,
+            0,
+            tileCount,
+            Comparer<int>.Create((a, b) =>
+            {
+                var cmp = _tileCounts[b].CompareTo(_tileCounts[a]);
+                return cmp != 0 ? cmp : a.CompareTo(b);
+            }));
     }
 
     private static TriangleRasterInfo BuildTriangleRasterInfo(

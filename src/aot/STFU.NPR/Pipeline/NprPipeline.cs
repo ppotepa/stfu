@@ -125,9 +125,68 @@ internal static class NprPipelineRunner
         };
 
         var counters = context.Counters.FormatStep(stepName + ".");
-        return string.IsNullOrEmpty(counters)
+        var rangeNotes = FormatRangeNotes(context, stepName);
+        var details = JoinNotes(counters, rangeNotes);
+        return string.IsNullOrEmpty(details)
             ? baseNotes
-            : baseNotes + "; " + counters;
+            : baseNotes + "; " + details;
+    }
+
+    private static string JoinNotes(string first, string second)
+    {
+        if (string.IsNullOrEmpty(first))
+        {
+            return second;
+        }
+
+        if (string.IsNullOrEmpty(second))
+        {
+            return first;
+        }
+
+        return first + ", " + second;
+    }
+
+    private static string FormatRangeNotes(NprContext context, string stepName)
+    {
+        if (!context.EnableRangeTimings || context.RangeTraces.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var rangeCount = 0;
+        long ticks = 0;
+        long maxTicks = 0;
+        var minItems = int.MaxValue;
+        var maxItems = 0;
+
+        for (var i = 0; i < context.RangeTraces.Count; i++)
+        {
+            var trace = context.RangeTraces[i];
+            if (!string.Equals(trace.StepName, stepName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var items = trace.EndExclusive - trace.StartInclusive;
+            rangeCount++;
+            ticks += trace.ElapsedTicks;
+            maxTicks = Math.Max(maxTicks, trace.ElapsedTicks);
+            minItems = Math.Min(minItems, items);
+            maxItems = Math.Max(maxItems, items);
+        }
+
+        if (rangeCount == 0)
+        {
+            return string.Empty;
+        }
+
+        if (minItems == int.MaxValue)
+        {
+            minItems = 0;
+        }
+
+        return $"ranges={rangeCount}, rangeItems={minItems}-{maxItems}, rangeTicksTotal={ticks}, rangeTicksMax={maxTicks}";
     }
 
     private readonly record struct StepMetrics(

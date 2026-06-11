@@ -101,6 +101,15 @@ public sealed class DxToneSurfacePass : IDisposable
         }
 
         uploadWatch.Stop();
+        diagnostics.Counters["DxToneSurfacePass.cacheHits"] = diagnostics.Counters.TryGetValue("DxToneSurfacePass.cacheHits", out var priorCacheHits)
+            ? priorCacheHits + cacheHits
+            : cacheHits;
+        diagnostics.Counters["DxToneSurfacePass.cacheMisses"] = diagnostics.Counters.TryGetValue("DxToneSurfacePass.cacheMisses", out var priorCacheMisses)
+            ? priorCacheMisses + cacheMisses
+            : cacheMisses;
+        diagnostics.Counters["DxToneSurfacePass.uploadedTones"] = diagnostics.Counters.TryGetValue("DxToneSurfacePass.uploadedTones", out var priorUploaded)
+            ? priorUploaded + uploaded
+            : uploaded;
         diagnostics.AddTiming(
             "GpuToneSurfaceUpload",
             uploadWatch.Elapsed.TotalMilliseconds,

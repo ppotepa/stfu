@@ -1,31 +1,20 @@
-# Parallelism guard scan
+# Parallelism guard
 
-Direct render/NPR use of `Parallel.For`, `Parallel.ForEach` and `Parallel.Invoke` is blocked outside `STFU.Parallelism`.
+Allowed:
+- `STFU.Parallelism.DeterministicParallel` for deterministic range loops.
+- `LatestNprRenderScheduler` for render request lifecycle and thread ownership.
+- Low-level DirectX device and context calls inside the DirectX backend when already serialized by the device lock.
 
-Run from the repository root:
+Forbidden by default:
+- raw `Parallel.For`, `Parallel.ForEach`, `Parallel.Invoke` in `src/aot` and render runtime,
+- `Task.Run` in hot path code,
+- `new Thread` in render or NPR pipeline code,
+- concurrent writes to graph lists without deterministic partition and merge.
 
-```powershell
-rg -P "(?<!Deterministic)Parallel\.(For|ForEach|Invoke)" src/aot src/runtime -g "*.cs" -n
-```
-
-Or use the checked-in guard:
+Run:
 
 ```powershell
 powershell -NoProfile -File tools/ci/guard-parallelism.ps1
 ```
 
-Expected result:
-
-```text
-src/aot/STFU.Parallelism/DeterministicParallel.cs:<line>:        Parallel.For(
-```
-
-Any other result means the call site should be moved behind `DeterministicParallel` or explicitly justified in code review.
-
-Audit-only scan:
-
-```powershell
-rg -P "\b(new\s+Thread|Task\.Run|ThreadPool\.QueueUserWorkItem)\b" src/aot src/runtime -g "*.cs" -n
-```
-
-This scan is informational. Thread-owned schedulers and background import workers are allowed when the owning layer justifies them.
+If a new exception is required, add it to this document and tests first.

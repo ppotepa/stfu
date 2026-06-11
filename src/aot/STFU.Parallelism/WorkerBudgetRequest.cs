@@ -3,20 +3,37 @@ namespace STFU.Parallelism;
 /// <summary>
 /// Describes how a worker budget should be resolved.
 /// </summary>
-public readonly record struct WorkerBudgetRequest(
+public readonly record struct WorkerBudgetRequest
+{
     /// <summary>
     /// The preferred budget mode.
     /// </summary>
-    WorkerBudgetMode Mode = WorkerBudgetMode.Balanced,
+    public WorkerBudgetMode Mode { get; init; }
+
     /// <summary>
     /// Explicit worker override. Zero means auto.
     /// </summary>
-    int ExplicitWorkerCount = 0,
+    public int ExplicitWorkerCount { get; init; }
+
     /// <summary>
     /// Minimum allowed worker count.
     /// </summary>
-    int MinimumWorkers = 1,
+    public int MinimumWorkers { get; init; }
+
     /// <summary>
     /// Maximum allowed worker count. Zero means auto.
     /// </summary>
-    int MaximumWorkers = 0);
+    public int MaximumWorkers { get; init; }
+
+    public WorkerBudgetRequest(
+        WorkerBudgetMode Mode = WorkerBudgetMode.Balanced,
+        int ExplicitWorkerCount = 0,
+        int MinimumWorkers = 1,
+        int MaximumWorkers = 0)
+    {
+        this.Mode = Mode;
+        this.ExplicitWorkerCount = ExplicitWorkerCount;
+        this.MinimumWorkers = MinimumWorkers;
+        this.MaximumWorkers = MaximumWorkers;
+    }
+}

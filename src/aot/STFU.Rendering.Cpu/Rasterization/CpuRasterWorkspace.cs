@@ -58,33 +58,22 @@ public sealed class CpuRasterWorkspace
         PathSortScratch.Clear();
         GridSegments.Clear();
         Counters.Reset();
+        // Keep tile layout and tile list caches across frames.
     }
 
     public List<int>[] RentBins(int tileCount)
     {
         if (Bins.Length < tileCount)
         {
-            Bins = new List<int>[tileCount];
-            for (var i = 0; i < tileCount; i++)
-            {
-                Bins[i] = [];
-            }
-
-            BinCount = tileCount;
-            return Bins;
+            var bins = Bins;
+            Array.Resize(ref bins, GrowCapacity(tileCount));
+            Bins = bins;
         }
 
-        for (var i = 0; i < BinCount; i++)
+        for (var i = 0; i < tileCount; i++)
         {
+            Bins[i] ??= new List<int>(32);
             Bins[i].Clear();
-        }
-
-        if (BinCount < tileCount)
-        {
-            for (var i = BinCount; i < tileCount; i++)
-            {
-                Bins[i] = [];
-            }
         }
 
         BinCount = tileCount;
@@ -259,6 +248,17 @@ public sealed class CpuRasterWorkspace
         }
 
         Counters.TileBinCapacity = NumericMath.AtLeast(Counters.TileBinCapacity, TileSegmentIndices.Length);
+    }
+
+    private static int GrowCapacity(int required)
+    {
+        var capacity = 4;
+        while (capacity < required)
+        {
+            capacity = checked(capacity + (capacity >> 1));
+        }
+
+        return capacity;
     }
 
     private readonly record struct TileCacheKey(int Width, int Height, int TileSize);

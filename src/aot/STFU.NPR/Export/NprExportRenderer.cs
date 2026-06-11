@@ -29,7 +29,8 @@ public sealed class NprExportRenderer
             PreviousFrame = sourceContext.PreviousFrame,
             EnablePassTimings = sourceContext.EnablePassTimings,
             EnableStepAllocationTracking = sourceContext.EnableStepAllocationTracking,
-            EnableDetailedStepNotes = sourceContext.EnableDetailedStepNotes
+            EnableDetailedStepNotes = sourceContext.EnableDetailedStepNotes,
+            EnableRangeTimings = sourceContext.EnableRangeTimings
         };
 
         pipeline.Execute(exportContext);

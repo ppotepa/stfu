@@ -95,7 +95,7 @@ public sealed class InteractivePipelineRoutingContractTests
             "UseReferenceFallbackForFinalFrame = !previewOutput || forceFallback",
             "RequireToneCoverageForInteractivePreview = requireToneCoverage",
             "InteractivePreviewMinReadinessScore = minReadinessScore",
-            "TargetFrameMs = 16.6");
+            "TargetFrameMs = targetFrameMs");
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed class InteractivePipelineRoutingContractTests
             "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs");
         var text = File.ReadAllText(path);
 
-        var fallback = text.IndexOf("var referenceFrame = _referenceFallback.Execute(context);", StringComparison.Ordinal);
+        var fallback = text.IndexOf("referenceFrame = _referenceFallback.Execute(context);", StringComparison.Ordinal);
         var orchestrator = text.IndexOf("var result = _orchestrator.Execute(intent, context);", StringComparison.Ordinal);
 
         Assert.True(fallback >= 0, "Interactive Performance must execute Reference Quality while it harvests graph artifacts.");

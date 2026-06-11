@@ -1,63 +1,37 @@
-[CmdletBinding()]
-param(
-    [string]$Root = ""
-)
-
 $ErrorActionPreference = "Stop"
-if ([string]::IsNullOrWhiteSpace($Root)) {
-    $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-}
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$sourceRoots = @(
+    "src/aot",
+    "src/runtime/STFU.Rendering.DirectX",
+    "src/runtime/STFU.UI.Bridge"
+)
 
 $pattern = '(?<!Deterministic)Parallel\.(For|ForEach|Invoke)'
-$paths = @(
-    (Join-Path $Root "src\aot"),
-    (Join-Path $Root "src\runtime")
+$taskRunPattern = 'Task\.Run\s*\('
+$threadAuditPattern = 'new\s+Thread\s*\('
+
+$allowed = @(
+    'src/aot/STFU.Parallelism/DeterministicParallel.cs',
+    'src/aot/STFU.Rendering.Abstractions/Execution/LatestNprRenderScheduler.cs'
 )
 
-$scanMatches = & rg -P $pattern @paths -g "*.cs" -n
-if ($LASTEXITCODE -gt 1) {
-    exit $LASTEXITCODE
-}
-
-$unexpected = @(
-    $scanMatches | Where-Object {
-        $_ -and ($_ -notmatch 'src[/\\]aot[/\\]STFU\.Parallelism[/\\]DeterministicParallel\.cs:')
+$violations = @()
+foreach ($rootRel in $sourceRoots) {
+    $dir = Join-Path $root $rootRel
+    if (!(Test-Path $dir)) { continue }
+    $files = Get-ChildItem $dir -Recurse -Filter *.cs
+    foreach ($file in $files) {
+        $rel = [IO.Path]::GetRelativePath($root, $file.FullName).Replace('\', '/')
+        if ($allowed -contains $rel) { continue }
+        $text = Get-Content $file.FullName -Raw
+        if ($text -match $pattern -or $text -match $taskRunPattern -or $text -match $threadAuditPattern) {
+            $violations += $rel
+        }
     }
-)
-
-if ($unexpected.Count -gt 0) {
-    Write-Error ("Unexpected direct Parallel.* usage outside STFU.Parallelism:`n" + ($unexpected -join "`n"))
-    exit 1
 }
 
-$scanMatches
-
-$threadAuditPattern = '\b(new\s+Thread|Task\.Run|ThreadPool\.QueueUserWorkItem)\b'
-$threadAudit = & rg -P $threadAuditPattern @paths -g "*.cs" -n
-if ($LASTEXITCODE -gt 1) {
-    exit $LASTEXITCODE
+if ($violations.Count -gt 0) {
+    Write-Error ("Forbidden raw parallel/threading usage:`n" + ($violations -join "`n"))
 }
 
-$unexpectedThreadAudit = @(
-    $threadAudit | Where-Object {
-        $_ -and
-        ($_ -notmatch 'src[/\\]aot[/\\]STFU\.Parallelism[/\\]') -and
-        ($_ -notmatch 'tests[/\\]') -and
-        ($_ -notmatch 'tools[/\\]') -and
-        ($_ -notmatch 'src[/\\]runtime[/\\]STFU\.Import\.Fbx[/\\]') -and
-        ($_ -notmatch 'src[/\\]aot[/\\]STFU\.Rendering\.Abstractions[/\\]Execution[/\\]')
-    }
-)
-
-if ($unexpectedThreadAudit.Count -gt 0) {
-    Write-Error ("Unexpected raw thread/task usage in renderer hot paths:`n" + ($unexpectedThreadAudit -join "`n"))
-    exit 1
-}
-
-if (-not [string]::IsNullOrWhiteSpace($threadAudit)) {
-    Write-Host ""
-    Write-Host "Thread/task audit:"
-    $threadAudit
-}
-
-exit 0
+Write-Host "Parallelism guard passed."

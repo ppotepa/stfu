@@ -54,6 +54,7 @@ public static class NprRenderContextFactory
             EnablePassTimings = request.DiagnosticsOptions?.EnablePassTimings ?? true,
             EnableStepAllocationTracking = request.DiagnosticsOptions?.EnableStepAllocationTracking ?? false,
             EnableDetailedStepNotes = request.DiagnosticsOptions?.EnableDetailedStepNotes ?? false,
+            EnableRangeTimings = request.DiagnosticsOptions?.EnableRangeTimings ?? false,
             Scene = request.Scene,
             Assets = request.Assets,
             Camera = request.Camera,

@@ -14,6 +14,9 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
     private byte[] _triangleFlags = [];
     private int[] _triangleOffsets = [];
     private TriangleBuildMeshJob[] _meshJobs = [];
+    private int[] _rangeRejectedInvalid = [];
+    private int[] _rangeRejectedArea = [];
+    private int[] _rangeRejectedInvisible = [];
 
     public void Execute(STFU.NPR.Pipeline.NprContext context)
     {
@@ -46,19 +49,26 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
         {
             context.Counters.Set("BuildProjectedTrianglesStep.outputTriangles", 0);
             context.Counters.Set("BuildProjectedTrianglesStep.culledTriangles", 0);
+            context.Counters.Set("BuildProjectedTrianglesStep.rejectedTriangles", 0);
+            context.Counters.Set("BuildProjectedTrianglesStep.triangleScratchCapacity", _stagedTriangles.Length);
+            context.Counters.Set("BuildProjectedTrianglesStep.rejectedInvalidIndex", 0);
+            context.Counters.Set("BuildProjectedTrianglesStep.rejectedArea", 0);
+            context.Counters.Set("BuildProjectedTrianglesStep.rejectedInvisible", 0);
             return;
         }
 
         EnsureScratchCapacity(totalTriangleCount);
+        var rangeCount = DeterministicParallel.GetRangeCount(totalTriangleCount, context.WorkerCount, 512);
+        EnsureRejectScratchCapacity(rangeCount);
 
         BuildTriangles(
-            context.WorkerCount,
+            context,
             meshCount,
             totalTriangleCount,
             cameraPosition,
             minimumProjectedTriangleArea,
             context.Graph.Vertices,
-            context.CancellationToken);
+            rangeCount);
 
         var writeCount = PrefixSums.ExclusiveFromFlags(
             _triangleFlags.AsSpan(0, totalTriangleCount),
@@ -68,15 +78,18 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
         CollectionsMarshal.SetCount(context.Graph.Triangles, initialTriangleCount + writeCount);
         var graphTriangles = context.Graph.Triangles;
 
-        DeterministicParallel.ForRanges(
+        NprParallelTrace.ForRanges(
+            context,
+            "BuildProjectedTrianglesStep.Copy",
             0,
             totalTriangleCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, _, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var graphTriangleSpan = CollectionsMarshal.AsSpan(graphTriangles);
+                var staged = _stagedTriangles.AsSpan();
+                var flags = _triangleFlags.AsSpan();
+                var offsets = _triangleOffsets.AsSpan();
                 for (var globalTriangleIndex = startInclusive; globalTriangleIndex < endExclusive; globalTriangleIndex++)
                 {
                     if ((globalTriangleIndex & 0x3FF) == 0)
@@ -84,41 +97,52 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
-                    if (_triangleFlags[globalTriangleIndex] == 0)
+                    if (flags[globalTriangleIndex] == 0)
                     {
                         continue;
                     }
 
-                    graphTriangleSpan[initialTriangleCount + _triangleOffsets[globalTriangleIndex]] =
-                        _stagedTriangles[globalTriangleIndex];
+                    graphTriangleSpan[initialTriangleCount + offsets[globalTriangleIndex]] =
+                        staged[globalTriangleIndex];
                 }
             },
             minItemsPerRange: 512);
 
         context.Counters.Set("BuildProjectedTrianglesStep.outputTriangles", writeCount);
         context.Counters.Set("BuildProjectedTrianglesStep.culledTriangles", totalTriangleCount - writeCount);
+        context.Counters.Set("BuildProjectedTrianglesStep.rejectedTriangles", totalTriangleCount - writeCount);
+        context.Counters.Set("BuildProjectedTrianglesStep.triangleScratchCapacity", _stagedTriangles.Length);
+        context.Counters.Set("BuildProjectedTrianglesStep.rejectedInvalidIndex", SumRangeCounters(_rangeRejectedInvalid, rangeCount));
+        context.Counters.Set("BuildProjectedTrianglesStep.rejectedArea", SumRangeCounters(_rangeRejectedArea, rangeCount));
+        context.Counters.Set("BuildProjectedTrianglesStep.rejectedInvisible", SumRangeCounters(_rangeRejectedInvisible, rangeCount));
     }
 
     private void BuildTriangles(
-        int workerCount,
+        STFU.NPR.Pipeline.NprContext context,
         int meshJobCount,
         int totalTriangleCount,
         Vector3 cameraPosition,
         float minimumProjectedTriangleArea,
         List<ProjectedVertex> graphVertices,
-        CancellationToken cancellationToken)
+        int rangeCount)
     {
-        DeterministicParallel.ForRanges(
+        Array.Clear(_rangeRejectedInvalid, 0, rangeCount);
+        Array.Clear(_rangeRejectedArea, 0, rangeCount);
+        Array.Clear(_rangeRejectedInvisible, 0, rangeCount);
+        NprParallelTrace.ForRanges(
+            context,
+            "BuildProjectedTrianglesStep.Build",
             0,
             totalTriangleCount,
-            workerCount,
-            cancellationToken,
-            (startInclusive, endExclusive, _, cancellationToken) =>
+            (startInclusive, endExclusive, rangeIndex, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var meshJobIndex = FindMeshJobIndex(startInclusive, meshJobCount);
                 var meshJob = _meshJobs[meshJobIndex];
                 var graphVertexSpan = CollectionsMarshal.AsSpan(graphVertices);
+                var rejectedInvalidIndex = 0;
+                var rejectedArea = 0;
+                var rejectedInvisible = 0;
 
                 for (var globalTriangleIndex = startInclusive; globalTriangleIndex < endExclusive; globalTriangleIndex++)
                 {
@@ -148,6 +172,7 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
                             triangleIndex,
                             triangle,
                             graphVertexSpan,
+                            out var rejectReason,
                             out var staged))
                     {
                         _stagedTriangles[globalTriangleIndex] = staged;
@@ -156,8 +181,24 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
                     else
                     {
                         _triangleFlags[globalTriangleIndex] = 0;
+                        switch (rejectReason)
+                        {
+                            case TriangleRejectReason.InvalidIndex:
+                                rejectedInvalidIndex++;
+                                break;
+                            case TriangleRejectReason.Area:
+                                rejectedArea++;
+                                break;
+                            case TriangleRejectReason.Invisible:
+                                rejectedInvisible++;
+                                break;
+                        }
                     }
                 }
+
+                _rangeRejectedInvalid[rangeIndex] = rejectedInvalidIndex;
+                _rangeRejectedArea[rangeIndex] = rejectedArea;
+                _rangeRejectedInvisible[rangeIndex] = rejectedInvisible;
             },
             minItemsPerRange: 512);
     }
@@ -216,6 +257,27 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
         }
     }
 
+    private void EnsureRejectScratchCapacity(int rangeCount)
+    {
+        if (_rangeRejectedInvalid.Length < rangeCount)
+        {
+            _rangeRejectedInvalid = new int[rangeCount];
+            _rangeRejectedArea = new int[rangeCount];
+            _rangeRejectedInvisible = new int[rangeCount];
+        }
+    }
+
+    private static int SumRangeCounters(int[] counters, int count)
+    {
+        var total = 0;
+        for (var i = 0; i < count; i++)
+        {
+            total += counters[i];
+        }
+
+        return total;
+    }
+
     private static IReadOnlyList<MeshTriangle> ResolveTriangles(MeshData mesh)
     {
         return mesh.Triangles;
@@ -229,6 +291,7 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
         int triangleIndex,
         MeshTriangle triangle,
         ReadOnlySpan<ProjectedVertex> graphVertices,
+        out TriangleRejectReason rejectReason,
         out ProjectedTriangle projectedTriangle)
     {
         var aIndex = projectedMesh.VertexOffset + triangle.A;
@@ -239,6 +302,7 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
             (uint)bIndex >= (uint)graphVertices.Length ||
             (uint)cIndex >= (uint)graphVertices.Length)
         {
+            rejectReason = TriangleRejectReason.InvalidIndex;
             projectedTriangle = default;
             return false;
         }
@@ -267,6 +331,19 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
             normalizeViewDirection: false);
         var visible = absScreenArea >= minimumProjectedTriangleArea &&
             (a.IsVisible || b.IsVisible || c.IsVisible);
+        if (absScreenArea < minimumProjectedTriangleArea)
+        {
+            rejectReason = TriangleRejectReason.Area;
+            projectedTriangle = default;
+            return false;
+        }
+
+        if (!(a.IsVisible || b.IsVisible || c.IsVisible))
+        {
+            rejectReason = TriangleRejectReason.Invisible;
+            projectedTriangle = default;
+            return false;
+        }
 
         projectedTriangle = new ProjectedTriangle(
             StableId: projectedMesh.TriangleOffset + triangleIndex,
@@ -286,7 +363,16 @@ public sealed class BuildProjectedTrianglesStep : STFU.NPR.Pipeline.INprStep
         {
             EntityId = projectedMesh.EntityId
         };
+        rejectReason = TriangleRejectReason.None;
         return true;
+    }
+
+    private enum TriangleRejectReason : byte
+    {
+        None = 0,
+        InvalidIndex = 1,
+        Area = 2,
+        Invisible = 3
     }
 
     private readonly record struct TriangleBuildMeshJob(

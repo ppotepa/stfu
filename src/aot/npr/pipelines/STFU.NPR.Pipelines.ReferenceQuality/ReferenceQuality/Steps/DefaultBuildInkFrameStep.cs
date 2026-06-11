@@ -49,6 +49,10 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearSilhouette", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearFeature", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.layerIndexSilhouette", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.layerIndexFeature", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.layerIndexBoundary", 0);
+            context.Counters.Set("DefaultBuildInkFrameStep.segmentScratchWaste", _segmentScratch.Length);
             context.Counters.Set("DefaultBuildInkFrameStep.emitCandidateCount", 0);
             context.Counters.Set("DefaultBuildInkFrameStep.emitFlagCapacity", _segmentEmitFlags.Length);
             context.Counters.Set("DefaultBuildInkFrameStep.segmentPlanCapacity", _segmentPlans.Length);
@@ -132,11 +136,11 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         var parallel = context.WorkerCount > 1 && pathCount >= 256;
         if (parallel)
         {
-            DeterministicParallel.ForRanges(
+            NprParallelTrace.ForRanges(
+                context,
+                nameof(DefaultBuildInkFrameStep),
                 0,
                 pathCount,
-                context.WorkerCount,
-                context.CancellationToken,
                 (startInclusive, endExclusive, _, cancellationToken) =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -190,21 +194,6 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             }
         }
 
-        if (_previousSilhouetteIndexCount > 0)
-        {
-            Array.Clear(_silhouetteSegmentIndices, 0, _previousSilhouetteIndexCount);
-        }
-
-        if (_previousFeatureIndexCount > 0)
-        {
-            Array.Clear(_featureSegmentIndices, 0, _previousFeatureIndexCount);
-        }
-
-        if (_previousBoundaryIndexCount > 0)
-        {
-            Array.Clear(_boundarySegmentIndices, 0, _previousBoundaryIndexCount);
-        }
-
         BuildLayerIndices(pathCount);
 
         var segments = new ArraySliceReadOnlyList<StrokeSegment2D>(_segmentScratch, totalSegments);
@@ -235,6 +224,10 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearSilhouette", _previousSilhouetteIndexCount);
         context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearFeature", _previousFeatureIndexCount);
         context.Counters.Set("DefaultBuildInkFrameStep.layerIndexClearBoundary", _previousBoundaryIndexCount);
+        context.Counters.Set("DefaultBuildInkFrameStep.layerIndexSilhouette", silhouetteSegmentCount);
+        context.Counters.Set("DefaultBuildInkFrameStep.layerIndexFeature", featureSegmentCount);
+        context.Counters.Set("DefaultBuildInkFrameStep.layerIndexBoundary", boundarySegmentCount);
+        context.Counters.Set("DefaultBuildInkFrameStep.segmentScratchWaste", _segmentScratch.Length - totalSegments);
         context.Counters.Set("DefaultBuildInkFrameStep.emitCandidateCount", emitOffset);
         context.Counters.Set("DefaultBuildInkFrameStep.emitFlagCapacity", _segmentEmitFlags.Length);
         context.Counters.Set("DefaultBuildInkFrameStep.segmentPlanCapacity", _segmentPlans.Length);
@@ -300,32 +293,23 @@ public sealed class DefaultBuildInkFrameStep : STFU.NPR.Pipeline.INprStep
             }
 
             var sourceOffset = _pathSegmentOffsets[pathIndex];
+            var destination = info.LayerIndex switch
+            {
+                0 => _silhouetteSegmentIndices.AsSpan(silhouetteCursor, count),
+                1 => _featureSegmentIndices.AsSpan(featureCursor, count),
+                _ => _boundarySegmentIndices.AsSpan(boundaryCursor, count)
+            };
+
+            for (var segmentIndex = 0; segmentIndex < count; segmentIndex++)
+            {
+                destination[segmentIndex] = sourceOffset + segmentIndex;
+            }
+
             switch (info.LayerIndex)
             {
-                case 0:
-                    for (var segmentIndex = 0; segmentIndex < count; segmentIndex++)
-                    {
-                        _silhouetteSegmentIndices[silhouetteCursor + segmentIndex] = sourceOffset + segmentIndex;
-                    }
-
-                    silhouetteCursor += count;
-                    break;
-                case 1:
-                    for (var segmentIndex = 0; segmentIndex < count; segmentIndex++)
-                    {
-                        _featureSegmentIndices[featureCursor + segmentIndex] = sourceOffset + segmentIndex;
-                    }
-
-                    featureCursor += count;
-                    break;
-                default:
-                    for (var segmentIndex = 0; segmentIndex < count; segmentIndex++)
-                    {
-                        _boundarySegmentIndices[boundaryCursor + segmentIndex] = sourceOffset + segmentIndex;
-                    }
-
-                    boundaryCursor += count;
-                    break;
+                case 0: silhouetteCursor += count; break;
+                case 1: featureCursor += count; break;
+                default: boundaryCursor += count; break;
             }
         }
 

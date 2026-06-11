@@ -58,19 +58,18 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         CollectionsMarshal.SetCount(topologyEdges, initialTopologyCount + edgeCapacity);
         CollectionsMarshal.SetCount(projectedEdges, initialEdgeCount + edgeCapacity);
 
-        DeterministicParallel.ForRanges(
+        NprParallelTrace.ForRanges(
+            context,
+            "BuildMeshTopologyStep.DensePerTriangleEdges",
             0,
             triangleCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, _, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var topologySpan = CollectionsMarshal.AsSpan(topologyEdges);
                 var projectedEdgeSpan = CollectionsMarshal.AsSpan(projectedEdges);
-                var vertexSpan = CollectionsMarshal.AsSpan(vertices);
                 var triangleSpan = CollectionsMarshal.AsSpan(triangles);
-
+                var vertexSpan = CollectionsMarshal.AsSpan(vertices);
                 for (var triangleIndex = startInclusive; triangleIndex < endExclusive; triangleIndex++)
                 {
                     if ((triangleIndex & 0x3FF) == 0)
@@ -78,7 +77,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
                         cancellationToken.ThrowIfCancellationRequested();
                     }
 
-                    var triangle = triangleSpan[triangleIndex];
+                    ref readonly var triangle = ref triangleSpan[triangleIndex];
                     var outputBaseIndex = triangleIndex * 3;
 
                     WritePerTriangleEdge(
@@ -87,7 +86,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
                         initialTopologyCount + outputBaseIndex,
                         initialEdgeCount + outputBaseIndex,
                         vertexSpan,
-                        triangle,
+                        in triangle,
                         triangleIndex,
                         0,
                         triangle.A,
@@ -98,7 +97,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
                         initialTopologyCount + outputBaseIndex + 1,
                         initialEdgeCount + outputBaseIndex + 1,
                         vertexSpan,
-                        triangle,
+                        in triangle,
                         triangleIndex,
                         1,
                         triangle.B,
@@ -109,7 +108,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
                         initialTopologyCount + outputBaseIndex + 2,
                         initialEdgeCount + outputBaseIndex + 2,
                         vertexSpan,
-                        triangle,
+                        in triangle,
                         triangleIndex,
                         2,
                         triangle.C,
@@ -124,6 +123,8 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         context.Counters.Set("BuildMeshTopologyStep.boundaryEdges", edgeCapacity);
         context.Counters.Set("BuildMeshTopologyStep.topologyEdges", edgeCapacity);
         context.Counters.Set("BuildMeshTopologyStep.projectedEdges", edgeCapacity);
+        context.Counters.Set("BuildMeshTopologyStep.outputTopologyEdges", edgeCapacity);
+        context.Counters.Set("BuildMeshTopologyStep.outputProjectedEdges", edgeCapacity);
         context.Counters.Set("BuildMeshTopologyStep.cacheMode", 0);
         context.Counters.Set("BuildMeshTopologyStep.denseMode", 1);
     }
@@ -136,11 +137,11 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         var vertices = context.Graph.Vertices;
         var triangles = context.Graph.Triangles;
 
-        DeterministicParallel.ForRanges(
+        NprParallelTrace.ForRanges(
+            context,
+            "BuildMeshTopologyStep.SparsePerTriangleEdges.Build",
             0,
             triangleCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, _, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -172,11 +173,11 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         CollectionsMarshal.SetCount(context.Graph.TopologyEdges, initialTopologyCount + edgeCount);
         CollectionsMarshal.SetCount(context.Graph.Edges, initialEdgeCount + edgeCount);
 
-        DeterministicParallel.ForRanges(
+        NprParallelTrace.ForRanges(
+            context,
+            "BuildMeshTopologyStep.SparsePerTriangleEdges.Copy",
             0,
             triangleCount,
-            context.WorkerCount,
-            context.CancellationToken,
             (startInclusive, endExclusive, _, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -519,7 +520,7 @@ public sealed class BuildMeshTopologyStep : STFU.NPR.Pipeline.INprStep
         int topologyOutputIndex,
         int projectedEdgeOutputIndex,
         ReadOnlySpan<ProjectedVertex> vertices,
-        ProjectedTriangle triangle,
+        in ProjectedTriangle triangle,
         int triangleIndex,
         int edgeIndex,
         int aIndex,

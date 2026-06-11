@@ -243,18 +243,18 @@ public sealed class DirectXRenderBackend : IGpuRenderBackend
                 diagnostics.AllocatedBytes = NumericMath.AtLeast(GC.GetTotalAllocatedBytes(false) - allocatedBefore, 0);
                 LogMemoryIfNeeded(request, diagnostics);
 
-            return new NprRenderResult
-            {
-                Revision = request.Revision,
-                Status = NprRenderStatus.Completed,
-                ExecutionProfile = request.ExecutionProfile,
-                OutputKind = NprRenderOutputKind.PixelSurface,
-                PixelSurfaceLease = pixelLease,
-                StrokeFrame = strokeFrame,
-                NprFrame = nprFrame,
-                DebugFrame = debugFrame,
-                Diagnostics = diagnostics
-            };
+                return new NprRenderResult
+                {
+                    Revision = request.Revision,
+                    Status = NprRenderStatus.Completed,
+                    ExecutionProfile = request.ExecutionProfile,
+                    OutputKind = NprRenderOutputKind.PixelSurface,
+                    PixelSurfaceLease = pixelLease,
+                    StrokeFrame = strokeFrame,
+                    NprFrame = nprFrame,
+                    DebugFrame = debugFrame,
+                    Diagnostics = diagnostics
+                };
             }
 
             if (!request.Budget.PreferGpuPresentation && !request.Budget.AllowGpuReadback)

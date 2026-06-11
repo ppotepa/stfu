@@ -90,6 +90,7 @@ public sealed class CpuStrokeRasterizer
         var tiles = workspace.GetTiles(target.Width, target.Height, tileSize);
         var parallel = budget.EnableTileParallelism && workerCount > 1 && segments.Count >= 64 && tileCount > 1;
         var rangeCount = DeterministicParallel.GetRangeCount(segments.Count, workerCount, 64);
+        workspace.Counters.StrokeTileCount = tileCount;
 
         if (!parallel || workerCount <= 1 || rangeCount <= 1)
         {
@@ -174,8 +175,9 @@ public sealed class CpuStrokeRasterizer
             workspace.TileCounts.AsSpan(0, tileCount),
             workspace.TileOffsets.AsSpan(0, tileCount));
         workspace.EnsureTileBinningCapacity(rangeCount, tileCount, totalRefs);
-        workspace.Counters.StrokeTileRefs += totalRefs;
+        workspace.Counters.StrokeTileRefs += totalRefs; // stroke.tileRefs
         workspace.Counters.StrokeTilesTouched += CountTouchedTiles(workspace.TileCounts, tileCount);
+        workspace.Counters.StrokeMaxRefsPerTile = CountMaxRefs(workspace.TileCounts, tileCount); // stroke.maxRefsPerTile
         Array.Clear(workspace.TileSegmentIndices, 0, totalRefs);
 
         for (var tileIndex = 0; tileIndex < tileCount; tileIndex++)
@@ -314,6 +316,7 @@ public sealed class CpuStrokeRasterizer
         workspace.EnsureTileBinningCapacity(1, tileCount, totalRefs);
         workspace.Counters.StrokeTileRefs += totalRefs;
         workspace.Counters.StrokeTilesTouched += CountTouchedTiles(workspace.TileCounts, tileCount);
+        workspace.Counters.StrokeMaxRefsPerTile = CountMaxRefs(workspace.TileCounts, tileCount);
         Array.Copy(workspace.TileOffsets, workspace.TileWriteCursors, tileCount);
 
         for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
@@ -483,5 +486,16 @@ public sealed class CpuStrokeRasterizer
         }
 
         return touched;
+    }
+
+    private static int CountMaxRefs(int[] tileCounts, int tileCount)
+    {
+        var maxRefs = 0;
+        for (var i = 0; i < tileCount; i++)
+        {
+            maxRefs = NumericMath.AtLeast(maxRefs, tileCounts[i]);
+        }
+
+        return maxRefs;
     }
 }
