@@ -87,7 +87,7 @@ public sealed class LayerStackViewModel : BindableObject
 
     public int VisibleLayerCount => Layers.Count(layer => layer.Visible);
 
-    public int StrokeOutputCount => _session.Strokes.CurrentFrame.Segments.Count;
+    public int StrokeOutputCount => _session.Strokes.CurrentFrame.Segments?.Count ?? 0;
 
     public int StrokePathOutputCount => _session.Strokes.CurrentFrame.Paths.Count;
 
@@ -421,6 +421,11 @@ public sealed class LayerStackViewModel : BindableObject
         _intentUnlayeredCounts.Clear();
 
         var segments = frame.Segments;
+        if (segments is null)
+        {
+            return;
+        }
+
         for (var i = 0; i < segments.Count; i++)
         {
             AccumulateIntentCount(segments[i].Metadata);
