@@ -43,6 +43,10 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.prunedFrameOrCameraArtifacts", diagnostics.PrunedFrameOrCameraArtifactCount);
         context.Counters.Set("InteractivePerformance.projectionSource", diagnostics.ProjectionSource);
         context.Counters.Set("InteractivePerformance.projectionBuiltSelfContained", diagnostics.ProjectionBuiltSelfContained ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.projectionUsedReferenceGraph", diagnostics.ProjectionUsedReferenceGraph ? 1 : 0);
+        context.Counters.Set("InteractivePerformance.projectionInputMeshes", diagnostics.ProjectionInputMeshCount);
+        context.Counters.Set("InteractivePerformance.projectionInputVertices", diagnostics.ProjectionInputVertexCount);
+        context.Counters.Set("InteractivePerformance.projectionInputTriangles", diagnostics.ProjectionInputTriangleCount);
         context.Counters.Set("InteractivePerformance.projectionSourceEntities", diagnostics.ProjectionSourceEntities);
         context.Counters.Set("InteractivePerformance.projectionMeshes", diagnostics.ProjectionMeshes);
         context.Counters.Set("InteractivePerformance.projectedVertices", diagnostics.ProjectedVertices);
@@ -115,6 +119,10 @@ public static class InteractiveDiagnosticsBridge
         context.Counters.Set("InteractivePerformance.outputHealthStatus", (long)diagnostics.OutputHealthStatus);
         context.Counters.Set("InteractivePerformance.outputHealthScore", diagnostics.OutputHealthScore);
         context.Counters.Set("InteractivePerformance.outputHealthWarningCount", diagnostics.OutputHealthWarningCount);
+        context.Counters.Set("InteractivePerformance.evidenceFactCount", diagnostics.EvidenceFactCount);
+        context.Counters.Set("InteractivePerformance.evidenceWarningCount", diagnostics.EvidenceWarningCount);
+        context.Counters.Set("InteractivePerformance.evidenceFailureCount", diagnostics.EvidenceFailureCount);
+        context.Counters.Set("InteractivePerformance.runtimeGateStatus", diagnostics.RuntimeGateStatus == "Pass" ? 1 : 0);
         context.Counters.Set("InteractivePerformance.referenceExecutionMode", (long)diagnostics.ReferenceExecutionMode);
         context.Counters.Set("InteractivePerformance.referenceExecutedBeforeInteractive", diagnostics.ReferenceExecutedBeforeInteractive ? 1 : 0);
         context.Counters.Set("InteractivePerformance.referenceExecutedAfterInteractive", diagnostics.ReferenceExecutedAfterInteractive ? 1 : 0);

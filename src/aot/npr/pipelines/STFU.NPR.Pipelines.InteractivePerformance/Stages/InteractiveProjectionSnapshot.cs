@@ -7,7 +7,11 @@ internal sealed record InteractiveProjectionSnapshot(
     NprGraph Graph,
     InteractiveProjectionSource Source,
     int SourceEntityCount,
+    int InputMeshCount,
+    int InputVertexCount,
+    int InputTriangleCount,
     int ProjectedMeshCount,
     int ProjectedVertexCount,
     int ProjectedTriangleCount,
-    string Note);
+    string Note,
+    bool UsedReferenceGraph = false);

@@ -21,6 +21,42 @@ function Write-ReportLine {
     $Value | Tee-Object -FilePath $reportPath -Append
 }
 
+function Assert-SourceContains {
+    param(
+        [string] $Path,
+        [string] $Pattern,
+        [string] $Description
+    )
+
+    $fullPath = Join-Path $repoRoot $Path
+    if (-not (Test-Path -LiteralPath $fullPath)) {
+        throw "Missing source file for $Description: $Path"
+    }
+
+    $text = Get-Content -LiteralPath $fullPath -Raw
+    if ($text -notlike "*$Pattern*") {
+        throw "Missing marker for $Description in ${Path}: ${Pattern}"
+    }
+}
+
+function Assert-SourceDoesNotContain {
+    param(
+        [string] $Path,
+        [string] $Pattern,
+        [string] $Description
+    )
+
+    $fullPath = Join-Path $repoRoot $Path
+    if (-not (Test-Path -LiteralPath $fullPath)) {
+        throw "Missing source file for $Description: $Path"
+    }
+
+    $text = Get-Content -LiteralPath $fullPath -Raw
+    if ($text.Contains($Pattern, [System.StringComparison]::Ordinal)) {
+        throw "Forbidden marker for $Description was found in ${Path}: ${Pattern}"
+    }
+}
+
 Write-ReportLine "STFU Interactive Performance validation"
 Write-ReportLine "Repository: $repoRoot"
 Write-ReportLine "Configuration: $Configuration"
@@ -99,6 +135,10 @@ foreach ($counter in @(
     "InteractivePerformance.outputHealthStatus",
     "InteractivePerformance.outputHealthScore",
     "InteractivePerformance.outputHealthWarningCount",
+    "InteractivePerformance.evidenceFactCount",
+    "InteractivePerformance.evidenceWarningCount",
+    "InteractivePerformance.evidenceFailureCount",
+    "InteractivePerformance.runtimeGateStatus",
     "InteractivePerformance.previewCandidateReadinessScore",
     "InteractivePerformance.previewRejectedByReadinessGate",
     "InteractivePerformance.previewRejectedBySegmentBudget"
@@ -206,6 +246,37 @@ foreach ($counter in @(
 }
 Write-ReportLine ""
 
+Write-ReportLine "[contract] checking interactive projection input markers"
+Assert-SourceContains `
+    -Path "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionInput.cs" `
+    -Pattern "InteractiveProjectionInput" `
+    -Description "interactive projection input model"
+Write-ReportLine "  ok InteractiveProjectionInput"
+Assert-SourceContains `
+    -Path "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionInputBuilder.cs" `
+    -Pattern "context.Scene" `
+    -Description "interactive projection input builder"
+Write-ReportLine "  ok InteractiveProjectionInputBuilder.context.Scene"
+Assert-SourceContains `
+    -Path "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionInputBuilder.cs" `
+    -Pattern "context.Assets" `
+    -Description "interactive projection input builder"
+Write-ReportLine "  ok InteractiveProjectionInputBuilder.context.Assets"
+Assert-SourceContains `
+    -Path "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionScratchBuilder.cs" `
+    -Pattern "InteractiveProjectionInputBuilder.Build" `
+    -Description "interactive projection scratch builder"
+Assert-SourceContains `
+    -Path "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionScratchBuilder.cs" `
+    -Pattern "InteractiveProjectionGraphBuilder.Build" `
+    -Description "interactive projection scratch builder"
+Assert-SourceDoesNotContain `
+    -Path "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionScratchBuilder.cs" `
+    -Pattern "context.ReferenceContext.Graph" `
+    -Description "self-contained scratch projection"
+Write-ReportLine "  ok self-contained scratch projection"
+Write-ReportLine ""
+
 Write-ReportLine "[contract] checking interactive budget markers"
 foreach ($marker in @(
     "InteractiveBudgetLimiter",
@@ -238,6 +309,8 @@ foreach ($marker in @(
     "InteractiveFrameBenchmarkReporter",
     "InteractiveFrameBenchmarkReport",
     "InteractiveFrameBenchmarkSample",
+    "InteractiveRuntimeEvidenceBuilder",
+    "InteractiveRuntimeGateSnapshotBuilder",
     "TotalInteractiveStageMs",
     "InteractivePerformance.totalInteractiveStageMs",
     "run-interactive-performance-bench.ps1",

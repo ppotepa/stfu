@@ -77,12 +77,16 @@ public static class ProjectionArtifactBuilder
             graph,
             InteractiveProjectionSource.ReferenceGraph,
             SourceEntityCount: context.ReferenceContext.Scene.Entities.Count,
+            InputMeshCount: graph.Meshes.Count,
+            InputVertexCount: graph.Vertices.Count,
+            InputTriangleCount: graph.Triangles.Count,
             ProjectedMeshCount: graph.Meshes.Count,
             ProjectedVertexCount: graph.Vertices.Count,
             ProjectedTriangleCount: graph.Triangles.Count,
             Note: graph.Vertices.Count > 0 || graph.Triangles.Count > 0
                 ? "Projected geometry harvested from the populated Reference Quality graph."
-                : "Reference Quality graph did not contain projected geometry.");
+                : "Reference Quality graph did not contain projected geometry.",
+            UsedReferenceGraph: true);
     }
 
     private static ProjectedVertexArtifact BuildVerticesFromSnapshot(
@@ -201,9 +205,13 @@ public static class ProjectionArtifactBuilder
             LastBuildTime = TimeSpan.Zero,
             Source = snapshot.Source,
             SourceEntityCount = snapshot.SourceEntityCount,
+            InputMeshCount = snapshot.InputMeshCount,
+            InputVertexCount = snapshot.InputVertexCount,
+            InputTriangleCount = snapshot.InputTriangleCount,
             ProjectedMeshCount = snapshot.ProjectedMeshCount,
             ProjectedVertexCount = vertices.VertexCount,
             ProjectedTriangleCount = triangles.TriangleCount,
+            UsedReferenceGraph = snapshot.UsedReferenceGraph,
             Note = fullProjectionAvailable
                 ? snapshot.Note
                 : "Interactive projection artifacts are empty because no projectable geometry was found."

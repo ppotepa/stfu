@@ -56,6 +56,7 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
             ref referenceFrameAvailable,
             referenceExecutedBeforeInteractive);
 
+        WriteRuntimeEvidenceDiagnostics(result.Diagnostics);
         InteractiveDiagnosticsBridge.WriteToContext(context, result.Diagnostics);
         return finalFrame;
     }
@@ -120,6 +121,33 @@ public sealed class InteractivePerformanceNprPipeline : INprPipeline
             referenceFrameAvailable);
         result.Diagnostics.CaptureOutputHealth(InteractiveOutputHealthAnalyzer.Analyze(result.Diagnostics));
         return referenceFrame;
+    }
+
+    private static void WriteRuntimeEvidenceDiagnostics(InteractiveFrameDiagnostics diagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostics);
+
+        var scenario = NormalizeRuntimeEvidenceScenario(diagnostics.RuntimeEvidenceScenario);
+        diagnostics.RuntimeEvidenceScenario = scenario;
+
+        var evidence = InteractiveRuntimeEvidenceBuilder.BuildFrameEvidence(scenario, diagnostics);
+        var referenceAverageMs = diagnostics.PreviousKnownFrameMs > 0d
+            ? diagnostics.PreviousKnownFrameMs
+            : diagnostics.TargetFrameMs;
+        var comparison = InteractiveRuntimeGateSnapshotBuilder.BuildComparison(scenario, referenceAverageMs, diagnostics);
+        var checklist = InteractiveAcceptanceChecklistEvaluator.BuildDefault(comparison, evidence);
+
+        diagnostics.EvidenceFactCount = evidence.Facts.Count;
+        diagnostics.EvidenceWarningCount = evidence.WarningCount;
+        diagnostics.EvidenceFailureCount = evidence.FailureCount;
+        diagnostics.RuntimeGateStatus = checklist.Passed ? "Pass" : "Fail";
+    }
+
+    private static string NormalizeRuntimeEvidenceScenario(string scenario)
+    {
+        return string.IsNullOrWhiteSpace(scenario)
+            ? "interactive-frame"
+            : scenario.Trim();
     }
 
     private bool EnsureReferenceFallbackFrame(

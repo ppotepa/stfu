@@ -1,6 +1,6 @@
-using STFU.NPR.Graph;
 using STFU.NPR.Pipeline.InteractivePerformance.Artifacts;
 using STFU.NPR.Pipeline.InteractivePerformance.Core;
+using STFU.NPR.Graph;
 
 namespace STFU.NPR.Pipeline.InteractivePerformance.Stages;
 
@@ -10,43 +10,36 @@ internal static class InteractiveProjectionScratchBuilder
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var sourceGraph = context.ReferenceContext.Graph;
-        if (sourceGraph.Vertices.Count <= 0 && sourceGraph.Triangles.Count <= 0)
+        var input = InteractiveProjectionInputBuilder.Build(context.ReferenceContext);
+        if (!input.HasGeometry)
         {
             return new InteractiveProjectionSnapshot(
                 new NprGraph(),
                 InteractiveProjectionSource.ScratchProjection,
                 context.ReferenceContext.Scene.Entities.Count,
+                InputMeshCount: input.MeshCount,
+                InputVertexCount: input.VertexCount,
+                InputTriangleCount: input.TriangleCount,
                 ProjectedMeshCount: 0,
                 ProjectedVertexCount: 0,
                 ProjectedTriangleCount: 0,
-                Note: "Scratch projection had no projected geometry to emit.");
+                Note: input.SourceNote,
+                UsedReferenceGraph: false);
         }
 
-        var projectedGraph = ProjectMeshStep(sourceGraph);
-        var triangleGraph = BuildProjectedTrianglesStep(projectedGraph);
+        var triangleGraph = InteractiveProjectionGraphBuilder.Build(input);
 
         return new InteractiveProjectionSnapshot(
             triangleGraph,
             InteractiveProjectionSource.ScratchProjection,
             context.ReferenceContext.Scene.Entities.Count,
-            ProjectedMeshCount: projectedGraph.Meshes.Count,
-            ProjectedVertexCount: projectedGraph.Vertices.Count,
-            ProjectedTriangleCount: projectedGraph.Triangles.Count,
-            Note: "Scratch projection executed for interactive-optimized visibility path.");
-    }
-
-    private static NprGraph ProjectMeshStep(NprGraph graph)
-    {
-        var projected = new NprGraph();
-        projected.Meshes.AddRange(graph.Meshes);
-        projected.Vertices.AddRange(graph.Vertices);
-        projected.Triangles.AddRange(graph.Triangles);
-        return projected;
-    }
-
-    private static NprGraph BuildProjectedTrianglesStep(NprGraph graph)
-    {
-        return graph;
+            InputMeshCount: input.MeshCount,
+            InputVertexCount: input.VertexCount,
+            InputTriangleCount: input.TriangleCount,
+            ProjectedMeshCount: triangleGraph.Meshes.Count,
+            ProjectedVertexCount: triangleGraph.Vertices.Count,
+            ProjectedTriangleCount: triangleGraph.Triangles.Count,
+            Note: "Scratch projection built from scene/assets input without ReferenceGraph.",
+            UsedReferenceGraph: false);
     }
 }

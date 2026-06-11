@@ -110,5 +110,10 @@ public sealed class ProjectionStage : IInteractivePipelineStage
         context.Diagnostics.ProjectionSourceEntities = summary.SourceEntityCount;
         context.Diagnostics.ProjectionMeshes = summary.ProjectedMeshCount;
         context.Diagnostics.ProjectionBuiltSelfContained = summary.IsSelfContained;
+        context.Diagnostics.ProjectionUsedReferenceGraph = summary.UsedReferenceGraph;
+        context.Diagnostics.ProjectionInputMeshCount = summary.InputMeshCount;
+        context.Diagnostics.ProjectionInputVertexCount = summary.InputVertexCount;
+        context.Diagnostics.ProjectionInputTriangleCount = summary.InputTriangleCount;
+        context.Diagnostics.ProjectionInputSourceNote = summary.Note;
     }
 }

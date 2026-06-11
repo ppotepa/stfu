@@ -154,6 +154,75 @@ public sealed class InteractivePerformanceSourceContractTests
     }
 
     [Fact]
+    public void Interactive_projection_input_contract_is_declared_and_reference_graph_clone_is_blocked()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionInput.cs",
+            "InteractiveProjectionInput",
+            "HasGeometry",
+            "VertexCount",
+            "TriangleCount");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionInputBuilder.cs",
+            "InteractiveProjectionInputBuilder",
+            "context.Scene",
+            "context.Assets");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionScratchBuilder.cs",
+            "InteractiveProjectionInputBuilder.Build",
+            "InteractiveProjectionGraphBuilder.Build");
+
+        var scratchPath = Path.Combine(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Stages/InteractiveProjectionScratchBuilder.cs");
+        var scratch = File.ReadAllText(scratchPath);
+        Assert.DoesNotContain("context.ReferenceContext.Graph", scratch, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Interactive_runtime_evidence_integration_markers_are_present()
+    {
+        var repo = FindRepositoryRoot();
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveRuntimeEvidenceBuilder.cs",
+            "BuildFrameEvidence",
+            "BuildFrameEvidenceBag",
+            "BuildInteractiveSummary",
+            "BuildComparison");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveRuntimeGateSnapshotBuilder.cs",
+            "BuildInteractiveSummary",
+            "BuildReferenceBaseline",
+            "BuildComparison");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/InteractivePerformanceNprPipeline.cs",
+            "WriteRuntimeEvidenceDiagnostics",
+            "RuntimeEvidenceScenario",
+            "RuntimeGateStatus");
+
+        AssertFileContains(
+            repo,
+            "src/aot/npr/pipelines/STFU.NPR.Pipelines.InteractivePerformance/Core/InteractiveDiagnosticsBridge.cs",
+            "InteractivePerformance.evidenceFactCount",
+            "InteractivePerformance.evidenceWarningCount",
+            "InteractivePerformance.evidenceFailureCount",
+            "InteractivePerformance.runtimeGateStatus");
+    }
+
+    [Fact]
     public void Viewport_status_formats_interactive_pipeline_reduction_summary()
     {
         var repo = FindRepositoryRoot();

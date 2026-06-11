@@ -65,6 +65,11 @@ public sealed class InteractiveFrameDiagnostics
     public int CacheMisses { get; set; }
     public long ProjectionSource { get; set; }
     public bool ProjectionBuiltSelfContained { get; set; }
+    public bool ProjectionUsedReferenceGraph { get; set; }
+    public int ProjectionInputMeshCount { get; set; }
+    public int ProjectionInputVertexCount { get; set; }
+    public int ProjectionInputTriangleCount { get; set; }
+    public string ProjectionInputSourceNote { get; set; } = string.Empty;
     public int ProjectionSourceEntities { get; set; }
     public int ProjectionMeshes { get; set; }
     public int ProjectedVertices { get; set; }
@@ -142,6 +147,11 @@ public sealed class InteractiveFrameDiagnostics
     public int OutputHealthScore { get; set; }
     public int OutputHealthWarningCount { get; set; }
     public string OutputHealthSummary { get; set; } = string.Empty;
+    public int EvidenceFactCount { get; set; }
+    public int EvidenceWarningCount { get; set; }
+    public int EvidenceFailureCount { get; set; }
+    public string RuntimeGateStatus { get; set; } = string.Empty;
+    public string RuntimeEvidenceScenario { get; set; } = string.Empty;
 
     public bool UsedReferenceFallback { get; set; }
     public string FallbackReason { get; set; } = string.Empty;
